@@ -40,6 +40,7 @@ export const SendRequestSchema = z
     clerkOrgId: z.string().optional().describe("Clerk organization ID"),
     brandId: z.string().describe("Brand ID"),
     campaignId: z.string().describe("Campaign ID"),
+    runId: z.string().describe("Run ID for tracking"),
     clerkUserId: z.string().optional().describe("Clerk user ID"),
     to: z.string().email().describe("Recipient email address"),
     recipientFirstName: z.string().describe("Recipient first name"),

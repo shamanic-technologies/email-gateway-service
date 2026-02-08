@@ -53,14 +53,13 @@ export async function getStats(filters: {
   campaignId?: string;
 }) {
   return request<{
-    stats: {
-      totalLeads: number;
-      contacted: number;
-      opened: number;
-      replied: number;
-      bounced: number;
-      unsubscribed: number;
-    };
+    totalCampaigns: number;
+    totalLeads: number;
+    contacted: number;
+    opened: number;
+    replied: number;
+    bounced: number;
+    unsubscribed: number;
   }>("/stats", { method: "POST", body: filters });
 }
 

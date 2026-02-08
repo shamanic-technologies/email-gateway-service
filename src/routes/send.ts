@@ -31,6 +31,7 @@ router.post("/send", async (req: Request, res: Response) => {
     if (body.type === "transactional") {
       const result = await postmarkClient.sendEmail({
         orgId,
+        runId: body.runId,
         brandId: body.brandId,
         appId: body.appId,
         campaignId: body.campaignId,
@@ -44,13 +45,14 @@ router.post("/send", async (req: Request, res: Response) => {
         metadata: body.metadata,
       });
 
-      res.json({ success: true, provider: "transactional", data: result });
+      res.json({ success: true, provider: "transactional", messageId: result.messageId });
       return;
     }
 
     if (body.type === "broadcast") {
       const result = await instantlyClient.atomicSend({
         orgId,
+        runId: body.runId,
         brandId: body.brandId,
         appId: body.appId,
         campaignId: body.campaignId,
@@ -65,7 +67,7 @@ router.post("/send", async (req: Request, res: Response) => {
         },
       });
 
-      res.json({ success: true, provider: "broadcast", data: result });
+      res.json({ success: true, provider: "broadcast" });
       return;
     }
   } catch (error: unknown) {
