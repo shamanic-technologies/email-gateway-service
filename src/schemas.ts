@@ -37,7 +37,7 @@ export const SendRequestSchema = z
   .object({
     type: EmailTypeSchema.describe("Email channel type"),
     appId: z.string().describe("App ID"),
-    clerkOrgId: z.string().describe("Clerk organization ID"),
+    clerkOrgId: z.string().optional().describe("Clerk organization ID"),
     brandId: z.string().describe("Brand ID"),
     campaignId: z.string().describe("Campaign ID"),
     clerkUserId: z.string().optional().describe("Clerk user ID"),

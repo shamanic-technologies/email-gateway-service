@@ -27,7 +27,7 @@ async function request<T>(
 }
 
 export async function atomicSend(body: {
-  orgId: string;
+  orgId?: string;
   brandId: string;
   appId: string;
   runId?: string;

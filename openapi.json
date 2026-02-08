@@ -183,7 +183,6 @@
         "required": [
           "type",
           "appId",
-          "clerkOrgId",
           "brandId",
           "campaignId",
           "to",

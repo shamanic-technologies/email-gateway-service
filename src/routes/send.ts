@@ -17,17 +17,20 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = parsed.data;
 
   try {
-    // Resolve org (upsert)
-    const org = await resolveOrganization(body.clerkOrgId, body.appId);
+    // Resolve org (upsert) if clerkOrgId provided
+    let orgId: string | undefined;
+    if (body.clerkOrgId) {
+      const org = await resolveOrganization(body.clerkOrgId, body.appId);
+      orgId = org.id;
 
-    // Resolve user if provided
-    if (body.clerkUserId) {
-      await resolveUser(body.clerkUserId, org.id);
+      if (body.clerkUserId) {
+        await resolveUser(body.clerkUserId, org.id);
+      }
     }
 
     if (body.type === "transactional") {
       const result = await postmarkClient.sendEmail({
-        orgId: org.id,
+        orgId,
         brandId: body.brandId,
         appId: body.appId,
         campaignId: body.campaignId,
@@ -47,7 +50,7 @@ router.post("/send", async (req: Request, res: Response) => {
 
     if (body.type === "broadcast") {
       const result = await instantlyClient.atomicSend({
-        orgId: org.id,
+        orgId,
         brandId: body.brandId,
         appId: body.appId,
         campaignId: body.campaignId,

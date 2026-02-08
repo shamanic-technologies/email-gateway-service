@@ -27,7 +27,7 @@ async function request<T>(
 }
 
 export async function sendEmail(body: {
-  orgId: string;
+  orgId?: string;
   runId?: string;
   brandId: string;
   appId: string;
