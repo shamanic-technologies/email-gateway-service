@@ -41,7 +41,14 @@ export async function sendEmail(body: {
   tag?: string;
   metadata?: Record<string, string>;
 }) {
-  return request("/send", { method: "POST", body });
+  return request<{
+    success: boolean;
+    messageId?: string;
+    submittedAt?: string;
+    sendingId?: string;
+    errorCode?: number;
+    message?: string;
+  }>("/send", { method: "POST", body });
 }
 
 export async function getStats(filters: {
@@ -59,6 +66,11 @@ export async function getStats(filters: {
       emailsClicked: number;
       emailsReplied: number;
       emailsBounced: number;
+      repliesWillingToMeet: number;
+      repliesInterested: number;
+      repliesNotInterested: number;
+      repliesOutOfOffice: number;
+      repliesUnsubscribe: number;
     };
   }>("/stats", { method: "POST", body: filters });
 }

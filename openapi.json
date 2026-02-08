@@ -130,6 +130,10 @@
             "type": "string",
             "description": "Campaign ID"
           },
+          "runId": {
+            "type": "string",
+            "description": "Run ID for tracking"
+          },
           "clerkUserId": {
             "type": "string",
             "description": "Clerk user ID"
@@ -185,6 +189,7 @@
           "appId",
           "brandId",
           "campaignId",
+          "runId",
           "to",
           "recipientFirstName",
           "recipientLastName",

@@ -13,6 +13,7 @@ function normalizePostmarkStats(raw: {
     emailsClicked: number;
     emailsReplied: number;
     emailsBounced: number;
+    repliesUnsubscribe: number;
   };
 }): Stats {
   return {
@@ -22,30 +23,29 @@ function normalizePostmarkStats(raw: {
     clicked: raw.stats.emailsClicked,
     replied: raw.stats.emailsReplied,
     bounced: raw.stats.emailsBounced,
-    unsubscribed: 0,
+    unsubscribed: raw.stats.repliesUnsubscribe,
     recipients: raw.stats.emailsSent,
   };
 }
 
 function normalizeInstantlyStats(raw: {
-  stats: {
-    totalLeads: number;
-    contacted: number;
-    opened: number;
-    replied: number;
-    bounced: number;
-    unsubscribed: number;
-  };
+  totalCampaigns: number;
+  totalLeads: number;
+  contacted: number;
+  opened: number;
+  replied: number;
+  bounced: number;
+  unsubscribed: number;
 }): Stats {
   return {
-    sent: raw.stats.contacted,
+    sent: raw.contacted,
     delivered: 0,
-    opened: raw.stats.opened,
+    opened: raw.opened,
     clicked: 0,
-    replied: raw.stats.replied,
-    bounced: raw.stats.bounced,
-    unsubscribed: raw.stats.unsubscribed,
-    recipients: raw.stats.totalLeads,
+    replied: raw.replied,
+    bounced: raw.bounced,
+    unsubscribed: raw.unsubscribed,
+    recipients: raw.totalLeads,
   };
 }
 
