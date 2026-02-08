@@ -3,14 +3,41 @@
   "info": {
     "title": "Email Sending Service",
     "version": "1.0.0",
-    "description": "Unified gateway for transactional and broadcast email sending"
+    "description": "Unified gateway for transactional and broadcast email sending. Routes emails to Postmark (transactional) or Instantly (broadcast) based on type."
   },
   "servers": [
     {
-      "url": "http://localhost:3009"
+      "url": "http://localhost:3009",
+      "description": "Local development"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Health",
+      "description": "Health check endpoints"
+    },
+    {
+      "name": "Email Sending",
+      "description": "Send emails via transactional or broadcast providers"
+    },
+    {
+      "name": "Stats",
+      "description": "Email delivery statistics"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Provider webhook forwarding"
     }
   ],
   "components": {
+    "securitySchemes": {
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Service-to-service API key"
+      }
+    },
     "schemas": {
       "HealthResponse": {
         "type": "object",
@@ -35,25 +62,45 @@
         "type": "object",
         "properties": {
           "success": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether the email was sent successfully"
           },
           "messageId": {
-            "type": "string"
+            "type": "string",
+            "description": "Provider message ID"
           },
           "provider": {
             "type": "string",
             "enum": [
               "transactional",
               "broadcast"
-            ]
+            ],
+            "description": "Provider that handled the email"
           },
           "error": {
-            "type": "string"
+            "type": "string",
+            "description": "Error message if send failed"
           }
         },
         "required": [
           "success",
           "provider"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          },
+          "details": {
+            "type": "string",
+            "description": "Additional error details"
+          }
+        },
+        "required": [
+          "error"
         ]
       },
       "SendRequest": {
@@ -64,57 +111,73 @@
             "enum": [
               "transactional",
               "broadcast"
-            ]
+            ],
+            "description": "Email channel type"
           },
           "appId": {
-            "type": "string"
+            "type": "string",
+            "description": "App ID"
           },
           "clerkOrgId": {
-            "type": "string"
+            "type": "string",
+            "description": "Clerk organization ID"
           },
           "brandId": {
-            "type": "string"
+            "type": "string",
+            "description": "Brand ID"
           },
           "campaignId": {
-            "type": "string"
+            "type": "string",
+            "description": "Campaign ID"
           },
           "clerkUserId": {
-            "type": "string"
+            "type": "string",
+            "description": "Clerk user ID"
           },
           "to": {
             "type": "string",
-            "format": "email"
+            "format": "email",
+            "description": "Recipient email address"
           },
           "recipientFirstName": {
-            "type": "string"
+            "type": "string",
+            "description": "Recipient first name"
           },
           "recipientLastName": {
-            "type": "string"
+            "type": "string",
+            "description": "Recipient last name"
           },
           "recipientCompany": {
-            "type": "string"
+            "type": "string",
+            "description": "Recipient company name"
           },
           "subject": {
-            "type": "string"
+            "type": "string",
+            "description": "Email subject line"
           },
           "htmlBody": {
-            "type": "string"
+            "type": "string",
+            "description": "HTML email body"
           },
           "textBody": {
-            "type": "string"
+            "type": "string",
+            "description": "Plain text email body"
           },
           "replyTo": {
             "type": "string",
-            "format": "email"
+            "format": "email",
+            "description": "Reply-to email address"
           },
           "tag": {
-            "type": "string"
+            "type": "string",
+            "description": "Email tag for categorization"
           },
           "metadata": {
             "type": "object",
             "additionalProperties": {
               "type": "string"
-            }
+            },
+            "description": "Custom metadata key-value pairs"
           }
         },
         "required": [
@@ -134,28 +197,36 @@
         "type": "object",
         "properties": {
           "sent": {
-            "type": "number"
+            "type": "number",
+            "description": "Total emails sent"
           },
           "delivered": {
-            "type": "number"
+            "type": "number",
+            "description": "Total emails delivered"
           },
           "opened": {
-            "type": "number"
+            "type": "number",
+            "description": "Total emails opened"
           },
           "clicked": {
-            "type": "number"
+            "type": "number",
+            "description": "Total link clicks"
           },
           "replied": {
-            "type": "number"
+            "type": "number",
+            "description": "Total replies received"
           },
           "bounced": {
-            "type": "number"
+            "type": "number",
+            "description": "Total bounced emails"
           },
           "unsubscribed": {
-            "type": "number"
+            "type": "number",
+            "description": "Total unsubscribes"
           },
           "recipients": {
-            "type": "number"
+            "type": "number",
+            "description": "Total unique recipients"
           }
         },
         "required": [
@@ -167,7 +238,8 @@
           "bounced",
           "unsubscribed",
           "recipients"
-        ]
+        ],
+        "description": "Stats for transactional emails"
       },
       "StatsResponse": {
         "type": "object",
@@ -176,7 +248,14 @@
             "$ref": "#/components/schemas/Stats"
           },
           "broadcast": {
-            "$ref": "#/components/schemas/Stats"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Stats"
+              },
+              {
+                "description": "Stats for broadcast emails"
+              }
+            ]
           }
         }
       },
@@ -188,25 +267,31 @@
             "enum": [
               "transactional",
               "broadcast"
-            ]
+            ],
+            "description": "Filter by email channel type"
           },
           "runIds": {
             "type": "array",
             "items": {
               "type": "string"
-            }
+            },
+            "description": "Filter by run IDs"
           },
           "clerkOrgId": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by Clerk organization ID"
           },
           "brandId": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by brand ID"
           },
           "appId": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by app ID"
           },
           "campaignId": {
-            "type": "string"
+            "type": "string",
+            "description": "Filter by campaign ID"
           }
         }
       }
@@ -216,7 +301,11 @@
   "paths": {
     "/health": {
       "get": {
+        "tags": [
+          "Health"
+        ],
         "summary": "Health check",
+        "description": "Returns service health status",
         "responses": {
           "200": {
             "description": "Service is healthy",
@@ -233,7 +322,16 @@
     },
     "/send": {
       "post": {
-        "summary": "Send an email (transactional or broadcast)",
+        "tags": [
+          "Email Sending"
+        ],
+        "summary": "Send an email",
+        "description": "Send a transactional or broadcast email via the appropriate provider",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -255,20 +353,50 @@
             }
           },
           "400": {
-            "description": "Invalid request"
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "401": {
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "502": {
-            "description": "Upstream service error"
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/stats": {
       "post": {
+        "tags": [
+          "Stats"
+        ],
         "summary": "Get aggregated email stats",
+        "description": "Get aggregated email stats filtered by type, runIds, clerkOrgId, brandId, appId, and/or campaignId",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -290,36 +418,72 @@
             }
           },
           "401": {
-            "description": "Unauthorized"
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           },
           "502": {
-            "description": "Upstream service error"
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/webhooks/postmark": {
       "post": {
+        "tags": [
+          "Webhooks"
+        ],
         "summary": "Forward Postmark webhook events",
+        "description": "Receives Postmark webhook events and forwards them to the upstream postmark service",
         "responses": {
           "200": {
             "description": "Webhook forwarded"
           },
           "502": {
-            "description": "Upstream service error"
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
     },
     "/webhooks/instantly": {
       "post": {
+        "tags": [
+          "Webhooks"
+        ],
         "summary": "Forward Instantly webhook events",
+        "description": "Receives Instantly webhook events and forwards them to the upstream instantly service",
         "responses": {
           "200": {
             "description": "Webhook forwarded"
           },
           "502": {
-            "description": "Upstream service error"
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }

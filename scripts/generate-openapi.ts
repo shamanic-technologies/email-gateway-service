@@ -12,9 +12,15 @@ const document = generator.generateDocument({
     title: "Email Sending Service",
     version: "1.0.0",
     description:
-      "Unified gateway for transactional and broadcast email sending",
+      "Unified gateway for transactional and broadcast email sending. Routes emails to Postmark (transactional) or Instantly (broadcast) based on type.",
   },
-  servers: [{ url: "http://localhost:3009" }],
+  servers: [{ url: "http://localhost:3009", description: "Local development" }],
+  tags: [
+    { name: "Health", description: "Health check endpoints" },
+    { name: "Email Sending", description: "Send emails via transactional or broadcast providers" },
+    { name: "Stats", description: "Email delivery statistics" },
+    { name: "Webhooks", description: "Provider webhook forwarding" },
+  ],
 });
 
 fs.writeFileSync("openapi.json", JSON.stringify(document, null, 2));

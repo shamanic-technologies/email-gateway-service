@@ -8,6 +8,24 @@ extendZodWithOpenApi(z);
 
 export const registry = new OpenAPIRegistry();
 
+// --- Security ---
+
+registry.registerComponent("securitySchemes", "apiKey", {
+  type: "apiKey",
+  in: "header",
+  name: "X-API-Key",
+  description: "Service-to-service API key",
+});
+
+// --- Shared schemas ---
+
+export const ErrorResponseSchema = z
+  .object({
+    error: z.string().describe("Error message"),
+    details: z.string().optional().describe("Additional error details"),
+  })
+  .openapi("ErrorResponse");
+
 // --- Enums ---
 
 export const EmailTypeSchema = z.enum(["transactional", "broadcast"]);
@@ -17,26 +35,22 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 
 export const SendRequestSchema = z
   .object({
-    type: EmailTypeSchema,
-    // context (mandatory)
-    appId: z.string(),
-    clerkOrgId: z.string(),
-    brandId: z.string(),
-    campaignId: z.string(),
-    clerkUserId: z.string().optional(),
-    // recipient (mandatory)
-    to: z.string().email(),
-    recipientFirstName: z.string(),
-    recipientLastName: z.string(),
-    recipientCompany: z.string(),
-    // email content
-    subject: z.string(),
-    htmlBody: z.string().optional(),
-    textBody: z.string().optional(),
-    // optional
-    replyTo: z.string().email().optional(),
-    tag: z.string().optional(),
-    metadata: z.record(z.string(), z.string()).optional(),
+    type: EmailTypeSchema.describe("Email channel type"),
+    appId: z.string().describe("App ID"),
+    clerkOrgId: z.string().describe("Clerk organization ID"),
+    brandId: z.string().describe("Brand ID"),
+    campaignId: z.string().describe("Campaign ID"),
+    clerkUserId: z.string().optional().describe("Clerk user ID"),
+    to: z.string().email().describe("Recipient email address"),
+    recipientFirstName: z.string().describe("Recipient first name"),
+    recipientLastName: z.string().describe("Recipient last name"),
+    recipientCompany: z.string().describe("Recipient company name"),
+    subject: z.string().describe("Email subject line"),
+    htmlBody: z.string().optional().describe("HTML email body"),
+    textBody: z.string().optional().describe("Plain text email body"),
+    replyTo: z.string().email().optional().describe("Reply-to email address"),
+    tag: z.string().optional().describe("Email tag for categorization"),
+    metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
   })
   .openapi("SendRequest");
 
@@ -44,10 +58,10 @@ export type SendRequest = z.infer<typeof SendRequestSchema>;
 
 export const SendResponseSchema = z
   .object({
-    success: z.boolean(),
-    messageId: z.string().optional(),
-    provider: EmailTypeSchema,
-    error: z.string().optional(),
+    success: z.boolean().describe("Whether the email was sent successfully"),
+    messageId: z.string().optional().describe("Provider message ID"),
+    provider: EmailTypeSchema.describe("Provider that handled the email"),
+    error: z.string().optional().describe("Error message if send failed"),
   })
   .openapi("SendResponse");
 
@@ -57,12 +71,12 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 export const StatsRequestSchema = z
   .object({
-    type: EmailTypeSchema.optional(),
-    runIds: z.array(z.string()).optional(),
-    clerkOrgId: z.string().optional(),
-    brandId: z.string().optional(),
-    appId: z.string().optional(),
-    campaignId: z.string().optional(),
+    type: EmailTypeSchema.optional().describe("Filter by email channel type"),
+    runIds: z.array(z.string()).optional().describe("Filter by run IDs"),
+    clerkOrgId: z.string().optional().describe("Filter by Clerk organization ID"),
+    brandId: z.string().optional().describe("Filter by brand ID"),
+    appId: z.string().optional().describe("Filter by app ID"),
+    campaignId: z.string().optional().describe("Filter by campaign ID"),
   })
   .openapi("StatsRequest");
 
@@ -70,14 +84,14 @@ export type StatsRequest = z.infer<typeof StatsRequestSchema>;
 
 export const StatsSchema = z
   .object({
-    sent: z.number(),
-    delivered: z.number(),
-    opened: z.number(),
-    clicked: z.number(),
-    replied: z.number(),
-    bounced: z.number(),
-    unsubscribed: z.number(),
-    recipients: z.number(),
+    sent: z.number().describe("Total emails sent"),
+    delivered: z.number().describe("Total emails delivered"),
+    opened: z.number().describe("Total emails opened"),
+    clicked: z.number().describe("Total link clicks"),
+    replied: z.number().describe("Total replies received"),
+    bounced: z.number().describe("Total bounced emails"),
+    unsubscribed: z.number().describe("Total unsubscribes"),
+    recipients: z.number().describe("Total unique recipients"),
   })
   .openapi("Stats");
 
@@ -85,8 +99,8 @@ export type Stats = z.infer<typeof StatsSchema>;
 
 export const StatsResponseSchema = z
   .object({
-    transactional: StatsSchema.optional(),
-    broadcast: StatsSchema.optional(),
+    transactional: StatsSchema.optional().describe("Stats for transactional emails"),
+    broadcast: StatsSchema.optional().describe("Stats for broadcast emails"),
   })
   .openapi("StatsResponse");
 
@@ -104,10 +118,16 @@ export const HealthResponseSchema = z
 
 // --- Register endpoints ---
 
+const errorContent = {
+  "application/json": { schema: ErrorResponseSchema },
+};
+
 registry.registerPath({
   method: "get",
   path: "/health",
+  tags: ["Health"],
   summary: "Health check",
+  description: "Returns service health status",
   responses: {
     200: {
       description: "Service is healthy",
@@ -119,7 +139,10 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/send",
-  summary: "Send an email (transactional or broadcast)",
+  tags: ["Email Sending"],
+  summary: "Send an email",
+  description: "Send a transactional or broadcast email via the appropriate provider",
+  security: [{ apiKey: [] }],
   request: {
     body: {
       content: { "application/json": { schema: SendRequestSchema } },
@@ -130,16 +153,19 @@ registry.registerPath({
       description: "Email sent successfully",
       content: { "application/json": { schema: SendResponseSchema } },
     },
-    400: { description: "Invalid request" },
-    401: { description: "Unauthorized" },
-    502: { description: "Upstream service error" },
+    400: { description: "Invalid request", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
   },
 });
 
 registry.registerPath({
   method: "post",
   path: "/stats",
+  tags: ["Stats"],
   summary: "Get aggregated email stats",
+  description: "Get aggregated email stats filtered by type, runIds, clerkOrgId, brandId, appId, and/or campaignId",
+  security: [{ apiKey: [] }],
   request: {
     body: {
       content: { "application/json": { schema: StatsRequestSchema } },
@@ -150,27 +176,31 @@ registry.registerPath({
       description: "Aggregated stats",
       content: { "application/json": { schema: StatsResponseSchema } },
     },
-    401: { description: "Unauthorized" },
-    502: { description: "Upstream service error" },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
   },
 });
 
 registry.registerPath({
   method: "post",
   path: "/webhooks/postmark",
+  tags: ["Webhooks"],
   summary: "Forward Postmark webhook events",
+  description: "Receives Postmark webhook events and forwards them to the upstream postmark service",
   responses: {
     200: { description: "Webhook forwarded" },
-    502: { description: "Upstream service error" },
+    502: { description: "Upstream service error", content: errorContent },
   },
 });
 
 registry.registerPath({
   method: "post",
   path: "/webhooks/instantly",
+  tags: ["Webhooks"],
   summary: "Forward Instantly webhook events",
+  description: "Receives Instantly webhook events and forwards them to the upstream instantly service",
   responses: {
     200: { description: "Webhook forwarded" },
-    502: { description: "Upstream service error" },
+    502: { description: "Upstream service error", content: errorContent },
   },
 });
