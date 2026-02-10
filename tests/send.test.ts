@@ -181,7 +181,7 @@ describe("POST /send", () => {
       expect(body.email.subject).toBe("Hello");
       expect(body.email.body).toContain("<p>Hi</p>");
       expect(body.email.body).toContain("Kevin Lourd");
-      expect(body.email.body).toContain("{{unsubscribe_url}}");
+      expect(body.email.body).not.toContain("unsubscribe");
       expect(body.variables).toEqual({ source: "test" });
       expect(body.runId).toBe("run_1");
       expect(body.campaignId).toBe("campaign_1");
@@ -254,7 +254,7 @@ describe("POST /send", () => {
       expect(body.htmlBody).toContain("growthagency.dev");
     });
 
-    it("appends Instantly unsubscribe link for broadcast emails", async () => {
+    it("does not include unsubscribe link for broadcast emails", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -267,7 +267,7 @@ describe("POST /send", () => {
         .send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toContain("{{unsubscribe_url}}");
+      expect(body.email.body).not.toContain("unsubscribe");
       expect(body.email.body).not.toContain("{{{pm:unsubscribe}}}");
       expect(body.email.body).toContain("Kevin Lourd");
       expect(body.email.body).toContain("growthagency.dev");
@@ -331,9 +331,9 @@ describe("buildSignature", () => {
     expect(sig).not.toContain("{{unsubscribe_url}}");
   });
 
-  it("uses Instantly unsubscribe for broadcast", () => {
+  it("omits unsubscribe link for broadcast", () => {
     const sig = buildSignature("broadcast");
-    expect(sig).toContain("{{unsubscribe_url}}");
+    expect(sig).not.toContain("unsubscribe");
     expect(sig).not.toContain("{{{pm:unsubscribe}}}");
   });
 

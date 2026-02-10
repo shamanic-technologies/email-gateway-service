@@ -1,14 +1,12 @@
 import type { EmailType } from "../schemas";
 
-const UNSUBSCRIBE_LINKS: Record<EmailType, string> = {
-  transactional: "{{{pm:unsubscribe}}}",
-  broadcast: "{{unsubscribe_url}}",
-};
-
 export function buildSignature(type: EmailType, brandUrl?: string): string {
-  const unsubscribeUrl = UNSUBSCRIBE_LINKS[type];
   const brandDisplay = brandUrl || "BRAND_URL";
   const brandHref = brandUrl || "BRAND_URL";
+
+  const unsubscribeBlock = type === "transactional"
+    ? `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Inter,system-ui,-apple-system,sans-serif"><tr><td style="font-size:11px;color:#cbd5e1;padding-top:4px"><a href="{{{pm:unsubscribe}}}" style="color:#cbd5e1;text-decoration:underline">Unsubscribe</a> to stop receiving sales cold emails from us</td></tr></table>`
+    : "";
 
   // All table-based layout — no <p> tags to avoid email client default margins
   return [
@@ -30,9 +28,7 @@ export function buildSignature(type: EmailType, brandUrl?: string): string {
     `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Inter,system-ui,-apple-system,sans-serif;padding-top:10px"><tr><td style="font-size:11px;color:#94a3b8;padding-top:10px;font-style:italic">`,
     `Email generated with AI on behalf of our client: <a href="${brandHref}" style="color:#94a3b8;text-decoration:underline">${brandDisplay}</a>`,
     `</td></tr></table>`,
-    `<table cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Inter,system-ui,-apple-system,sans-serif"><tr><td style="font-size:11px;color:#cbd5e1;padding-top:4px">`,
-    `<a href="${unsubscribeUrl}" style="color:#cbd5e1;text-decoration:underline">Unsubscribe</a> to stop receiving sales cold emails from us`,
-    `</td></tr></table>`,
+    unsubscribeBlock,
     `</td></tr></table>`,
   ].join("");
 }
