@@ -3,6 +3,7 @@ import { SendRequestSchema } from "../schemas";
 import { config } from "../config";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
+import * as brandClient from "../lib/brand-client";
 import { appendSignature } from "../lib/signature";
 
 const router = Router();
@@ -15,7 +16,16 @@ router.post("/send", async (req: Request, res: Response) => {
   }
 
   const body = parsed.data;
-  const htmlWithSignature = appendSignature(body.htmlBody, body.type);
+
+  let brandUrl: string | undefined;
+  try {
+    const brand = await brandClient.getBrand(body.brandId);
+    brandUrl = brand.brandUrl ?? undefined;
+  } catch (err) {
+    console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
+  }
+
+  const htmlWithSignature = appendSignature(body.htmlBody, body.type, brandUrl);
 
   console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId}`);
 

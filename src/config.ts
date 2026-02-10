@@ -13,4 +13,8 @@ export const config = {
     url: process.env.INSTANTLY_SERVICE_URL || "http://localhost:3011",
     apiKey: process.env.INSTANTLY_SERVICE_API_KEY || "",
   },
+  brand: {
+    url: process.env.BRAND_SERVICE_URL || "http://localhost:3005",
+    apiKey: process.env.BRAND_SERVICE_API_KEY || "",
+  },
 } as const;
