@@ -15,6 +15,8 @@ router.post("/send", async (req: Request, res: Response) => {
 
   const body = parsed.data;
 
+  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId}`);
+
   try {
     if (body.type === "transactional") {
       const result = await postmarkClient.sendEmail({
@@ -33,6 +35,7 @@ router.post("/send", async (req: Request, res: Response) => {
         metadata: body.metadata,
       });
 
+      console.log(`[send] postmark response: messageId=${result.messageId}`);
       res.json({ success: true, provider: "transactional", messageId: result.messageId });
       return;
     }
@@ -55,7 +58,10 @@ router.post("/send", async (req: Request, res: Response) => {
         },
       });
 
+      console.log(`[send] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
+
       if (result.added === 0) {
+        console.warn(`[send] lead not added to=${body.to} campaign=${result.campaignId}`);
         res.status(409).json({
           success: false,
           provider: "broadcast",
