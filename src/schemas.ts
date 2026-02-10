@@ -60,8 +60,9 @@ export type SendRequest = z.infer<typeof SendRequestSchema>;
 export const SendResponseSchema = z
   .object({
     success: z.boolean().describe("Whether the email was sent successfully"),
-    messageId: z.string().optional().describe("Provider message ID"),
+    messageId: z.string().optional().describe("Provider message ID (Postmark messageId or Instantly leadId)"),
     provider: EmailTypeSchema.describe("Provider that handled the email"),
+    campaignId: z.string().optional().describe("Instantly campaign ID (broadcast only)"),
     error: z.string().optional().describe("Error message if send failed"),
   })
   .openapi("SendResponse");
