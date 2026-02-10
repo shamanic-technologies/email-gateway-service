@@ -26,6 +26,13 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
+export interface AtomicSendResponse {
+  success: boolean;
+  campaignId: string;
+  leadId: string | null;
+  added: number;
+}
+
 export async function atomicSend(body: {
   orgId?: string;
   brandId: string;
@@ -42,7 +49,7 @@ export async function atomicSend(body: {
     body: string;
   };
 }) {
-  return request("/send", { method: "POST", body });
+  return request<AtomicSendResponse>("/send", { method: "POST", body });
 }
 
 export async function getStats(filters: {

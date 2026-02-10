@@ -67,7 +67,7 @@
           },
           "messageId": {
             "type": "string",
-            "description": "Provider message ID"
+            "description": "Provider message ID (Postmark messageId or Instantly leadId)"
           },
           "provider": {
             "type": "string",
@@ -76,6 +76,10 @@
               "broadcast"
             ],
             "description": "Provider that handled the email"
+          },
+          "campaignId": {
+            "type": "string",
+            "description": "Instantly campaign ID (broadcast only)"
           },
           "error": {
             "type": "string",

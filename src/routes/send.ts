@@ -38,7 +38,7 @@ router.post("/send", async (req: Request, res: Response) => {
     }
 
     if (body.type === "broadcast") {
-      await instantlyClient.atomicSend({
+      const result = await instantlyClient.atomicSend({
         orgId: body.clerkOrgId,
         runId: body.runId,
         brandId: body.brandId,
@@ -55,7 +55,22 @@ router.post("/send", async (req: Request, res: Response) => {
         },
       });
 
-      res.json({ success: true, provider: "broadcast" });
+      if (result.added === 0) {
+        res.status(409).json({
+          success: false,
+          provider: "broadcast",
+          error: "Lead was not added to campaign (possibly duplicate)",
+          campaignId: result.campaignId,
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        provider: "broadcast",
+        messageId: result.leadId ?? undefined,
+        campaignId: result.campaignId,
+      });
       return;
     }
   } catch (error: unknown) {
