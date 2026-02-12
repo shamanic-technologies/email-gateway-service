@@ -306,6 +306,24 @@ describe("POST /send", () => {
       expect(body.email.body).toContain("BRAND_URL");
     });
 
+    it("skips brand service call and uses fallback when brandId is omitted", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildBroadcastBody({ brandId: undefined }));
+
+      // Only one fetch call (instantly), no brand service call
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toBe("http://localhost:3011/send");
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.email.body).toContain("BRAND_URL");
+    });
+
     it("does not append signature when htmlBody is missing (broadcast)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({

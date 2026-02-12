@@ -35,10 +35,10 @@ export interface AtomicSendResponse {
 
 export async function atomicSend(body: {
   orgId?: string;
-  brandId: string;
+  brandId?: string;
   appId: string;
   runId?: string;
-  campaignId: string;
+  campaignId?: string;
   to: string;
   firstName?: string;
   lastName?: string;

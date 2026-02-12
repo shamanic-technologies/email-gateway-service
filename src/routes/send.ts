@@ -18,11 +18,13 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = parsed.data;
 
   let brandUrl: string | undefined;
-  try {
-    const brand = await brandClient.getBrand(body.brandId);
-    brandUrl = brand.brandUrl ?? undefined;
-  } catch (err) {
-    console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
+  if (body.brandId) {
+    try {
+      const brand = await brandClient.getBrand(body.brandId);
+      brandUrl = brand.brandUrl ?? undefined;
+    } catch (err) {
+      console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
+    }
   }
 
   const htmlWithSignature = appendSignature(body.htmlBody, body.type, brandUrl);

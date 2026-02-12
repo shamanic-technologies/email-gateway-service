@@ -29,9 +29,9 @@ async function request<T>(
 export async function sendEmail(body: {
   orgId?: string;
   runId?: string;
-  brandId: string;
+  brandId?: string;
   appId: string;
-  campaignId: string;
+  campaignId?: string;
   from: string;
   to: string;
   subject: string;
