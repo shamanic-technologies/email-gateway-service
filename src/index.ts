@@ -21,7 +21,7 @@ app.use(serviceAuth, sendRoutes);
 app.use(serviceAuth, statsRoutes);
 
 app.listen(config.port, () => {
-  console.log(`email-sending-service running on port ${config.port}`);
+  console.log(`email-gateway running on port ${config.port}`);
 });
 
 export { app };

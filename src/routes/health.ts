@@ -5,11 +5,11 @@ import * as path from "path";
 const router = Router();
 
 router.get("/", (_req, res) => {
-  res.json({ service: "email-sending-service", version: "1.0.0" });
+  res.json({ service: "email-gateway", version: "1.0.0" });
 });
 
 router.get("/health", (_req, res) => {
-  res.json({ status: "ok", service: "email-sending-service", version: "1.0.0" });
+  res.json({ status: "ok", service: "email-gateway", version: "1.0.0" });
 });
 
 router.get("/openapi.json", (_req, res) => {

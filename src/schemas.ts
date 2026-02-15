@@ -141,7 +141,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/send",
-  tags: ["Email Sending"],
+  tags: ["Email Routing"],
   summary: "Send an email",
   description: "Send a transactional or broadcast email via the appropriate provider",
   security: [{ apiKey: [] }],
