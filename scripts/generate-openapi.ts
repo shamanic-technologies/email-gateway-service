@@ -9,15 +9,15 @@ const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
   openapi: "3.0.0",
   info: {
-    title: "Email Sending Service",
+    title: "Email Gateway",
     version: "1.0.0",
     description:
-      "Unified gateway for transactional and broadcast email sending. Routes emails to Postmark (transactional) or Instantly (broadcast) based on type.",
+      "Email gateway that routes emails to Postmark (transactional) or Instantly (broadcast) based on type.",
   },
   servers: [{ url: "http://localhost:3009", description: "Local development" }],
   tags: [
     { name: "Health", description: "Health check endpoints" },
-    { name: "Email Sending", description: "Send emails via transactional or broadcast providers" },
+    { name: "Email Routing", description: "Route emails to transactional or broadcast providers" },
     { name: "Stats", description: "Email delivery statistics" },
     { name: "Webhooks", description: "Provider webhook forwarding" },
   ],

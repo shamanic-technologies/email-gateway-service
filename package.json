@@ -1,7 +1,7 @@
 {
-  "name": "email-sending-service",
+  "name": "email-gateway",
   "version": "1.0.0",
-  "description": "Email gateway service - unified entry point for transactional and broadcast email sending",
+  "description": "Email gateway - routes emails to Postmark (transactional) or Instantly (broadcast) based on type",
   "main": "dist/index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",

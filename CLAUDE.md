@@ -1,6 +1,6 @@
-# Project: email-sending-service
+# Project: email-gateway
 
-Email gateway service - unified entry point for transactional and broadcast email sending.
+Email gateway - routes emails to Postmark (transactional) or Instantly (broadcast) based on type.
 
 ## Commands
 
