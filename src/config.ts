@@ -3,7 +3,7 @@ dotenv.config();
 
 export const config = {
   port: Number(process.env.PORT) || 3009,
-  apiKey: process.env.EMAIL_SENDING_SERVICE_API_KEY || "",
+  apiKey: process.env.EMAIL_GATEWAY_SERVICE_API_KEY || "",
   emailFromAddress: process.env.EMAIL_FROM_ADDRESS || "growth@mcpfactory.org",
   postmark: {
     url: process.env.POSTMARK_SERVICE_URL || "http://localhost:3010",
