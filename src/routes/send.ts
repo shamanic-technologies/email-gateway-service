@@ -27,7 +27,7 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  const htmlWithSignature = appendSignature(body.htmlBody, body.type, brandUrl);
+  const htmlWithSignature = appendSignature(body.htmlBody, body.type, body.appId, brandUrl);
 
   console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId}`);
 

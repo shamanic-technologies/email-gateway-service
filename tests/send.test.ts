@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { app } from "../src/index";
-import { buildSignature, appendSignature } from "../src/lib/signature";
+import { buildSignature, appendSignature, buildMcpFactorySignature, buildDefaultFooter } from "../src/lib/signature";
 
 // Mock config - vi.mock is hoisted, so use literal values
 vi.mock("../src/config", () => ({
@@ -146,7 +146,7 @@ describe("POST /send", () => {
       expect(res.body.error).toBe("Upstream service error");
     });
 
-    it("passes correct payload to instantly-service", async () => {
+    it("passes correct payload to instantly-service (non-mcpfactory)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -180,11 +180,31 @@ describe("POST /send", () => {
       expect(body.company).toBe("Acme Corp");
       expect(body.email.subject).toBe("Hello");
       expect(body.email.body).toContain("<p>Hi</p>");
-      expect(body.email.body).toContain("Kevin Lourd");
+      // non-mcpfactory broadcast: no signature, no unsubscribe
+      expect(body.email.body).not.toContain("Kevin Lourd");
       expect(body.email.body).not.toContain("unsubscribe");
       expect(body.variables).toEqual({ source: "test" });
       expect(body.runId).toBe("run_1");
       expect(body.campaignId).toBe("campaign_1");
+    });
+
+    it("appends mcpfactory signature for broadcast when appId is mcpfactory", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildBroadcastBody({ appId: "mcpfactory" }));
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(body.email.body).toContain("Kevin Lourd");
+      expect(body.email.body).toContain("growthagency.dev");
+      expect(body.email.body).not.toContain("unsubscribe");
     });
   });
 
@@ -212,6 +232,24 @@ describe("POST /send", () => {
         messageId: "pm_msg_789",
       });
     });
+
+    it("appends default unsubscribe for non-mcpfactory transactional", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildTransactionalBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
+      expect(body.htmlBody).not.toContain("Kevin Lourd");
+      expect(body.htmlBody).not.toContain("growthagency.dev");
+    });
   });
 
   describe("validation", () => {
@@ -234,8 +272,8 @@ describe("POST /send", () => {
     });
   });
 
-  describe("signature", () => {
-    it("appends Postmark unsubscribe link for transactional emails", async () => {
+  describe("signature — mcpfactory app", () => {
+    it("appends full GrowthAgency signature + Postmark unsubscribe for transactional", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -245,7 +283,7 @@ describe("POST /send", () => {
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody());
+        .send(buildTransactionalBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
@@ -254,7 +292,7 @@ describe("POST /send", () => {
       expect(body.htmlBody).toContain("growthagency.dev");
     });
 
-    it("does not include unsubscribe link for broadcast emails", async () => {
+    it("does not include unsubscribe link for broadcast", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -264,7 +302,7 @@ describe("POST /send", () => {
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+        .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.email.body).not.toContain("unsubscribe");
@@ -283,7 +321,7 @@ describe("POST /send", () => {
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+        .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.email.body).toContain("https://mybrand.com");
@@ -300,7 +338,7 @@ describe("POST /send", () => {
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+        .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.email.body).toContain("BRAND_URL");
@@ -315,13 +353,52 @@ describe("POST /send", () => {
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ brandId: undefined }));
+        .send(buildBroadcastBody({ appId: "mcpfactory", brandId: undefined }));
 
       // Only one fetch call (instantly), no brand service call
       expect(mockFetch).toHaveBeenCalledTimes(1);
       expect(mockFetch.mock.calls[0][0]).toBe("http://localhost:3011/send");
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.email.body).toContain("BRAND_URL");
+    });
+  });
+
+  describe("signature — default (non-mcpfactory)", () => {
+    it("appends only a discrete unsubscribe for transactional", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildTransactionalBody({ appId: "other_app" }));
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
+      expect(body.htmlBody).toContain("Unsubscribe");
+      expect(body.htmlBody).not.toContain("Kevin Lourd");
+      expect(body.htmlBody).not.toContain("growthagency.dev");
+      expect(body.htmlBody).not.toContain("BRAND_URL");
+    });
+
+    it("does not append anything for broadcast", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildBroadcastBody({ appId: "other_app" }));
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      // Should be just the original html body, no footer
+      expect(body.email.body).toBe("<p>Hi</p>");
     });
 
     it("does not append signature when htmlBody is missing (broadcast)", async () => {
@@ -343,46 +420,102 @@ describe("POST /send", () => {
 });
 
 describe("buildSignature", () => {
-  it("uses Postmark unsubscribe for transactional", () => {
-    const sig = buildSignature("transactional");
-    expect(sig).toContain("{{{pm:unsubscribe}}}");
-    expect(sig).not.toContain("{{unsubscribe_url}}");
+  describe("mcpfactory", () => {
+    it("uses Postmark unsubscribe for transactional", () => {
+      const sig = buildSignature("transactional", "mcpfactory");
+      expect(sig).toContain("{{{pm:unsubscribe}}}");
+      expect(sig).not.toContain("{{unsubscribe_url}}");
+    });
+
+    it("omits unsubscribe link for broadcast", () => {
+      const sig = buildSignature("broadcast", "mcpfactory");
+      expect(sig).not.toContain("unsubscribe");
+      expect(sig).not.toContain("{{{pm:unsubscribe}}}");
+    });
+
+    it("includes GrowthAgency signature content", () => {
+      const sig = buildSignature("broadcast", "mcpfactory");
+      expect(sig).toContain("Kevin Lourd");
+      expect(sig).toContain("Agency");
+      expect(sig).toContain("growthagency.dev");
+    });
+
+    it("falls back to BRAND_URL when no brandUrl provided", () => {
+      const sig = buildSignature("broadcast", "mcpfactory");
+      expect(sig).toContain("BRAND_URL");
+    });
+
+    it("injects brandUrl when provided", () => {
+      const sig = buildSignature("broadcast", "mcpfactory", "https://mybrand.com");
+      expect(sig).toContain("https://mybrand.com");
+      expect(sig).not.toContain("BRAND_URL");
+    });
   });
 
-  it("omits unsubscribe link for broadcast", () => {
-    const sig = buildSignature("broadcast");
-    expect(sig).not.toContain("unsubscribe");
-    expect(sig).not.toContain("{{{pm:unsubscribe}}}");
-  });
+  describe("default (non-mcpfactory)", () => {
+    it("returns discrete unsubscribe for transactional", () => {
+      const sig = buildSignature("transactional", "some_app");
+      expect(sig).toContain("{{{pm:unsubscribe}}}");
+      expect(sig).toContain("Unsubscribe");
+      expect(sig).not.toContain("Kevin Lourd");
+      expect(sig).not.toContain("growthagency.dev");
+    });
 
-  it("includes signature content", () => {
-    const sig = buildSignature("broadcast");
+    it("returns empty string for broadcast", () => {
+      const sig = buildSignature("broadcast", "some_app");
+      expect(sig).toBe("");
+    });
+  });
+});
+
+describe("buildMcpFactorySignature", () => {
+  it("includes full signature for transactional with unsubscribe", () => {
+    const sig = buildMcpFactorySignature("transactional");
     expect(sig).toContain("Kevin Lourd");
-    expect(sig).toContain("Agency");
-    expect(sig).toContain("growthagency.dev");
+    expect(sig).toContain("{{{pm:unsubscribe}}}");
   });
 
-  it("falls back to BRAND_URL when no brandUrl provided", () => {
-    const sig = buildSignature("broadcast");
-    expect(sig).toContain("BRAND_URL");
+  it("includes full signature for broadcast without unsubscribe", () => {
+    const sig = buildMcpFactorySignature("broadcast");
+    expect(sig).toContain("Kevin Lourd");
+    expect(sig).not.toContain("unsubscribe");
+  });
+});
+
+describe("buildDefaultFooter", () => {
+  it("returns unsubscribe block for transactional", () => {
+    const footer = buildDefaultFooter("transactional");
+    expect(footer).toContain("{{{pm:unsubscribe}}}");
+    expect(footer).toContain("Unsubscribe");
+    expect(footer).not.toContain("Kevin Lourd");
   });
 
-  it("injects brandUrl when provided", () => {
-    const sig = buildSignature("broadcast", "https://mybrand.com");
-    expect(sig).toContain("https://mybrand.com");
-    expect(sig).not.toContain("BRAND_URL");
+  it("returns empty string for broadcast", () => {
+    expect(buildDefaultFooter("broadcast")).toBe("");
   });
 });
 
 describe("appendSignature", () => {
   it("returns undefined when htmlBody is undefined", () => {
-    expect(appendSignature(undefined, "broadcast")).toBeUndefined();
+    expect(appendSignature(undefined, "broadcast", "any_app")).toBeUndefined();
   });
 
-  it("appends signature to htmlBody", () => {
-    const result = appendSignature("<p>Hello</p>", "transactional");
+  it("appends mcpfactory signature to htmlBody", () => {
+    const result = appendSignature("<p>Hello</p>", "transactional", "mcpfactory");
     expect(result).toContain("<p>Hello</p>");
     expect(result).toContain("Kevin Lourd");
     expect(result).toContain("{{{pm:unsubscribe}}}");
+  });
+
+  it("appends only unsubscribe for non-mcpfactory transactional", () => {
+    const result = appendSignature("<p>Hello</p>", "transactional", "other_app");
+    expect(result).toContain("<p>Hello</p>");
+    expect(result).toContain("{{{pm:unsubscribe}}}");
+    expect(result).not.toContain("Kevin Lourd");
+  });
+
+  it("returns original htmlBody for non-mcpfactory broadcast", () => {
+    const result = appendSignature("<p>Hello</p>", "broadcast", "other_app");
+    expect(result).toBe("<p>Hello</p>");
   });
 });
