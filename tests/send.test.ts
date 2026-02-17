@@ -188,7 +188,7 @@ describe("POST /send", () => {
       expect(body.campaignId).toBe("campaign_1");
     });
 
-    it("appends mcpfactory signature for broadcast when appId is mcpfactory", async () => {
+    it("does not append any signature for broadcast even when appId is mcpfactory (Instantly manages its own)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -202,8 +202,9 @@ describe("POST /send", () => {
         .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toContain("Kevin Lourd");
-      expect(body.email.body).toContain("growthagency.dev");
+      expect(body.email.body).toBe("<p>Hi</p>");
+      expect(body.email.body).not.toContain("Kevin Lourd");
+      expect(body.email.body).not.toContain("growthagency.dev");
       expect(body.email.body).not.toContain("unsubscribe");
     });
   });
@@ -292,7 +293,7 @@ describe("POST /send", () => {
       expect(body.htmlBody).toContain("growthagency.dev");
     });
 
-    it("does not include unsubscribe link for broadcast", async () => {
+    it("does not append any signature for broadcast (Instantly manages its own)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -305,61 +306,60 @@ describe("POST /send", () => {
         .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).not.toContain("unsubscribe");
-      expect(body.email.body).not.toContain("{{{pm:unsubscribe}}}");
-      expect(body.email.body).toContain("Kevin Lourd");
-      expect(body.email.body).toContain("growthagency.dev");
+      expect(body.email.body).toBe("<p>Hi</p>");
+      expect(body.email.body).not.toContain("Kevin Lourd");
+      expect(body.email.body).not.toContain("growthagency.dev");
     });
 
-    it("injects brandUrl from brand service into signature", async () => {
+    it("injects brandUrl from brand service into transactional signature", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse("https://mybrand.com"));
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ appId: "mcpfactory" }));
+        .send(buildTransactionalBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toContain("https://mybrand.com");
-      expect(body.email.body).not.toContain("BRAND_URL");
+      expect(body.htmlBody).toContain("https://mybrand.com");
+      expect(body.htmlBody).not.toContain("BRAND_URL");
     });
 
-    it("falls back to BRAND_URL when brand service fails", async () => {
+    it("falls back to BRAND_URL when brand service fails (transactional)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandFailure());
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ appId: "mcpfactory" }));
+        .send(buildTransactionalBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toContain("BRAND_URL");
+      expect(body.htmlBody).toContain("BRAND_URL");
     });
 
-    it("skips brand service call and uses fallback when brandId is omitted", async () => {
+    it("skips brand service call and uses fallback when brandId is omitted (transactional)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ appId: "mcpfactory", brandId: undefined }));
+        .send(buildTransactionalBody({ appId: "mcpfactory", brandId: undefined }));
 
-      // Only one fetch call (instantly), no brand service call
+      // Only one fetch call (postmark), no brand service call
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(mockFetch.mock.calls[0][0]).toBe("http://localhost:3011/send");
+      expect(mockFetch.mock.calls[0][0]).toBe("http://localhost:3010/send");
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.email.body).toContain("BRAND_URL");
+      expect(body.htmlBody).toContain("BRAND_URL");
     });
   });
 
@@ -427,26 +427,25 @@ describe("buildSignature", () => {
       expect(sig).not.toContain("{{unsubscribe_url}}");
     });
 
-    it("omits unsubscribe link for broadcast", () => {
-      const sig = buildSignature("broadcast", "mcpfactory");
-      expect(sig).not.toContain("unsubscribe");
-      expect(sig).not.toContain("{{{pm:unsubscribe}}}");
-    });
-
-    it("includes GrowthAgency signature content", () => {
-      const sig = buildSignature("broadcast", "mcpfactory");
+    it("includes GrowthAgency signature for transactional", () => {
+      const sig = buildSignature("transactional", "mcpfactory");
       expect(sig).toContain("Kevin Lourd");
       expect(sig).toContain("Agency");
       expect(sig).toContain("growthagency.dev");
     });
 
-    it("falls back to BRAND_URL when no brandUrl provided", () => {
+    it("returns empty string for broadcast (Instantly manages its own signatures)", () => {
       const sig = buildSignature("broadcast", "mcpfactory");
+      expect(sig).toBe("");
+    });
+
+    it("falls back to BRAND_URL when no brandUrl provided (transactional)", () => {
+      const sig = buildSignature("transactional", "mcpfactory");
       expect(sig).toContain("BRAND_URL");
     });
 
-    it("injects brandUrl when provided", () => {
-      const sig = buildSignature("broadcast", "mcpfactory", "https://mybrand.com");
+    it("injects brandUrl when provided (transactional)", () => {
+      const sig = buildSignature("transactional", "mcpfactory", "https://mybrand.com");
       expect(sig).toContain("https://mybrand.com");
       expect(sig).not.toContain("BRAND_URL");
     });
@@ -516,6 +515,11 @@ describe("appendSignature", () => {
 
   it("returns original htmlBody for non-mcpfactory broadcast", () => {
     const result = appendSignature("<p>Hello</p>", "broadcast", "other_app");
+    expect(result).toBe("<p>Hello</p>");
+  });
+
+  it("returns original htmlBody for mcpfactory broadcast (Instantly manages its own)", () => {
+    const result = appendSignature("<p>Hello</p>", "broadcast", "mcpfactory");
     expect(result).toBe("<p>Hello</p>");
   });
 });

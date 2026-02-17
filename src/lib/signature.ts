@@ -44,6 +44,9 @@ export function buildDefaultFooter(type: EmailType): string {
 }
 
 export function buildSignature(type: EmailType, appId: string, brandUrl?: string): string {
+  // Broadcast emails go through Instantly which manages its own per-account signatures
+  if (type === "broadcast") return "";
+
   if (appId === MCPFACTORY_APP_ID) {
     return buildMcpFactorySignature(type, brandUrl);
   }
