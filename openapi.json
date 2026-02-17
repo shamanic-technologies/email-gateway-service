@@ -84,6 +84,10 @@
           "error": {
             "type": "string",
             "description": "Error message if send failed"
+          },
+          "deduplicated": {
+            "type": "boolean",
+            "description": "True if this response was returned from the idempotency cache (email was not re-sent)"
           }
         },
         "required": [
@@ -186,6 +190,10 @@
               "type": "string"
             },
             "description": "Custom metadata key-value pairs"
+          },
+          "idempotencyKey": {
+            "type": "string",
+            "description": "Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."
           }
         },
         "required": [

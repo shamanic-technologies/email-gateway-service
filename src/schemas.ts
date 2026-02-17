@@ -52,6 +52,7 @@ export const SendRequestSchema = z
     replyTo: z.string().email().optional().describe("Reply-to email address"),
     tag: z.string().optional().describe("Email tag for categorization"),
     metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
+    idempotencyKey: z.string().optional().describe("Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."),
   })
   .openapi("SendRequest");
 
@@ -64,6 +65,7 @@ export const SendResponseSchema = z
     provider: EmailTypeSchema.describe("Provider that handled the email"),
     campaignId: z.string().optional().describe("Instantly campaign ID (broadcast only)"),
     error: z.string().optional().describe("Error message if send failed"),
+    deduplicated: z.boolean().optional().describe("True if this response was returned from the idempotency cache (email was not re-sent)"),
   })
   .openapi("SendResponse");
 

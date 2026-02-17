@@ -5,6 +5,7 @@ import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import * as brandClient from "../lib/brand-client";
 import { appendSignature } from "../lib/signature";
+import * as idempotencyStore from "../lib/idempotency-store";
 
 const router = Router();
 
@@ -16,6 +17,16 @@ router.post("/send", async (req: Request, res: Response) => {
   }
 
   const body = parsed.data;
+
+  // Idempotency check — return cached result if key was already processed
+  if (body.idempotencyKey) {
+    const cached = idempotencyStore.get(body.idempotencyKey);
+    if (cached) {
+      console.log(`[send] idempotency hit key=${body.idempotencyKey} to=${body.to}`);
+      res.status(cached.statusCode).json({ ...cached.response, deduplicated: true });
+      return;
+    }
+  }
 
   let brandUrl: string | undefined;
   if (body.brandId) {
@@ -50,7 +61,11 @@ router.post("/send", async (req: Request, res: Response) => {
       });
 
       console.log(`[send] postmark response: messageId=${result.messageId}`);
-      res.json({ success: true, provider: "transactional", messageId: result.messageId });
+      const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
+      if (body.idempotencyKey) {
+        idempotencyStore.set(body.idempotencyKey, 200, response);
+      }
+      res.json(response);
       return;
     }
 
@@ -76,21 +91,29 @@ router.post("/send", async (req: Request, res: Response) => {
 
       if (result.added === 0) {
         console.warn(`[send] lead not added to=${body.to} campaign=${result.campaignId}`);
-        res.status(409).json({
+        const response = {
           success: false,
-          provider: "broadcast",
+          provider: "broadcast" as const,
           error: "Lead was not added to campaign (possibly duplicate)",
           campaignId: result.campaignId,
-        });
+        };
+        if (body.idempotencyKey) {
+          idempotencyStore.set(body.idempotencyKey, 409, response);
+        }
+        res.status(409).json(response);
         return;
       }
 
-      res.json({
+      const response = {
         success: true,
-        provider: "broadcast",
+        provider: "broadcast" as const,
         messageId: result.leadId ?? undefined,
         campaignId: result.campaignId,
-      });
+      };
+      if (body.idempotencyKey) {
+        idempotencyStore.set(body.idempotencyKey, 200, response);
+      }
+      res.json(response);
       return;
     }
   } catch (error: unknown) {

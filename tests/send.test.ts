@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { app } from "../src/index";
 import { buildSignature, appendSignature, buildMcpFactorySignature, buildDefaultFooter } from "../src/lib/signature";
+import * as idempotencyStore from "../src/lib/idempotency-store";
 
 // Mock config - vi.mock is hoisted, so use literal values
 vi.mock("../src/config", () => ({
@@ -75,6 +76,7 @@ function buildTransactionalBody(overrides = {}) {
 describe("POST /send", () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    idempotencyStore.clear();
   });
 
   describe("broadcast (Instantly)", () => {
@@ -250,6 +252,185 @@ describe("POST /send", () => {
       expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
       expect(body.htmlBody).not.toContain("Kevin Lourd");
       expect(body.htmlBody).not.toContain("growthagency.dev");
+    });
+  });
+
+  describe("idempotency", () => {
+    it("returns cached result on duplicate idempotencyKey (transactional)", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_msg_1" }),
+      });
+
+      const body = buildTransactionalBody({ idempotencyKey: "idem_1" });
+
+      const res1 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.messageId).toBe("pm_msg_1");
+      expect(res1.body.deduplicated).toBeUndefined();
+
+      // Second call with same key — should NOT call fetch again
+      const res2 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.messageId).toBe("pm_msg_1");
+      expect(res2.body.deduplicated).toBe(true);
+      // Only 2 fetch calls total (brand + postmark from first request)
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns cached result on duplicate idempotencyKey (broadcast)", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const body = buildBroadcastBody({ idempotencyKey: "idem_2" });
+
+      const res1 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res1.status).toBe(200);
+      expect(res1.body.campaignId).toBe("c1");
+      expect(res1.body.deduplicated).toBeUndefined();
+
+      const res2 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.campaignId).toBe("c1");
+      expect(res2.body.deduplicated).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("caches 409 responses for broadcast duplicates", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: null, added: 0 }),
+      });
+
+      const body = buildBroadcastBody({ idempotencyKey: "idem_409" });
+
+      const res1 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res1.status).toBe(409);
+
+      const res2 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res2.status).toBe(409);
+      expect(res2.body.deduplicated).toBe(true);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("sends normally when different idempotencyKeys are used", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_msg_1" }),
+      });
+
+      const res1 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildTransactionalBody({ idempotencyKey: "key_a" }));
+
+      const res2 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildTransactionalBody({ idempotencyKey: "key_b" }));
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      // Both should have called fetch (no brand service since no brandId resolution failure)
+      // 2 calls per request: brand + postmark
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    it("sends normally when no idempotencyKey is provided", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_msg_1" }),
+      });
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_msg_2" }),
+      });
+
+      const body = buildTransactionalBody();
+
+      const res1 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      const res2 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      expect(res1.body.deduplicated).toBeUndefined();
+      expect(res2.body.deduplicated).toBeUndefined();
+      // Both requests hit the providers
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    });
+
+    it("does not cache upstream errors (502)", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("Internal Server Error"),
+      });
+
+      const body = buildTransactionalBody({ idempotencyKey: "idem_err" });
+
+      const res1 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res1.status).toBe(502);
+
+      // Retry should actually attempt to send again
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_retry" }),
+      });
+
+      const res2 = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res2.status).toBe(200);
+      expect(res2.body.messageId).toBe("pm_retry");
+      expect(res2.body.deduplicated).toBeUndefined();
     });
   });
 
