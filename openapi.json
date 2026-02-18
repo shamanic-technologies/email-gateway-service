@@ -210,31 +210,47 @@
       "Stats": {
         "type": "object",
         "properties": {
-          "sent": {
+          "emailsSent": {
             "type": "number",
             "description": "Total emails sent"
           },
-          "delivered": {
+          "emailsDelivered": {
             "type": "number",
             "description": "Total emails delivered"
           },
-          "opened": {
+          "emailsOpened": {
             "type": "number",
             "description": "Total emails opened"
           },
-          "clicked": {
+          "emailsClicked": {
             "type": "number",
             "description": "Total link clicks"
           },
-          "replied": {
+          "emailsReplied": {
             "type": "number",
             "description": "Total replies received"
           },
-          "bounced": {
+          "emailsBounced": {
             "type": "number",
             "description": "Total bounced emails"
           },
-          "unsubscribed": {
+          "repliesWillingToMeet": {
+            "type": "number",
+            "description": "Replies willing to meet"
+          },
+          "repliesInterested": {
+            "type": "number",
+            "description": "Replies interested"
+          },
+          "repliesNotInterested": {
+            "type": "number",
+            "description": "Replies not interested"
+          },
+          "repliesOutOfOffice": {
+            "type": "number",
+            "description": "Replies out of office"
+          },
+          "repliesUnsubscribe": {
             "type": "number",
             "description": "Total unsubscribes"
           },
@@ -244,13 +260,17 @@
           }
         },
         "required": [
-          "sent",
-          "delivered",
-          "opened",
-          "clicked",
-          "replied",
-          "bounced",
-          "unsubscribed",
+          "emailsSent",
+          "emailsDelivered",
+          "emailsOpened",
+          "emailsClicked",
+          "emailsReplied",
+          "emailsBounced",
+          "repliesWillingToMeet",
+          "repliesInterested",
+          "repliesNotInterested",
+          "repliesOutOfOffice",
+          "repliesUnsubscribe",
           "recipients"
         ],
         "description": "Stats for transactional emails"

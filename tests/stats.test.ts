@@ -94,13 +94,17 @@ describe("POST /stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional).toEqual({
-        sent: 100,
-        delivered: 95,
-        opened: 40,
-        clicked: 10,
-        replied: 5,
-        bounced: 3,
-        unsubscribed: 2,
+        emailsSent: 100,
+        emailsDelivered: 95,
+        emailsOpened: 40,
+        emailsClicked: 10,
+        emailsReplied: 5,
+        emailsBounced: 3,
+        repliesWillingToMeet: 1,
+        repliesInterested: 2,
+        repliesNotInterested: 0,
+        repliesOutOfOffice: 1,
+        repliesUnsubscribe: 2,
         recipients: 100,
       });
       expect(res.body.broadcast).toBeUndefined();
@@ -141,13 +145,17 @@ describe("POST /stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast).toEqual({
-        sent: 80,
-        delivered: 75,
-        opened: 30,
-        clicked: 3,
-        replied: 2,
-        bounced: 5,
-        unsubscribed: 0,
+        emailsSent: 80,
+        emailsDelivered: 75,
+        emailsOpened: 30,
+        emailsClicked: 3,
+        emailsReplied: 2,
+        emailsBounced: 5,
+        repliesWillingToMeet: 0,
+        repliesInterested: 0,
+        repliesNotInterested: 1,
+        repliesOutOfOffice: 2,
+        repliesUnsubscribe: 0,
         recipients: 75,
       });
       expect(res.body.transactional).toBeUndefined();
@@ -189,8 +197,8 @@ describe("POST /stats", () => {
         .send({ appId: "mcpfactory" });
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.sent).toBe(100);
-      expect(res.body.broadcast.sent).toBe(80);
+      expect(res.body.transactional.emailsSent).toBe(100);
+      expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
     it("returns error for broadcast when Instantly fails", async () => {
@@ -211,7 +219,7 @@ describe("POST /stats", () => {
         .send({ appId: "mcpfactory" });
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.sent).toBe(100);
+      expect(res.body.transactional.emailsSent).toBe(100);
       expect(res.body.broadcast.error).toBeDefined();
     });
 
@@ -234,7 +242,7 @@ describe("POST /stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.error).toBeDefined();
-      expect(res.body.broadcast.sent).toBe(80);
+      expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
     it("returns errors for both when both fail", async () => {
@@ -289,6 +297,21 @@ describe("POST /stats", () => {
 
       // Postmark doesn't return recipients, so it falls back to emailsSent
       expect(res.body.transactional.recipients).toBe(100);
+    });
+
+    it("defaults missing reply subtypes to 0", async () => {
+      // Instantly doesn't return repliesWillingToMeet or repliesInterested
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ type: "broadcast" });
+
+      expect(res.body.broadcast.repliesWillingToMeet).toBe(0);
+      expect(res.body.broadcast.repliesInterested).toBe(0);
+      expect(res.body.broadcast.repliesNotInterested).toBe(1);
+      expect(res.body.broadcast.repliesOutOfOffice).toBe(2);
     });
   });
 });

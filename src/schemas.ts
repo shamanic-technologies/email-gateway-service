@@ -88,13 +88,17 @@ export type StatsRequest = z.infer<typeof StatsRequestSchema>;
 
 export const StatsSchema = z
   .object({
-    sent: z.number().describe("Total emails sent"),
-    delivered: z.number().describe("Total emails delivered"),
-    opened: z.number().describe("Total emails opened"),
-    clicked: z.number().describe("Total link clicks"),
-    replied: z.number().describe("Total replies received"),
-    bounced: z.number().describe("Total bounced emails"),
-    unsubscribed: z.number().describe("Total unsubscribes"),
+    emailsSent: z.number().describe("Total emails sent"),
+    emailsDelivered: z.number().describe("Total emails delivered"),
+    emailsOpened: z.number().describe("Total emails opened"),
+    emailsClicked: z.number().describe("Total link clicks"),
+    emailsReplied: z.number().describe("Total replies received"),
+    emailsBounced: z.number().describe("Total bounced emails"),
+    repliesWillingToMeet: z.number().describe("Replies willing to meet"),
+    repliesInterested: z.number().describe("Replies interested"),
+    repliesNotInterested: z.number().describe("Replies not interested"),
+    repliesOutOfOffice: z.number().describe("Replies out of office"),
+    repliesUnsubscribe: z.number().describe("Total unsubscribes"),
     recipients: z.number().describe("Total unique recipients"),
   })
   .openapi("Stats");

@@ -13,20 +13,28 @@ interface ProviderStatsResponse {
     emailsClicked: number;
     emailsReplied: number;
     emailsBounced: number;
-    repliesUnsubscribe: number;
+    repliesWillingToMeet?: number;
+    repliesInterested?: number;
+    repliesNotInterested?: number;
+    repliesOutOfOffice?: number;
+    repliesUnsubscribe?: number;
   };
   recipients?: number;
 }
 
 function normalizeProviderStats(raw: ProviderStatsResponse): Stats {
   return {
-    sent: raw.stats.emailsSent,
-    delivered: raw.stats.emailsDelivered,
-    opened: raw.stats.emailsOpened,
-    clicked: raw.stats.emailsClicked,
-    replied: raw.stats.emailsReplied,
-    bounced: raw.stats.emailsBounced,
-    unsubscribed: raw.stats.repliesUnsubscribe,
+    emailsSent: raw.stats.emailsSent,
+    emailsDelivered: raw.stats.emailsDelivered,
+    emailsOpened: raw.stats.emailsOpened,
+    emailsClicked: raw.stats.emailsClicked,
+    emailsReplied: raw.stats.emailsReplied,
+    emailsBounced: raw.stats.emailsBounced,
+    repliesWillingToMeet: raw.stats.repliesWillingToMeet ?? 0,
+    repliesInterested: raw.stats.repliesInterested ?? 0,
+    repliesNotInterested: raw.stats.repliesNotInterested ?? 0,
+    repliesOutOfOffice: raw.stats.repliesOutOfOffice ?? 0,
+    repliesUnsubscribe: raw.stats.repliesUnsubscribe ?? 0,
     recipients: raw.recipients ?? raw.stats.emailsSent,
   };
 }
