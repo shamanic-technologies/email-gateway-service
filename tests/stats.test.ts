@@ -40,7 +40,7 @@ function mockPostmarkStats(overrides = {}) {
   };
 }
 
-function mockInstantlyStats(overrides = {}) {
+function mockInstantlyStats(overrides = {}, stepStats?: Array<{ step: number; emailsSent: number; emailsOpened: number; emailsReplied: number; emailsBounced: number }>) {
   return {
     ok: true,
     json: () =>
@@ -59,6 +59,7 @@ function mockInstantlyStats(overrides = {}) {
           ...overrides,
         },
         recipients: 75,
+        ...(stepStats ? { stepStats } : {}),
       }),
   };
 }
@@ -557,6 +558,59 @@ describe("POST /stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toEqual([]);
+    });
+  });
+
+  describe("stepStats (broadcast only)", () => {
+    it("forwards stepStats from instantly in broadcast block", async () => {
+      const steps = [
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, emailsBounced: 1 },
+        { step: 2, emailsSent: 10, emailsOpened: 5, emailsReplied: 1, emailsBounced: 1 },
+        { step: 3, emailsSent: 10, emailsOpened: 2, emailsReplied: 1, emailsBounced: 0 },
+      ];
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, steps));
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ type: "broadcast" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.stepStats).toEqual(steps);
+      expect(res.body.broadcast.emailsSent).toBe(80);
+    });
+
+    it("omits stepStats when not present in provider response", async () => {
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ type: "broadcast" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.stepStats).toBeUndefined();
+      expect(res.body.broadcast.emailsSent).toBe(80);
+    });
+
+    it("includes stepStats in broadcast block when aggregating both providers", async () => {
+      const steps = [
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, emailsBounced: 1 },
+      ];
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats({}, steps));
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ appId: "mcpfactory" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.transactional.stepStats).toBeUndefined();
+      expect(res.body.broadcast.stepStats).toEqual(steps);
     });
   });
 });

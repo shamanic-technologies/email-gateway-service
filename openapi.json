@@ -127,17 +127,16 @@
             "type": "string",
             "description": "Plain text email body for this step"
           },
-          "delayDays": {
+          "daysSinceLastStep": {
             "type": "integer",
             "minimum": 0,
-            "description": "Days to wait before sending this step relative to first send (0 = immediate)"
+            "description": "Days to wait since the previous step (0 = immediate, step 1 is always 0)"
           }
         },
         "required": [
           "step",
           "bodyHtml",
-          "bodyText",
-          "delayDays"
+          "daysSinceLastStep"
         ]
       },
       "SendRequest": {
@@ -411,6 +410,58 @@
         ],
         "description": "Stats for transactional emails"
       },
+      "StepStats": {
+        "type": "object",
+        "properties": {
+          "step": {
+            "type": "number",
+            "description": "Step number"
+          },
+          "emailsSent": {
+            "type": "number",
+            "description": "Emails sent for this step"
+          },
+          "emailsOpened": {
+            "type": "number",
+            "description": "Emails opened for this step"
+          },
+          "emailsReplied": {
+            "type": "number",
+            "description": "Replies for this step"
+          },
+          "emailsBounced": {
+            "type": "number",
+            "description": "Bounces for this step"
+          }
+        },
+        "required": [
+          "step",
+          "emailsSent",
+          "emailsOpened",
+          "emailsReplied",
+          "emailsBounced"
+        ]
+      },
+      "BroadcastStats": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Stats"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "stepStats": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/StepStats"
+                },
+                "description": "Per-step breakdown (broadcast sequences only)"
+              }
+            }
+          }
+        ],
+        "description": "Stats for broadcast emails"
+      },
       "StatsResponse": {
         "type": "object",
         "properties": {
@@ -418,14 +469,7 @@
             "$ref": "#/components/schemas/Stats"
           },
           "broadcast": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/Stats"
-              },
-              {
-                "description": "Stats for broadcast emails"
-              }
-            ]
+            "$ref": "#/components/schemas/BroadcastStats"
           }
         }
       },

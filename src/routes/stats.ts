@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { StatsRequestSchema, Stats } from "../schemas";
+import { StatsRequestSchema, Stats, BroadcastStats } from "../schemas";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import type {
@@ -7,6 +7,7 @@ import type {
   ProviderStatsGrouped,
   ProviderStatsPayload,
   ProviderStatsResult,
+  ProviderStepStats,
 } from "../lib/instantly-client";
 
 const router = Router();
@@ -26,6 +27,11 @@ function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats
     repliesUnsubscribe: raw.repliesUnsubscribe ?? 0,
     recipients: recipients ?? raw.emailsSent,
   };
+}
+
+function normalizeBroadcastFlat(raw: ProviderStatsFlat): BroadcastStats {
+  const base = normalizePayload(raw.stats, raw.recipients);
+  return raw.stepStats ? { ...base, stepStats: raw.stepStats } : base;
 }
 
 function isGrouped(result: ProviderStatsResult): result is ProviderStatsGrouped {
@@ -72,7 +78,8 @@ async function handleFlat(
 
   if (type === "broadcast") {
     const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0]);
-    res.json({ broadcast: normalizeFlatResult(raw) });
+    const flat = raw as ProviderStatsFlat;
+    res.json({ broadcast: normalizeBroadcastFlat(flat) });
     return;
   }
 
@@ -92,7 +99,8 @@ async function handleFlat(
   }
 
   if (instantlyResult.status === "fulfilled") {
-    response.broadcast = normalizeFlatResult(instantlyResult.value);
+    const flat = instantlyResult.value as ProviderStatsFlat;
+    response.broadcast = normalizeBroadcastFlat(flat);
   } else {
     console.error(`[stats] Instantly failed: ${instantlyResult.reason?.message}`);
     response.broadcast = { error: instantlyResult.reason?.message };

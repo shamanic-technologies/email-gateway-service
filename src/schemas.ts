@@ -55,8 +55,8 @@ export const SequenceStepSchema = z
   .object({
     step: z.number().int().min(1).describe("Step number (1-based ordinal)"),
     bodyHtml: z.string().describe("HTML email body for this step"),
-    bodyText: z.string().describe("Plain text email body for this step"),
-    delayDays: z.number().int().min(0).describe("Days to wait before sending this step relative to first send (0 = immediate)"),
+    bodyText: z.string().optional().describe("Plain text email body for this step"),
+    daysSinceLastStep: z.number().int().min(0).describe("Days to wait since the previous step (0 = immediate, step 1 is always 0)"),
   })
   .openapi("SequenceStep");
 
@@ -133,10 +133,28 @@ export const StatsSchema = z
 
 export type Stats = z.infer<typeof StatsSchema>;
 
+export const StepStatsSchema = z
+  .object({
+    step: z.number().describe("Step number"),
+    emailsSent: z.number().describe("Emails sent for this step"),
+    emailsOpened: z.number().describe("Emails opened for this step"),
+    emailsReplied: z.number().describe("Replies for this step"),
+    emailsBounced: z.number().describe("Bounces for this step"),
+  })
+  .openapi("StepStats");
+
+export type StepStats = z.infer<typeof StepStatsSchema>;
+
+export const BroadcastStatsSchema = StatsSchema.extend({
+  stepStats: z.array(StepStatsSchema).optional().describe("Per-step breakdown (broadcast sequences only)"),
+}).openapi("BroadcastStats");
+
+export type BroadcastStats = z.infer<typeof BroadcastStatsSchema>;
+
 export const StatsResponseSchema = z
   .object({
     transactional: StatsSchema.optional().describe("Stats for transactional emails"),
-    broadcast: StatsSchema.optional().describe("Stats for broadcast emails"),
+    broadcast: BroadcastStatsSchema.optional().describe("Stats for broadcast emails"),
   })
   .openapi("StatsResponse");
 

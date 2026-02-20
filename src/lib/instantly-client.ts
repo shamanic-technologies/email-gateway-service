@@ -49,8 +49,8 @@ export async function atomicSend(body: {
   sequence: Array<{
     step: number;
     bodyHtml: string;
-    bodyText: string;
-    delayDays: number;
+    bodyText?: string;
+    daysSinceLastStep: number;
   }>;
 }) {
   return request<AtomicSendResponse>("/send", { method: "POST", body });
@@ -71,9 +71,18 @@ export interface ProviderStatsPayload {
   repliesUnsubscribe?: number;
 }
 
+export interface ProviderStepStats {
+  step: number;
+  emailsSent: number;
+  emailsOpened: number;
+  emailsReplied: number;
+  emailsBounced: number;
+}
+
 export interface ProviderStatsFlat {
   stats: ProviderStatsPayload;
   recipients?: number;
+  stepStats?: ProviderStepStats[];
 }
 
 export interface ProviderStatsGrouped {

@@ -52,9 +52,9 @@ function buildBroadcastBody(overrides = {}) {
     recipientCompany: "Acme Corp",
     subject: "Hello",
     sequence: [
-      { step: 1, bodyHtml: "<p>Hi</p>", bodyText: "Hi", delayDays: 0 },
-      { step: 2, bodyHtml: "<p>Following up</p>", bodyText: "Following up", delayDays: 3 },
-      { step: 3, bodyHtml: "<p>Final email</p>", bodyText: "Final email", delayDays: 10 },
+      { step: 1, bodyHtml: "<p>Hi</p>", bodyText: "Hi", daysSinceLastStep: 0 },
+      { step: 2, bodyHtml: "<p>Following up</p>", bodyText: "Following up", daysSinceLastStep: 3 },
+      { step: 3, bodyHtml: "<p>Final email</p>", bodyText: "Final email", daysSinceLastStep: 7 },
     ],
     ...overrides,
   };
@@ -184,9 +184,9 @@ describe("POST /send", () => {
       expect(body.company).toBe("Acme Corp");
       expect(body.subject).toBe("Hello");
       expect(body.sequence).toEqual([
-        { step: 1, bodyHtml: "<p>Hi</p>", bodyText: "Hi", delayDays: 0 },
-        { step: 2, bodyHtml: "<p>Following up</p>", bodyText: "Following up", delayDays: 3 },
-        { step: 3, bodyHtml: "<p>Final email</p>", bodyText: "Final email", delayDays: 10 },
+        { step: 1, bodyHtml: "<p>Hi</p>", bodyText: "Hi", daysSinceLastStep: 0 },
+        { step: 2, bodyHtml: "<p>Following up</p>", bodyText: "Following up", daysSinceLastStep: 3 },
+        { step: 3, bodyHtml: "<p>Final email</p>", bodyText: "Final email", daysSinceLastStep: 7 },
       ]);
       expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
