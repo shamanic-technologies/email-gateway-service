@@ -28,22 +28,22 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  let brandUrl: string | undefined;
-  if (body.brandId) {
-    try {
-      const brand = await brandClient.getBrand(body.brandId);
-      brandUrl = brand.brandUrl ?? undefined;
-    } catch (err) {
-      console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
-    }
-  }
-
-  const htmlWithSignature = appendSignature(body.htmlBody, body.type, body.appId, brandUrl);
-
   console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId}`);
 
   try {
     if (body.type === "transactional") {
+      let brandUrl: string | undefined;
+      if (body.brandId) {
+        try {
+          const brand = await brandClient.getBrand(body.brandId);
+          brandUrl = brand.brandUrl ?? undefined;
+        } catch (err) {
+          console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
+        }
+      }
+
+      const htmlWithSignature = appendSignature(body.htmlBody, body.type, body.appId, brandUrl);
+
       const result = await postmarkClient.sendEmail({
         orgId: body.clerkOrgId,
         runId: body.runId,
@@ -81,10 +81,7 @@ router.post("/send", async (req: Request, res: Response) => {
         lastName: body.recipientLastName,
         company: body.recipientCompany,
         variables: body.metadata,
-        email: {
-          subject: body.subject,
-          body: htmlWithSignature || body.textBody || "",
-        },
+        sequence: body.sequence,
       });
 
       console.log(`[send] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);

@@ -44,10 +44,11 @@ export async function atomicSend(body: {
   lastName?: string;
   company?: string;
   variables?: Record<string, string>;
-  email: {
+  sequence: Array<{
     subject: string;
     body: string;
-  };
+    delayDays: number;
+  }>;
 }) {
   return request<AtomicSendResponse>("/send", { method: "POST", body });
 }

@@ -49,8 +49,11 @@ function buildBroadcastBody(overrides = {}) {
     recipientFirstName: "Jane",
     recipientLastName: "Doe",
     recipientCompany: "Acme Corp",
-    subject: "Hello",
-    htmlBody: "<p>Hi</p>",
+    sequence: [
+      { subject: "Hello", body: "<p>Hi</p>", delayDays: 0 },
+      { subject: "Follow up", body: "<p>Following up</p>", delayDays: 3 },
+      { subject: "Last chance", body: "<p>Final email</p>", delayDays: 10 },
+    ],
     ...overrides,
   };
 }
@@ -81,7 +84,6 @@ describe("POST /send", () => {
 
   describe("broadcast (Instantly)", () => {
     it("returns success with campaignId and messageId when added > 0", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -108,7 +110,6 @@ describe("POST /send", () => {
     });
 
     it("returns 409 when added === 0 (duplicate lead)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -132,7 +133,6 @@ describe("POST /send", () => {
     });
 
     it("returns 502 when instantly-service is down", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -148,8 +148,7 @@ describe("POST /send", () => {
       expect(res.body.error).toBe("Upstream service error");
     });
 
-    it("passes correct payload to instantly-service (non-mcpfactory)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+    it("passes correct payload with sequence to instantly-service", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -170,8 +169,8 @@ describe("POST /send", () => {
           })
         );
 
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      const [url, options] = mockFetch.mock.calls[1];
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const [url, options] = mockFetch.mock.calls[0];
       expect(url).toBe("http://localhost:3011/send");
       expect(options.method).toBe("POST");
 
@@ -180,18 +179,18 @@ describe("POST /send", () => {
       expect(body.firstName).toBe("Jane");
       expect(body.lastName).toBe("Doe");
       expect(body.company).toBe("Acme Corp");
-      expect(body.email.subject).toBe("Hello");
-      expect(body.email.body).toContain("<p>Hi</p>");
-      // non-mcpfactory broadcast: no signature, no unsubscribe
-      expect(body.email.body).not.toContain("Kevin Lourd");
-      expect(body.email.body).not.toContain("unsubscribe");
+      expect(body.sequence).toEqual([
+        { subject: "Hello", body: "<p>Hi</p>", delayDays: 0 },
+        { subject: "Follow up", body: "<p>Following up</p>", delayDays: 3 },
+        { subject: "Last chance", body: "<p>Final email</p>", delayDays: 10 },
+      ]);
+      expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
       expect(body.runId).toBe("run_1");
       expect(body.campaignId).toBe("campaign_1");
     });
 
-    it("does not append any signature for broadcast even when appId is mcpfactory (Instantly manages its own)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+    it("forwards sequence as-is for broadcast (no signature, no brand fetch)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -203,11 +202,12 @@ describe("POST /send", () => {
         .set("X-API-Key", API_KEY)
         .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toBe("<p>Hi</p>");
-      expect(body.email.body).not.toContain("Kevin Lourd");
-      expect(body.email.body).not.toContain("growthagency.dev");
-      expect(body.email.body).not.toContain("unsubscribe");
+      // Only 1 fetch call (instantly), no brand service
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.sequence).toHaveLength(3);
+      expect(body.sequence[0].body).toBe("<p>Hi</p>");
+      expect(body.email).toBeUndefined();
     });
   });
 
@@ -288,7 +288,6 @@ describe("POST /send", () => {
     });
 
     it("returns cached result on duplicate idempotencyKey (broadcast)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -314,11 +313,10 @@ describe("POST /send", () => {
       expect(res2.status).toBe(200);
       expect(res2.body.campaignId).toBe("c1");
       expect(res2.body.deduplicated).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it("caches 409 responses for broadcast duplicates", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -341,7 +339,7 @@ describe("POST /send", () => {
 
       expect(res2.status).toBe(409);
       expect(res2.body.deduplicated).toBe(true);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it("sends normally when different idempotencyKeys are used", async () => {
@@ -474,8 +472,7 @@ describe("POST /send", () => {
       expect(body.htmlBody).toContain("growthagency.dev");
     });
 
-    it("does not append any signature for broadcast (Instantly manages its own)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+    it("forwards sequence without modification for broadcast (no signature)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
@@ -486,10 +483,9 @@ describe("POST /send", () => {
         .set("X-API-Key", API_KEY)
         .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toBe("<p>Hi</p>");
-      expect(body.email.body).not.toContain("Kevin Lourd");
-      expect(body.email.body).not.toContain("growthagency.dev");
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.sequence[0].body).toBe("<p>Hi</p>");
+      expect(body.email).toBeUndefined();
     });
 
     it("injects brandUrl from brand service into transactional signature", async () => {
@@ -565,8 +561,7 @@ describe("POST /send", () => {
       expect(body.htmlBody).not.toContain("BRAND_URL");
     });
 
-    it("does not append anything for broadcast", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+    it("forwards sequence as-is for broadcast (no signature)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
@@ -577,25 +572,10 @@ describe("POST /send", () => {
         .set("X-API-Key", API_KEY)
         .send(buildBroadcastBody({ appId: "other_app" }));
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      // Should be just the original html body, no footer
-      expect(body.email.body).toBe("<p>Hi</p>");
-    });
-
-    it("does not append signature when htmlBody is missing (broadcast)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
-      });
-
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ htmlBody: undefined, textBody: "plain text" }));
-
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.email.body).toBe("plain text");
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.sequence).toHaveLength(3);
+      expect(body.sequence[0].body).toBe("<p>Hi</p>");
+      expect(body.email).toBeUndefined();
     });
   });
 });

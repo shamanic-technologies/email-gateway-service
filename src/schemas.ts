@@ -33,27 +33,47 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 
 // --- POST /send ---
 
-export const SendRequestSchema = z
+const SendBaseSchema = z.object({
+  appId: z.string().describe("App ID"),
+  clerkOrgId: z.string().optional().describe("Clerk organization ID"),
+  brandId: z.string().optional().describe("Brand ID"),
+  campaignId: z.string().optional().describe("Campaign ID"),
+  runId: z.string().describe("Run ID for tracking"),
+  clerkUserId: z.string().optional().describe("Clerk user ID"),
+  to: z.string().email().describe("Recipient email address"),
+  recipientFirstName: z.string().describe("Recipient first name"),
+  recipientLastName: z.string().describe("Recipient last name"),
+  recipientCompany: z.string().describe("Recipient company name"),
+  replyTo: z.string().email().optional().describe("Reply-to email address"),
+  tag: z.string().optional().describe("Email tag for categorization"),
+  metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
+  idempotencyKey: z.string().optional().describe("Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."),
+});
+
+export const SequenceStepSchema = z
   .object({
-    type: EmailTypeSchema.describe("Email channel type"),
-    appId: z.string().describe("App ID"),
-    clerkOrgId: z.string().optional().describe("Clerk organization ID"),
-    brandId: z.string().optional().describe("Brand ID"),
-    campaignId: z.string().optional().describe("Campaign ID"),
-    runId: z.string().describe("Run ID for tracking"),
-    clerkUserId: z.string().optional().describe("Clerk user ID"),
-    to: z.string().email().describe("Recipient email address"),
-    recipientFirstName: z.string().describe("Recipient first name"),
-    recipientLastName: z.string().describe("Recipient last name"),
-    recipientCompany: z.string().describe("Recipient company name"),
-    subject: z.string().describe("Email subject line"),
-    htmlBody: z.string().optional().describe("HTML email body"),
-    textBody: z.string().optional().describe("Plain text email body"),
-    replyTo: z.string().email().optional().describe("Reply-to email address"),
-    tag: z.string().optional().describe("Email tag for categorization"),
-    metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
-    idempotencyKey: z.string().optional().describe("Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."),
+    subject: z.string().describe("Email subject line for this step"),
+    body: z.string().describe("HTML email body for this step"),
+    delayDays: z.number().int().min(0).describe("Days to wait before sending this step (0 = immediate)"),
   })
+  .openapi("SequenceStep");
+
+export type SequenceStep = z.infer<typeof SequenceStepSchema>;
+
+const TransactionalSendSchema = SendBaseSchema.extend({
+  type: z.literal("transactional").describe("Transactional email channel"),
+  subject: z.string().describe("Email subject line"),
+  htmlBody: z.string().optional().describe("HTML email body"),
+  textBody: z.string().optional().describe("Plain text email body"),
+});
+
+const BroadcastSendSchema = SendBaseSchema.extend({
+  type: z.literal("broadcast").describe("Broadcast email channel"),
+  sequence: z.array(SequenceStepSchema).min(1).describe("Email sequence steps sent via Instantly"),
+});
+
+export const SendRequestSchema = z
+  .discriminatedUnion("type", [TransactionalSendSchema, BroadcastSendSchema])
   .openapi("SendRequest");
 
 export type SendRequest = z.infer<typeof SendRequestSchema>;

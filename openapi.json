@@ -111,100 +111,217 @@
           "error"
         ]
       },
-      "SendRequest": {
+      "SequenceStep": {
         "type": "object",
         "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "transactional",
-              "broadcast"
-            ],
-            "description": "Email channel type"
-          },
-          "appId": {
-            "type": "string",
-            "description": "App ID"
-          },
-          "clerkOrgId": {
-            "type": "string",
-            "description": "Clerk organization ID"
-          },
-          "brandId": {
-            "type": "string",
-            "description": "Brand ID"
-          },
-          "campaignId": {
-            "type": "string",
-            "description": "Campaign ID"
-          },
-          "runId": {
-            "type": "string",
-            "description": "Run ID for tracking"
-          },
-          "clerkUserId": {
-            "type": "string",
-            "description": "Clerk user ID"
-          },
-          "to": {
-            "type": "string",
-            "format": "email",
-            "description": "Recipient email address"
-          },
-          "recipientFirstName": {
-            "type": "string",
-            "description": "Recipient first name"
-          },
-          "recipientLastName": {
-            "type": "string",
-            "description": "Recipient last name"
-          },
-          "recipientCompany": {
-            "type": "string",
-            "description": "Recipient company name"
-          },
           "subject": {
             "type": "string",
-            "description": "Email subject line"
+            "description": "Email subject line for this step"
           },
-          "htmlBody": {
+          "body": {
             "type": "string",
-            "description": "HTML email body"
+            "description": "HTML email body for this step"
           },
-          "textBody": {
-            "type": "string",
-            "description": "Plain text email body"
-          },
-          "replyTo": {
-            "type": "string",
-            "format": "email",
-            "description": "Reply-to email address"
-          },
-          "tag": {
-            "type": "string",
-            "description": "Email tag for categorization"
-          },
-          "metadata": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Custom metadata key-value pairs"
-          },
-          "idempotencyKey": {
-            "type": "string",
-            "description": "Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."
+          "delayDays": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Days to wait before sending this step (0 = immediate)"
           }
         },
         "required": [
-          "type",
-          "appId",
-          "runId",
-          "to",
-          "recipientFirstName",
-          "recipientLastName",
-          "recipientCompany",
-          "subject"
+          "subject",
+          "body",
+          "delayDays"
+        ]
+      },
+      "SendRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "appId": {
+                "type": "string",
+                "description": "App ID"
+              },
+              "clerkOrgId": {
+                "type": "string",
+                "description": "Clerk organization ID"
+              },
+              "brandId": {
+                "type": "string",
+                "description": "Brand ID"
+              },
+              "campaignId": {
+                "type": "string",
+                "description": "Campaign ID"
+              },
+              "runId": {
+                "type": "string",
+                "description": "Run ID for tracking"
+              },
+              "clerkUserId": {
+                "type": "string",
+                "description": "Clerk user ID"
+              },
+              "to": {
+                "type": "string",
+                "format": "email",
+                "description": "Recipient email address"
+              },
+              "recipientFirstName": {
+                "type": "string",
+                "description": "Recipient first name"
+              },
+              "recipientLastName": {
+                "type": "string",
+                "description": "Recipient last name"
+              },
+              "recipientCompany": {
+                "type": "string",
+                "description": "Recipient company name"
+              },
+              "replyTo": {
+                "type": "string",
+                "format": "email",
+                "description": "Reply-to email address"
+              },
+              "tag": {
+                "type": "string",
+                "description": "Email tag for categorization"
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Custom metadata key-value pairs"
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "description": "Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "transactional"
+                ],
+                "description": "Transactional email channel"
+              },
+              "subject": {
+                "type": "string",
+                "description": "Email subject line"
+              },
+              "htmlBody": {
+                "type": "string",
+                "description": "HTML email body"
+              },
+              "textBody": {
+                "type": "string",
+                "description": "Plain text email body"
+              }
+            },
+            "required": [
+              "appId",
+              "runId",
+              "to",
+              "recipientFirstName",
+              "recipientLastName",
+              "recipientCompany",
+              "type",
+              "subject"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "appId": {
+                "type": "string",
+                "description": "App ID"
+              },
+              "clerkOrgId": {
+                "type": "string",
+                "description": "Clerk organization ID"
+              },
+              "brandId": {
+                "type": "string",
+                "description": "Brand ID"
+              },
+              "campaignId": {
+                "type": "string",
+                "description": "Campaign ID"
+              },
+              "runId": {
+                "type": "string",
+                "description": "Run ID for tracking"
+              },
+              "clerkUserId": {
+                "type": "string",
+                "description": "Clerk user ID"
+              },
+              "to": {
+                "type": "string",
+                "format": "email",
+                "description": "Recipient email address"
+              },
+              "recipientFirstName": {
+                "type": "string",
+                "description": "Recipient first name"
+              },
+              "recipientLastName": {
+                "type": "string",
+                "description": "Recipient last name"
+              },
+              "recipientCompany": {
+                "type": "string",
+                "description": "Recipient company name"
+              },
+              "replyTo": {
+                "type": "string",
+                "format": "email",
+                "description": "Reply-to email address"
+              },
+              "tag": {
+                "type": "string",
+                "description": "Email tag for categorization"
+              },
+              "metadata": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Custom metadata key-value pairs"
+              },
+              "idempotencyKey": {
+                "type": "string",
+                "description": "Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "broadcast"
+                ],
+                "description": "Broadcast email channel"
+              },
+              "sequence": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SequenceStep"
+                },
+                "minItems": 1,
+                "description": "Email sequence steps sent via Instantly"
+              }
+            },
+            "required": [
+              "appId",
+              "runId",
+              "to",
+              "recipientFirstName",
+              "recipientLastName",
+              "recipientCompany",
+              "type",
+              "sequence"
+            ]
+          }
         ]
       },
       "Stats": {
