@@ -39,7 +39,7 @@ const SendBaseSchema = z.object({
   brandId: z.string().optional().describe("Brand ID"),
   campaignId: z.string().optional().describe("Campaign ID"),
   runId: z.string().describe("Run ID for tracking"),
-  workflowName: z.string().describe("Workflow name for tracking and grouping"),
+  workflowName: z.string().optional().describe("Workflow name for tracking and grouping"),
   clerkUserId: z.string().optional().describe("Clerk user ID"),
   to: z.string().email().describe("Recipient email address"),
   recipientFirstName: z.string().describe("Recipient first name"),

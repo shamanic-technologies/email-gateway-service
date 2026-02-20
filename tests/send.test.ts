@@ -481,15 +481,20 @@ describe("POST /send", () => {
       expect(res.body.error).toBe("Invalid request");
     });
 
-    it("returns 400 when workflowName is missing", async () => {
+    it("accepts request without workflowName (optional)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
       const { workflowName, ...bodyWithout } = buildBroadcastBody();
       const res = await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
         .send(bodyWithout);
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toBe("Invalid request");
+      expect(res.status).toBe(200);
     });
 
     it("returns 401 without API key", async () => {

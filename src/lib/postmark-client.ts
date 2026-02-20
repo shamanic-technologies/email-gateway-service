@@ -31,7 +31,7 @@ export async function sendEmail(body: {
   runId?: string;
   brandId?: string;
   appId: string;
-  workflowName: string;
+  workflowName?: string;
   campaignId?: string;
   from: string;
   to: string;

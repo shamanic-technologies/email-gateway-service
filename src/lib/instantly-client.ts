@@ -38,7 +38,7 @@ export async function atomicSend(body: {
   brandId?: string;
   appId: string;
   runId?: string;
-  workflowName: string;
+  workflowName?: string;
   campaignId?: string;
   to: string;
   firstName?: string;

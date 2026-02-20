@@ -233,7 +233,6 @@
             "required": [
               "appId",
               "runId",
-              "workflowName",
               "to",
               "recipientFirstName",
               "recipientLastName",
@@ -333,7 +332,6 @@
             "required": [
               "appId",
               "runId",
-              "workflowName",
               "to",
               "recipientFirstName",
               "recipientLastName",
