@@ -44,15 +44,17 @@ function buildBroadcastBody(overrides = {}) {
     brandId: "brand_1",
     campaignId: "campaign_1",
     runId: "run_1",
+    workflowName: "test-workflow",
     clerkOrgId: "org_1",
     to: "lead@example.com",
     recipientFirstName: "Jane",
     recipientLastName: "Doe",
     recipientCompany: "Acme Corp",
+    subject: "Hello",
     sequence: [
-      { subject: "Hello", body: "<p>Hi</p>", delayDays: 0 },
-      { subject: "Follow up", body: "<p>Following up</p>", delayDays: 3 },
-      { subject: "Last chance", body: "<p>Final email</p>", delayDays: 10 },
+      { step: 1, bodyHtml: "<p>Hi</p>", bodyText: "Hi", delayDays: 0 },
+      { step: 2, bodyHtml: "<p>Following up</p>", bodyText: "Following up", delayDays: 3 },
+      { step: 3, bodyHtml: "<p>Final email</p>", bodyText: "Final email", delayDays: 10 },
     ],
     ...overrides,
   };
@@ -65,6 +67,7 @@ function buildTransactionalBody(overrides = {}) {
     brandId: "brand_1",
     campaignId: "campaign_1",
     runId: "run_1",
+    workflowName: "test-workflow",
     clerkOrgId: "org_1",
     to: "user@example.com",
     recipientFirstName: "John",
@@ -179,10 +182,11 @@ describe("POST /send", () => {
       expect(body.firstName).toBe("Jane");
       expect(body.lastName).toBe("Doe");
       expect(body.company).toBe("Acme Corp");
+      expect(body.subject).toBe("Hello");
       expect(body.sequence).toEqual([
-        { subject: "Hello", body: "<p>Hi</p>", delayDays: 0 },
-        { subject: "Follow up", body: "<p>Following up</p>", delayDays: 3 },
-        { subject: "Last chance", body: "<p>Final email</p>", delayDays: 10 },
+        { step: 1, bodyHtml: "<p>Hi</p>", bodyText: "Hi", delayDays: 0 },
+        { step: 2, bodyHtml: "<p>Following up</p>", bodyText: "Following up", delayDays: 3 },
+        { step: 3, bodyHtml: "<p>Final email</p>", bodyText: "Final email", delayDays: 10 },
       ]);
       expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
@@ -206,7 +210,7 @@ describe("POST /send", () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.sequence).toHaveLength(3);
-      expect(body.sequence[0].body).toBe("<p>Hi</p>");
+      expect(body.sequence[0].bodyHtml).toBe("<p>Hi</p>");
       expect(body.email).toBeUndefined();
     });
   });
@@ -432,12 +436,57 @@ describe("POST /send", () => {
     });
   });
 
+  describe("workflowName forwarding", () => {
+    it("forwards workflowName to instantly-service for broadcast", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildBroadcastBody({ workflowName: "outreach-v2" }));
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.workflowName).toBe("outreach-v2");
+    });
+
+    it("forwards workflowName to postmark-service for transactional", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildTransactionalBody({ workflowName: "welcome-flow" }));
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(body.workflowName).toBe("welcome-flow");
+    });
+  });
+
   describe("validation", () => {
     it("returns 400 for missing required fields", async () => {
       const res = await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
         .send({ type: "broadcast" });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid request");
+    });
+
+    it("returns 400 when workflowName is missing", async () => {
+      const { workflowName, ...bodyWithout } = buildBroadcastBody();
+      const res = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(bodyWithout);
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Invalid request");
@@ -484,7 +533,7 @@ describe("POST /send", () => {
         .send(buildBroadcastBody({ appId: "mcpfactory" }));
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.sequence[0].body).toBe("<p>Hi</p>");
+      expect(body.sequence[0].bodyHtml).toBe("<p>Hi</p>");
       expect(body.email).toBeUndefined();
     });
 
@@ -574,7 +623,7 @@ describe("POST /send", () => {
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.sequence).toHaveLength(3);
-      expect(body.sequence[0].body).toBe("<p>Hi</p>");
+      expect(body.sequence[0].bodyHtml).toBe("<p>Hi</p>");
       expect(body.email).toBeUndefined();
     });
   });

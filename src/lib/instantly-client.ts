@@ -38,20 +38,53 @@ export async function atomicSend(body: {
   brandId?: string;
   appId: string;
   runId?: string;
+  workflowName: string;
   campaignId?: string;
   to: string;
   firstName?: string;
   lastName?: string;
   company?: string;
   variables?: Record<string, string>;
+  subject: string;
   sequence: Array<{
-    subject: string;
-    body: string;
+    step: number;
+    bodyHtml: string;
+    bodyText: string;
     delayDays: number;
   }>;
 }) {
   return request<AtomicSendResponse>("/send", { method: "POST", body });
 }
+
+export interface ProviderStatsPayload {
+  emailsSent: number;
+  emailsDelivered: number;
+  emailsOpened: number;
+  emailsClicked: number;
+  emailsReplied: number;
+  emailsBounced: number;
+  repliesAutoReply?: number;
+  repliesWillingToMeet?: number;
+  repliesInterested?: number;
+  repliesNotInterested?: number;
+  repliesOutOfOffice?: number;
+  repliesUnsubscribe?: number;
+}
+
+export interface ProviderStatsFlat {
+  stats: ProviderStatsPayload;
+  recipients?: number;
+}
+
+export interface ProviderStatsGrouped {
+  groups: Array<{
+    key: string;
+    stats: ProviderStatsPayload;
+    recipients?: number;
+  }>;
+}
+
+export type ProviderStatsResult = ProviderStatsFlat | ProviderStatsGrouped;
 
 export async function getStats(filters: {
   runIds?: string[];
@@ -59,22 +92,10 @@ export async function getStats(filters: {
   brandId?: string;
   appId?: string;
   campaignId?: string;
+  workflowName?: string;
+  groupBy?: string;
 }) {
-  return request<{
-    stats: {
-      emailsSent: number;
-      emailsDelivered: number;
-      emailsOpened: number;
-      emailsClicked: number;
-      emailsReplied: number;
-      emailsBounced: number;
-      repliesAutoReply: number;
-      repliesNotInterested: number;
-      repliesOutOfOffice: number;
-      repliesUnsubscribe: number;
-    };
-    recipients: number;
-  }>("/stats", { method: "POST", body: filters });
+  return request<ProviderStatsResult>("/stats", { method: "POST", body: filters });
 }
 
 export async function forwardWebhook(body: unknown) {

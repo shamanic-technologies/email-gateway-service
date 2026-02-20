@@ -28,7 +28,7 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId}`);
+  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId} workflow=${body.workflowName}`);
 
   try {
     if (body.type === "transactional") {
@@ -49,6 +49,7 @@ router.post("/send", async (req: Request, res: Response) => {
         runId: body.runId,
         brandId: body.brandId,
         appId: body.appId,
+        workflowName: body.workflowName,
         campaignId: body.campaignId,
         from: config.emailFromAddress,
         to: body.to,
@@ -75,12 +76,14 @@ router.post("/send", async (req: Request, res: Response) => {
         runId: body.runId,
         brandId: body.brandId,
         appId: body.appId,
+        workflowName: body.workflowName,
         campaignId: body.campaignId,
         to: body.to,
         firstName: body.recipientFirstName,
         lastName: body.recipientLastName,
         company: body.recipientCompany,
         variables: body.metadata,
+        subject: body.subject,
         sequence: body.sequence,
       });
 

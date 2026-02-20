@@ -31,6 +31,7 @@ export async function sendEmail(body: {
   runId?: string;
   brandId?: string;
   appId: string;
+  workflowName: string;
   campaignId?: string;
   from: string;
   to: string;
@@ -51,28 +52,19 @@ export async function sendEmail(body: {
   }>("/send", { method: "POST", body });
 }
 
+// Re-export shared provider types from instantly-client
+import type { ProviderStatsResult } from "./instantly-client";
+
 export async function getStats(filters: {
   runIds?: string[];
   clerkOrgId?: string;
   brandId?: string;
   appId?: string;
   campaignId?: string;
+  workflowName?: string;
+  groupBy?: string;
 }) {
-  return request<{
-    stats: {
-      emailsSent: number;
-      emailsDelivered: number;
-      emailsOpened: number;
-      emailsClicked: number;
-      emailsReplied: number;
-      emailsBounced: number;
-      repliesWillingToMeet: number;
-      repliesInterested: number;
-      repliesNotInterested: number;
-      repliesOutOfOffice: number;
-      repliesUnsubscribe: number;
-    };
-  }>("/stats", { method: "POST", body: filters });
+  return request<ProviderStatsResult>("/stats", { method: "POST", body: filters });
 }
 
 export async function forwardWebhook(body: unknown) {
