@@ -227,6 +227,23 @@
               "textBody": {
                 "type": "string",
                 "description": "Plain text email body"
+              },
+              "from": {
+                "type": "string",
+                "description": "Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the gateway default is used."
+              },
+              "postmark": {
+                "type": "object",
+                "properties": {
+                  "messageStream": {
+                    "type": "string",
+                    "description": "Postmark message stream ID (e.g. \"outbound\", \"broadcast\")"
+                  }
+                },
+                "required": [
+                  "messageStream"
+                ],
+                "description": "Postmark-specific options. If omitted, Postmark defaults apply."
               }
             },
             "required": [

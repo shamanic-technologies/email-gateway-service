@@ -62,11 +62,17 @@ export const SequenceStepSchema = z
 
 export type SequenceStep = z.infer<typeof SequenceStepSchema>;
 
+const PostmarkOptionsSchema = z.object({
+  messageStream: z.string().describe("Postmark message stream ID (e.g. \"outbound\", \"broadcast\")"),
+});
+
 const TransactionalSendSchema = SendBaseSchema.extend({
   type: z.literal("transactional").describe("Transactional email channel"),
   subject: z.string().describe("Email subject line"),
   htmlBody: z.string().optional().describe("HTML email body"),
   textBody: z.string().optional().describe("Plain text email body"),
+  from: z.string().optional().describe("Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the gateway default is used."),
+  postmark: PostmarkOptionsSchema.optional().describe("Postmark-specific options. If omitted, Postmark defaults apply."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({
