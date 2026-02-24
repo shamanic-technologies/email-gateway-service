@@ -632,6 +632,32 @@ describe("POST /send", () => {
       expect(res.status).toBe(200);
     });
 
+    it("returns explicit error when to is null (lead has no email)", async () => {
+      const res = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(buildBroadcastBody({ to: null }));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Invalid request");
+      expect(res.body.details.fieldErrors.to[0]).toContain(
+        "the lead has no email address"
+      );
+    });
+
+    it("returns explicit error when recipientLastName is missing", async () => {
+      const { recipientLastName, ...body } = buildBroadcastBody();
+      const res = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .send(body);
+
+      expect(res.status).toBe(400);
+      expect(res.body.details.fieldErrors.recipientLastName[0]).toContain(
+        "recipientLastName is required"
+      );
+    });
+
     it("returns 401 without API key", async () => {
       const res = await request(app)
         .post("/send")

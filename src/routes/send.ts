@@ -12,7 +12,14 @@ const router = Router();
 router.post("/send", async (req: Request, res: Response) => {
   const parsed = SendRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    const flat = parsed.error.flatten();
+    const missingFields = Object.keys(flat.fieldErrors);
+    console.error(
+      `[send] Validation failed: missing/invalid fields=[${missingFields.join(", ")}]` +
+      ` type=${req.body?.type} to=${req.body?.to ?? "NULL"} leadId=${req.body?.leadId ?? "none"}` +
+      ` campaignId=${req.body?.campaignId ?? "none"} runId=${req.body?.runId ?? "none"}`
+    );
+    res.status(400).json({ error: "Invalid request", details: flat });
     return;
   }
 
