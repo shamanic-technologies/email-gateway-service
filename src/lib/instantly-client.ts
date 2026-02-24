@@ -108,22 +108,23 @@ export async function getStats(filters: {
   return request<ProviderStatsResult>("/stats", { method: "POST", body: filters });
 }
 
+export interface StatusScope {
+  lead: { contacted: boolean; delivered: boolean; replied: boolean; lastDeliveredAt: string | null };
+  email: { contacted: boolean; delivered: boolean; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null };
+}
+
 export interface StatusResult {
-  leadId?: string;
+  leadId: string;
   email: string;
-  campaign: {
-    lead: { contacted: boolean; delivered: boolean; replied: boolean; lastDeliveredAt: string | null };
-    email: { contacted: boolean; delivered: boolean; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null };
-  };
-  global: {
-    lead: { contacted: boolean; delivered: boolean; replied: boolean; lastDeliveredAt: string | null };
-    email: { contacted: boolean; delivered: boolean; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null };
-  };
+  campaign: StatusScope | null;
+  brand: StatusScope;
+  global: { email: { bounced: boolean; unsubscribed: boolean } };
 }
 
 export async function getStatus(body: {
-  campaignId: string;
-  items: Array<{ leadId?: string; email: string }>;
+  brandId: string;
+  campaignId?: string;
+  items: Array<{ leadId: string; email: string }>;
 }) {
   return request<{ results: StatusResult[] }>("/status", { method: "POST", body });
 }

@@ -12,10 +12,10 @@ router.post("/status", async (req: Request, res: Response) => {
     return;
   }
 
-  const { campaignId, items } = parsed.data;
-  const payload = { campaignId, items };
+  const { brandId, campaignId, items } = parsed.data;
+  const payload = { brandId, campaignId, items };
 
-  console.log(`[status] campaignId=${campaignId} items=${items.length}`);
+  console.log(`[status] brandId=${brandId} campaignId=${campaignId ?? "none"} items=${items.length}`);
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
@@ -54,12 +54,12 @@ router.post("/status", async (req: Request, res: Response) => {
 
       const broadcast = broadcastMap.get(item.email);
       if (broadcast) {
-        entry.broadcast = { campaign: broadcast.campaign, global: broadcast.global };
+        entry.broadcast = { campaign: broadcast.campaign, brand: broadcast.brand, global: broadcast.global };
       }
 
       const transactional = transactionalMap.get(item.email);
       if (transactional) {
-        entry.transactional = { campaign: transactional.campaign, global: transactional.global };
+        entry.transactional = { campaign: transactional.campaign, brand: transactional.brand, global: transactional.global };
       }
 
       return entry;

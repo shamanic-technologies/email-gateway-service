@@ -213,16 +213,26 @@ const StatusScopeSchema = z
   })
   .openapi("StatusScope");
 
+const GlobalStatusSchema = z
+  .object({
+    email: z.object({
+      bounced: z.boolean().describe("Whether this email has bounced anywhere"),
+      unsubscribed: z.boolean().describe("Whether this email has unsubscribed anywhere"),
+    }).describe("Global email signals (technical/legal)"),
+  })
+  .openapi("GlobalStatus");
+
 const ProviderStatusSchema = z
   .object({
-    campaign: StatusScopeSchema.describe("Status scoped to the given campaign"),
-    global: StatusScopeSchema.describe("Status aggregated across all campaigns"),
+    campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (null if no campaignId provided)"),
+    brand: StatusScopeSchema.describe("Status scoped to the given brand"),
+    global: GlobalStatusSchema.describe("Global signals across all brands and campaigns"),
   })
   .openapi("ProviderStatus");
 
 const StatusResultSchema = z
   .object({
-    leadId: z.string().optional().describe("Lead ID from lead-service"),
+    leadId: z.string().describe("Lead ID from lead-service"),
     email: z.string().describe("Recipient email address"),
     broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly)"),
     transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark)"),
@@ -230,13 +240,14 @@ const StatusResultSchema = z
   .openapi("StatusResult");
 
 export const StatusItemSchema = z.object({
-  leadId: z.string().optional().describe("Lead ID from lead-service"),
+  leadId: z.string().describe("Lead ID from lead-service"),
   email: z.string().email().describe("Recipient email address"),
 });
 
 export const StatusRequestSchema = z
   .object({
-    campaignId: z.string().describe("Campaign ID to scope the lookup"),
+    brandId: z.string().describe("Brand ID — primary scope for dedup"),
+    campaignId: z.string().optional().describe("Campaign ID — if absent, campaign scope is null"),
     items: z.array(StatusItemSchema).min(1).describe("List of lead/email pairs to check"),
   })
   .openapi("StatusRequest");
@@ -331,7 +342,7 @@ registry.registerPath({
   path: "/status",
   tags: ["Status"],
   summary: "Get delivery status for leads/emails",
-  description: "Batch lookup of delivery status scoped by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign-scoped and global views.",
+  description: "Batch lookup of delivery status scoped by brand (required) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
   security: [{ apiKey: [] }],
   request: {
     body: {

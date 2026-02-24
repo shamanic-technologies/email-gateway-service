@@ -613,6 +613,7 @@
       },
       "StatusScope": {
         "type": "object",
+        "nullable": true,
         "properties": {
           "lead": {
             "$ref": "#/components/schemas/LeadStatus"
@@ -625,7 +626,34 @@
           "lead",
           "email"
         ],
-        "description": "Status scoped to the given campaign"
+        "description": "Status scoped to the given campaign (null if no campaignId provided)"
+      },
+      "GlobalStatus": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "object",
+            "properties": {
+              "bounced": {
+                "type": "boolean",
+                "description": "Whether this email has bounced anywhere"
+              },
+              "unsubscribed": {
+                "type": "boolean",
+                "description": "Whether this email has unsubscribed anywhere"
+              }
+            },
+            "required": [
+              "bounced",
+              "unsubscribed"
+            ],
+            "description": "Global email signals (technical/legal)"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "description": "Global signals across all brands and campaigns"
       },
       "ProviderStatus": {
         "type": "object",
@@ -633,19 +661,23 @@
           "campaign": {
             "$ref": "#/components/schemas/StatusScope"
           },
-          "global": {
+          "brand": {
             "allOf": [
               {
                 "$ref": "#/components/schemas/StatusScope"
               },
               {
-                "description": "Status aggregated across all campaigns"
+                "description": "Status scoped to the given brand"
               }
             ]
+          },
+          "global": {
+            "$ref": "#/components/schemas/GlobalStatus"
           }
         },
         "required": [
           "campaign",
+          "brand",
           "global"
         ],
         "description": "Status from broadcast provider (Instantly)"
@@ -676,6 +708,7 @@
           }
         },
         "required": [
+          "leadId",
           "email"
         ]
       },
@@ -697,9 +730,13 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
+          "brandId": {
+            "type": "string",
+            "description": "Brand ID — primary scope for dedup"
+          },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID to scope the lookup"
+            "description": "Campaign ID — if absent, campaign scope is null"
           },
           "items": {
             "type": "array",
@@ -717,6 +754,7 @@
                 }
               },
               "required": [
+                "leadId",
                 "email"
               ]
             },
@@ -725,7 +763,7 @@
           }
         },
         "required": [
-          "campaignId",
+          "brandId",
           "items"
         ]
       }
@@ -880,7 +918,7 @@
           "Status"
         ],
         "summary": "Get delivery status for leads/emails",
-        "description": "Batch lookup of delivery status scoped by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign-scoped and global views.",
+        "description": "Batch lookup of delivery status scoped by brand (required) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
         "security": [
           {
             "apiKey": []
