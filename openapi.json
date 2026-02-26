@@ -148,9 +148,9 @@
                 "type": "string",
                 "description": "App ID"
               },
-              "clerkOrgId": {
+              "orgId": {
                 "type": "string",
-                "description": "Clerk organization ID"
+                "description": "Organization ID"
               },
               "brandId": {
                 "type": "string",
@@ -172,9 +172,9 @@
                 "type": "string",
                 "description": "Workflow name for tracking and grouping"
               },
-              "clerkUserId": {
+              "userId": {
                 "type": "string",
-                "description": "Clerk user ID"
+                "description": "User ID"
               },
               "to": {
                 "type": "string",
@@ -268,9 +268,9 @@
                 "type": "string",
                 "description": "App ID"
               },
-              "clerkOrgId": {
+              "orgId": {
                 "type": "string",
-                "description": "Clerk organization ID"
+                "description": "Organization ID"
               },
               "brandId": {
                 "type": "string",
@@ -292,9 +292,9 @@
                 "type": "string",
                 "description": "Workflow name for tracking and grouping"
               },
-              "clerkUserId": {
+              "userId": {
                 "type": "string",
-                "description": "Clerk user ID"
+                "description": "User ID"
               },
               "to": {
                 "type": "string",
@@ -516,9 +516,9 @@
             },
             "description": "Filter by run IDs"
           },
-          "clerkOrgId": {
+          "orgId": {
             "type": "string",
-            "description": "Filter by Clerk organization ID"
+            "description": "Filter by organization ID"
           },
           "brandId": {
             "type": "string",

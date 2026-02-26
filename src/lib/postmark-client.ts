@@ -59,7 +59,7 @@ import type { ProviderStatsResult } from "./instantly-client";
 
 export async function getStats(filters: {
   runIds?: string[];
-  clerkOrgId?: string;
+  orgId?: string;
   brandId?: string;
   appId?: string;
   campaignId?: string;
