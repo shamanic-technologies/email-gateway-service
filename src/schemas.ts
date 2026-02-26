@@ -35,13 +35,13 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 
 const SendBaseSchema = z.object({
   appId: z.string({ required_error: "appId is required" }).describe("App ID"),
-  clerkOrgId: z.string().optional().describe("Clerk organization ID"),
+  orgId: z.string().optional().describe("Organization ID"),
   brandId: z.string().optional().describe("Brand ID"),
   campaignId: z.string().optional().describe("Campaign ID"),
   leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
   runId: z.string({ required_error: "runId is required" }).describe("Run ID for tracking"),
   workflowName: z.string().optional().describe("Workflow name for tracking and grouping"),
-  clerkUserId: z.string().optional().describe("Clerk user ID"),
+  userId: z.string().optional().describe("User ID"),
   to: z.string({ required_error: "to (recipient email) is required — the lead has no email address", invalid_type_error: "to (recipient email) must be a string, got null — the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
   recipientFirstName: z.string({ required_error: "recipientFirstName is required", invalid_type_error: "recipientFirstName must be a string" }).describe("Recipient first name"),
   recipientLastName: z.string({ required_error: "recipientLastName is required", invalid_type_error: "recipientLastName must be a string" }).describe("Recipient last name"),
@@ -110,7 +110,7 @@ export const StatsRequestSchema = z
   .object({
     type: EmailTypeSchema.optional().describe("Filter by email channel type"),
     runIds: z.array(z.string()).optional().describe("Filter by run IDs"),
-    clerkOrgId: z.string().optional().describe("Filter by Clerk organization ID"),
+    orgId: z.string().optional().describe("Filter by organization ID"),
     brandId: z.string().optional().describe("Filter by brand ID"),
     appId: z.string().optional().describe("Filter by app ID"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),

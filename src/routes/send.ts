@@ -52,7 +52,7 @@ router.post("/send", async (req: Request, res: Response) => {
       const htmlWithSignature = appendSignature(body.htmlBody, body.type, body.appId, brandUrl);
 
       const result = await postmarkClient.sendEmail({
-        orgId: body.clerkOrgId,
+        orgId: body.orgId,
         runId: body.runId,
         brandId: body.brandId,
         appId: body.appId,
@@ -81,7 +81,7 @@ router.post("/send", async (req: Request, res: Response) => {
 
     if (body.type === "broadcast") {
       const result = await instantlyClient.atomicSend({
-        orgId: body.clerkOrgId,
+        orgId: body.orgId,
         runId: body.runId,
         brandId: body.brandId,
         appId: body.appId,

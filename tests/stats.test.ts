@@ -172,7 +172,7 @@ describe("POST /stats", () => {
         .send({
           type: "transactional",
           appId: "mcpfactory",
-          clerkOrgId: "org_123",
+          orgId: "org_123",
           campaignId: "camp_1",
         });
 
@@ -181,7 +181,7 @@ describe("POST /stats", () => {
       expect(options.method).toBe("POST");
       const body = JSON.parse(options.body);
       expect(body.appId).toBe("mcpfactory");
-      expect(body.clerkOrgId).toBe("org_123");
+      expect(body.orgId).toBe("org_123");
       expect(body.campaignId).toBe("camp_1");
       expect(body.type).toBeUndefined();
     });
@@ -223,7 +223,7 @@ describe("POST /stats", () => {
         .send({
           type: "broadcast",
           appId: "mcpfactory",
-          clerkOrgId: "org_123",
+          orgId: "org_123",
         });
 
       const [url, options] = mockFetch.mock.calls[0];
@@ -231,7 +231,7 @@ describe("POST /stats", () => {
       expect(options.method).toBe("POST");
       const body = JSON.parse(options.body);
       expect(body.appId).toBe("mcpfactory");
-      expect(body.clerkOrgId).toBe("org_123");
+      expect(body.orgId).toBe("org_123");
       expect(body.type).toBeUndefined();
     });
   });
