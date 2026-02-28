@@ -561,6 +561,87 @@ describe("POST /stats", () => {
     });
   });
 
+  describe("fetch retry on network error", () => {
+    it("retries once on network error then succeeds", async () => {
+      let callCount = 0;
+      mockFetch.mockImplementation((url: string) => {
+        callCount++;
+        if (url.includes("3011")) {
+          if (callCount === 1) return Promise.reject(new Error("fetch failed"));
+          return Promise.resolve(mockInstantlyStats());
+        }
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ type: "broadcast", appId: "mcpfactory" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(callCount).toBe(2);
+    });
+
+    it("includes URL in error after retries exhausted", async () => {
+      mockFetch.mockRejectedValue(new Error("fetch failed"));
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ type: "broadcast", appId: "mcpfactory" });
+
+      expect(res.status).toBe(502);
+      expect(res.body.details).toContain("fetch failed");
+      expect(res.body.details).toContain("http://localhost:3011");
+    });
+
+    it("does not retry on HTTP errors (non-network)", async () => {
+      let callCount = 0;
+      mockFetch.mockImplementation((url: string) => {
+        callCount++;
+        if (url.includes("3011"))
+          return Promise.resolve({
+            ok: false,
+            status: 500,
+            text: () => Promise.resolve("Internal error"),
+          });
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ type: "broadcast", appId: "mcpfactory" });
+
+      expect(res.status).toBe(502);
+      expect(callCount).toBe(1);
+    });
+
+    it("retries network errors in aggregate mode and succeeds on retry", async () => {
+      const fetchCalls: string[] = [];
+      mockFetch.mockImplementation((url: string) => {
+        fetchCalls.push(url);
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) {
+          const instantlyCalls = fetchCalls.filter((u) => u.includes("3011"));
+          if (instantlyCalls.length === 1) return Promise.reject(new Error("fetch failed"));
+          return Promise.resolve(mockInstantlyStats());
+        }
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await request(app)
+        .post("/stats")
+        .set("X-API-Key", API_KEY)
+        .send({ appId: "mcpfactory" });
+
+      expect(res.status).toBe(200);
+      expect(res.body.transactional.emailsSent).toBe(100);
+      expect(res.body.broadcast.emailsSent).toBe(80);
+    });
+  });
+
   describe("stepStats (broadcast only)", () => {
     it("forwards stepStats from instantly in broadcast block", async () => {
       const steps = [

@@ -2,28 +2,52 @@ import { config } from "../config";
 
 const { url, apiKey } = config.instantly;
 
+const TIMEOUT_MS = 10_000;
+const RETRY_DELAY_MS = 500;
+
 async function request<T>(
   path: string,
   options: { method?: string; body?: unknown } = {}
 ): Promise<T> {
   const { method = "GET", body } = options;
-  const response = await fetch(`${url}${path}`, {
+  const fullUrl = `${url}${path}`;
+  const fetchOptions: RequestInit = {
     method,
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": apiKey,
     },
     body: body ? JSON.stringify(body) : undefined,
-  });
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  };
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `instantly-service ${method} ${path}: ${response.status} - ${errorText}`
-    );
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await fetch(fullUrl, fetchOptions);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `instantly-service ${method} ${path}: ${response.status} - ${errorText}`
+        );
+      }
+
+      return response.json() as Promise<T>;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      // Only retry on network-level errors (fetch failed, timeout), not HTTP errors
+      if (lastError.message.includes("instantly-service")) throw lastError;
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      }
+    }
   }
 
-  return response.json() as Promise<T>;
+  throw new Error(
+    `instantly-service ${method} ${path}: ${lastError?.message ?? "fetch failed"} (url: ${url})`
+  );
 }
 
 export interface AtomicSendResponse {
