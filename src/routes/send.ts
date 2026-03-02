@@ -67,7 +67,6 @@ router.post("/send", async (req: Request, res: Response) => {
         replyTo: body.replyTo,
         tag: body.tag,
         metadata: body.metadata,
-        messageStream: body.postmark?.messageStream,
       });
 
       console.log(`[send] postmark response: messageId=${result.messageId}`);
