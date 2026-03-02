@@ -272,7 +272,7 @@ describe("POST /send", () => {
       expect(body.from).toBe("test@example.com");
     });
 
-    it("passes postmark.messageStream to postmark-service", async () => {
+    it("does not send messageStream to postmark-service (resolved server-side)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -282,46 +282,10 @@ describe("POST /send", () => {
       await request(app)
         .post("/send")
         .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody({ postmark: { messageStream: "outbound" } }));
-
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.messageStream).toBe("outbound");
-    });
-
-    it("does not send messageStream when postmark options are omitted", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, messageId: "pm_5" }),
-      });
-
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
         .send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.messageStream).toBeUndefined();
-    });
-
-    it("passes both from and postmark.messageStream together", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, messageId: "pm_6" }),
-      });
-
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody({
-          from: "Hello <hello@growthagency.dev>",
-          postmark: { messageStream: "broadcast" },
-        }));
-
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.from).toBe("Hello <hello@growthagency.dev>");
-      expect(body.messageStream).toBe("broadcast");
     });
 
     it("appends default unsubscribe for transactional", async () => {

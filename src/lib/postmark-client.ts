@@ -66,7 +66,6 @@ export async function sendEmail(body: {
   replyTo?: string;
   tag?: string;
   metadata?: Record<string, string>;
-  messageStream?: string;
 }) {
   return request<{
     success: boolean;
