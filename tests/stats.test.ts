@@ -17,6 +17,14 @@ const API_KEY = "test-api-key";
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+function authedPost(path: string) {
+  return request(app)
+    .post(path)
+    .set("X-API-Key", API_KEY)
+    .set("x-org-id", "org_1")
+    .set("x-user-id", "user_1");
+}
+
 function mockPostmarkStats(overrides = {}) {
   return {
     ok: true,
@@ -126,11 +134,30 @@ describe("POST /stats", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 400 for invalid type", async () => {
+  it("returns 400 when x-org-id header is missing", async () => {
     const res = await request(app)
       .post("/stats")
       .set("X-API-Key", API_KEY)
-      .send({ type: "invalid" });
+      .set("x-user-id", "user_1")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-org-id");
+  });
+
+  it("returns 400 when x-user-id header is missing", async () => {
+    const res = await request(app)
+      .post("/stats")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-user-id");
+  });
+
+  it("returns 400 for invalid type", async () => {
+    const res = await authedPost("/stats").send({ type: "invalid" });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid request");
@@ -140,10 +167,7 @@ describe("POST /stats", () => {
     it("returns normalized transactional stats from Postmark", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "transactional", appId: "app_1" });
+      const res = await authedPost("/stats").send({ type: "transactional" });
 
       expect(res.status).toBe(200);
       expect(res.body.transactional).toEqual({
@@ -163,26 +187,22 @@ describe("POST /stats", () => {
       expect(res.body.broadcast).toBeUndefined();
     });
 
-    it("passes filters to Postmark", async () => {
+    it("passes filters to Postmark (orgId/userId from headers)", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({
-          type: "transactional",
-          appId: "app_1",
-          orgId: "org_123",
-          campaignId: "camp_1",
-        });
+      await authedPost("/stats").send({
+        type: "transactional",
+        campaignId: "camp_1",
+      });
 
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toBe("http://localhost:3010/stats");
       expect(options.method).toBe("POST");
       const body = JSON.parse(options.body);
-      expect(body.appId).toBe("app_1");
-      expect(body.orgId).toBe("org_123");
+      expect(body.orgId).toBe("org_1");
+      expect(body.userId).toBe("user_1");
       expect(body.campaignId).toBe("camp_1");
+      expect(body.appId).toBeUndefined();
       expect(body.type).toBeUndefined();
     });
   });
@@ -191,10 +211,7 @@ describe("POST /stats", () => {
     it("returns normalized broadcast stats from Instantly", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast", appId: "app_1" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast).toEqual({
@@ -214,24 +231,18 @@ describe("POST /stats", () => {
       expect(res.body.transactional).toBeUndefined();
     });
 
-    it("passes filters to Instantly", async () => {
+    it("passes filters to Instantly (orgId/userId from headers)", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({
-          type: "broadcast",
-          appId: "app_1",
-          orgId: "org_123",
-        });
+      await authedPost("/stats").send({ type: "broadcast" });
 
       const [url, options] = mockFetch.mock.calls[0];
       expect(url).toBe("http://localhost:3011/stats");
       expect(options.method).toBe("POST");
       const body = JSON.parse(options.body);
-      expect(body.appId).toBe("app_1");
-      expect(body.orgId).toBe("org_123");
+      expect(body.orgId).toBe("org_1");
+      expect(body.userId).toBe("user_1");
+      expect(body.appId).toBeUndefined();
       expect(body.type).toBeUndefined();
     });
   });
@@ -244,10 +255,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ appId: "app_1" });
+      const res = await authedPost("/stats").send({});
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -266,10 +274,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ appId: "app_1" });
+      const res = await authedPost("/stats").send({});
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -288,10 +293,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ appId: "app_1" });
+      const res = await authedPost("/stats").send({});
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.error).toBeDefined();
@@ -315,10 +317,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ appId: "app_1" });
+      const res = await authedPost("/stats").send({});
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.error).toBeDefined();
@@ -332,10 +331,7 @@ describe("POST /stats", () => {
         mockInstantlyStats()
       );
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.body.broadcast.recipients).toBe(75);
     });
@@ -343,10 +339,7 @@ describe("POST /stats", () => {
     it("falls back to emailsSent for recipients when field is missing (Postmark)", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "transactional" });
+      const res = await authedPost("/stats").send({ type: "transactional" });
 
       // Postmark doesn't return recipients, so it falls back to emailsSent
       expect(res.body.transactional.recipients).toBe(100);
@@ -356,10 +349,7 @@ describe("POST /stats", () => {
       // Instantly doesn't return repliesWillingToMeet or repliesInterested
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.body.broadcast.repliesWillingToMeet).toBe(0);
       expect(res.body.broadcast.repliesInterested).toBe(0);
@@ -372,10 +362,7 @@ describe("POST /stats", () => {
     it("passes workflowName to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "transactional", workflowName: "welcome-flow" });
+      await authedPost("/stats").send({ type: "transactional", workflowName: "welcome-flow" });
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.workflowName).toBe("welcome-flow");
@@ -391,10 +378,7 @@ describe("POST /stats", () => {
         ])
       );
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast", groupBy: "brandId" });
+      const res = await authedPost("/stats").send({ type: "broadcast", groupBy: "brandId" });
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
@@ -413,10 +397,7 @@ describe("POST /stats", () => {
         ])
       );
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "transactional", groupBy: "campaignId" });
+      const res = await authedPost("/stats").send({ type: "transactional", groupBy: "campaignId" });
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
@@ -444,10 +425,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ groupBy: "brandId" });
+      const res = await authedPost("/stats").send({ groupBy: "brandId" });
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(3);
@@ -479,10 +457,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ groupBy: "workflowName" });
+      await authedPost("/stats").send({ groupBy: "workflowName" });
 
       for (const call of mockFetch.mock.calls) {
         const body = JSON.parse(call[1].body);
@@ -505,10 +480,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ groupBy: "brandId" });
+      const res = await authedPost("/stats").send({ groupBy: "brandId" });
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
@@ -522,10 +494,7 @@ describe("POST /stats", () => {
         mockGroupedInstantly([{ key: "lead@example.com", recipients: 1 }])
       );
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast", groupBy: "leadEmail" });
+      const res = await authedPost("/stats").send({ type: "broadcast", groupBy: "leadEmail" });
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];
@@ -551,10 +520,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ groupBy: "brandId" });
+      const res = await authedPost("/stats").send({ groupBy: "brandId" });
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toEqual([]);
@@ -573,10 +539,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast", appId: "app_1" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.emailsSent).toBe(80);
@@ -586,10 +549,7 @@ describe("POST /stats", () => {
     it("includes URL in error after retries exhausted", async () => {
       mockFetch.mockRejectedValue(new Error("fetch failed"));
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast", appId: "app_1" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.status).toBe(502);
       expect(res.body.details).toContain("fetch failed");
@@ -609,10 +569,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast", appId: "app_1" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.status).toBe(502);
       expect(callCount).toBe(1);
@@ -631,10 +588,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ appId: "app_1" });
+      const res = await authedPost("/stats").send({});
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -651,10 +605,7 @@ describe("POST /stats", () => {
       ];
       mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, steps));
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.stepStats).toEqual(steps);
@@ -664,10 +615,7 @@ describe("POST /stats", () => {
     it("omits stepStats when not present in provider response", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast" });
+      const res = await authedPost("/stats").send({ type: "broadcast" });
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.stepStats).toBeUndefined();
@@ -684,10 +632,7 @@ describe("POST /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await request(app)
-        .post("/stats")
-        .set("X-API-Key", API_KEY)
-        .send({ appId: "app_1" });
+      const res = await authedPost("/stats").send({});
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.stepStats).toBeUndefined();

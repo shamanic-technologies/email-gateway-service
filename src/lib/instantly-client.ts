@@ -59,10 +59,10 @@ export interface AtomicSendResponse {
 
 export async function atomicSend(body: {
   orgId?: string;
+  userId?: string;
   brandId?: string;
-  appId: string;
   leadId?: string;
-  runId?: string;
+  parentRunId?: string;
   workflowName?: string;
   campaignId?: string;
   to: string;
@@ -123,8 +123,8 @@ export type ProviderStatsResult = ProviderStatsFlat | ProviderStatsGrouped;
 export async function getStats(filters: {
   runIds?: string[];
   orgId?: string;
+  userId?: string;
   brandId?: string;
-  appId?: string;
   campaignId?: string;
   workflowName?: string;
   groupBy?: string;

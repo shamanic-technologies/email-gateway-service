@@ -52,9 +52,9 @@ async function request<T>(
 
 export async function sendEmail(body: {
   orgId?: string;
-  runId?: string;
+  userId?: string;
+  parentRunId?: string;
   brandId?: string;
-  appId: string;
   leadId?: string;
   workflowName?: string;
   campaignId?: string;
@@ -83,8 +83,8 @@ import type { ProviderStatsResult } from "./instantly-client";
 export async function getStats(filters: {
   runIds?: string[];
   orgId?: string;
+  userId?: string;
   brandId?: string;
-  appId?: string;
   campaignId?: string;
   workflowName?: string;
   groupBy?: string;

@@ -50,7 +50,9 @@ router.post("/stats", async (req: Request, res: Response) => {
     return;
   }
 
-  const { type, ...filters } = parsed.data;
+  const { orgId, userId } = res.locals as { orgId: string; userId: string };
+  const { type, ...bodyFilters } = parsed.data;
+  const filters = { ...bodyFilters, orgId, userId };
 
   try {
     if (filters.groupBy) {

@@ -17,7 +17,7 @@ router.post("/send", async (req: Request, res: Response) => {
     console.error(
       `[send] Validation failed: missing/invalid fields=[${missingFields.join(", ")}]` +
       ` type=${req.body?.type} to=${req.body?.to ?? "NULL"} leadId=${req.body?.leadId ?? "none"}` +
-      ` campaignId=${req.body?.campaignId ?? "none"} runId=${req.body?.runId ?? "none"}`
+      ` campaignId=${req.body?.campaignId ?? "none"} parentRunId=${req.body?.parentRunId ?? "none"}`
     );
     res.status(400).json({ error: "Invalid request", details: flat });
     return;
@@ -35,7 +35,9 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} run=${body.runId} workflow=${body.workflowName}`);
+  const { orgId, userId } = res.locals as { orgId: string; userId: string };
+
+  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} parentRunId=${body.parentRunId} workflow=${body.workflowName}`);
 
   try {
     if (body.type === "transactional") {
@@ -49,13 +51,13 @@ router.post("/send", async (req: Request, res: Response) => {
         }
       }
 
-      const htmlWithSignature = appendSignature(body.htmlBody, body.type, body.appId, brandUrl);
+      const htmlWithSignature = appendSignature(body.htmlBody, body.type);
 
       const result = await postmarkClient.sendEmail({
-        orgId: body.orgId,
-        runId: body.runId,
+        orgId,
+        userId,
+        parentRunId: body.parentRunId,
         brandId: body.brandId,
-        appId: body.appId,
         leadId: body.leadId,
         workflowName: body.workflowName,
         campaignId: body.campaignId,
@@ -80,10 +82,10 @@ router.post("/send", async (req: Request, res: Response) => {
 
     if (body.type === "broadcast") {
       const result = await instantlyClient.atomicSend({
-        orgId: body.orgId,
-        runId: body.runId,
+        orgId,
+        userId,
+        parentRunId: body.parentRunId,
         brandId: body.brandId,
-        appId: body.appId,
         leadId: body.leadId,
         workflowName: body.workflowName,
         campaignId: body.campaignId,
