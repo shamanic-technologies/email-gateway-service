@@ -34,14 +34,11 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 // --- POST /send ---
 
 const SendBaseSchema = z.object({
-  appId: z.string({ required_error: "appId is required" }).describe("App ID"),
-  orgId: z.string().optional().describe("Organization ID"),
   brandId: z.string().optional().describe("Brand ID"),
   campaignId: z.string().optional().describe("Campaign ID"),
   leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
-  runId: z.string({ required_error: "runId is required" }).describe("Run ID for tracking"),
+  parentRunId: z.string({ required_error: "parentRunId is required" }).describe("Parent run ID for tracking"),
   workflowName: z.string().optional().describe("Workflow name for tracking and grouping"),
-  userId: z.string().optional().describe("User ID"),
   to: z.string({ required_error: "to (recipient email) is required — the lead has no email address", invalid_type_error: "to (recipient email) must be a string, got null — the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
   recipientFirstName: z.string({ required_error: "recipientFirstName is required", invalid_type_error: "recipientFirstName must be a string" }).describe("Recipient first name"),
   recipientLastName: z.string({ required_error: "recipientLastName is required", invalid_type_error: "recipientLastName must be a string" }).describe("Recipient last name"),
@@ -105,9 +102,7 @@ export const StatsRequestSchema = z
   .object({
     type: EmailTypeSchema.optional().describe("Filter by email channel type"),
     runIds: z.array(z.string()).optional().describe("Filter by run IDs"),
-    orgId: z.string().optional().describe("Filter by organization ID"),
     brandId: z.string().optional().describe("Filter by brand ID"),
-    appId: z.string().optional().describe("Filter by app ID"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
     workflowName: z.string().optional().describe("Filter by workflow name"),
     groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension. When set, response is { groups: [...] } instead of flat stats."),
@@ -267,6 +262,13 @@ export const HealthResponseSchema = z
   })
   .openapi("HealthResponse");
 
+// --- Identity headers ---
+
+export const IdentityHeadersSchema = z.object({
+  "x-org-id": z.string().describe("Internal organization UUID from client-service"),
+  "x-user-id": z.string().describe("Internal user UUID from client-service"),
+});
+
 // --- Register endpoints ---
 
 const errorContent = {
@@ -295,6 +297,7 @@ registry.registerPath({
   description: "Send a transactional or broadcast email via the appropriate provider",
   security: [{ apiKey: [] }],
   request: {
+    headers: IdentityHeadersSchema,
     body: {
       content: { "application/json": { schema: SendRequestSchema } },
     },
@@ -318,6 +321,7 @@ registry.registerPath({
   description: "Get aggregated email stats. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
   security: [{ apiKey: [] }],
   request: {
+    headers: IdentityHeadersSchema,
     body: {
       content: { "application/json": { schema: StatsRequestSchema } },
     },
@@ -340,6 +344,7 @@ registry.registerPath({
   description: "Batch lookup of delivery status scoped by brand (required) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
   security: [{ apiKey: [] }],
   request: {
+    headers: IdentityHeadersSchema,
     body: {
       content: { "application/json": { schema: StatusRequestSchema } },
     },

@@ -17,6 +17,14 @@ const API_KEY = "test-api-key";
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
+function authedPost(path: string) {
+  return request(app)
+    .post(path)
+    .set("X-API-Key", API_KEY)
+    .set("x-org-id", "org_1")
+    .set("x-user-id", "user_1");
+}
+
 function buildStatusBody(overrides = {}) {
   return {
     brandId: "brand_1",
@@ -69,37 +77,51 @@ describe("POST /status", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 400 for missing brandId", async () => {
+  it("returns 400 when x-org-id header is missing", async () => {
     const res = await request(app)
       .post("/status")
       .set("X-API-Key", API_KEY)
+      .set("x-user-id", "user_1")
+      .send(buildStatusBody());
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-org-id");
+  });
+
+  it("returns 400 when x-user-id header is missing", async () => {
+    const res = await request(app)
+      .post("/status")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1")
+      .send(buildStatusBody());
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-user-id");
+  });
+
+  it("returns 400 for missing brandId", async () => {
+    const res = await authedPost("/status")
       .send({ campaignId: "camp_1", items: [{ leadId: "l1", email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for empty items array", async () => {
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send({ brandId: "brand_1", items: [] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for missing leadId in items", async () => {
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send({ brandId: "brand_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for invalid email in items", async () => {
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send({ brandId: "brand_1", items: [{ leadId: "l1", email: "not-an-email" }] });
 
     expect(res.status).toBe(400);
@@ -121,10 +143,7 @@ describe("POST /status", () => {
       return Promise.reject(new Error("unexpected url"));
     });
 
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
-      .send(buildStatusBody());
+    const res = await authedPost("/status").send(buildStatusBody());
 
     expect(res.status).toBe(200);
     expect(res.body.results).toHaveLength(2);
@@ -150,10 +169,7 @@ describe("POST /status", () => {
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
-      .send(buildStatusBody());
+    await authedPost("/status").send(buildStatusBody());
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
@@ -184,9 +200,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send(buildStatusBody({ campaignId: undefined, items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -204,9 +218,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockServiceError());
     });
 
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -224,9 +236,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockServiceError());
     });
 
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -237,9 +247,7 @@ describe("POST /status", () => {
   it("returns 502 when both sub-services fail", async () => {
     mockFetch.mockResolvedValue(mockServiceError());
 
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(502);
@@ -261,9 +269,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await request(app)
-      .post("/status")
-      .set("X-API-Key", API_KEY)
+    const res = await authedPost("/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);

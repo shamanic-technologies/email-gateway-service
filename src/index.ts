@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config";
 import { serviceAuth } from "./middleware/serviceAuth";
+import { requireIdentityHeaders } from "./middleware/identityHeaders";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
@@ -17,10 +18,10 @@ app.use(express.json());
 app.use(healthRoutes);
 app.use("/webhooks", webhooksRoutes);
 
-// Protected routes (require X-API-Key)
-app.use(serviceAuth, sendRoutes);
-app.use(serviceAuth, statusRoutes);
-app.use(serviceAuth, statsRoutes);
+// Protected routes (require X-API-Key + identity headers)
+app.use(serviceAuth, requireIdentityHeaders, sendRoutes);
+app.use(serviceAuth, requireIdentityHeaders, statusRoutes);
+app.use(serviceAuth, requireIdentityHeaders, statsRoutes);
 
 app.listen(config.port, () => {
   console.log(`email-gateway running on port ${config.port}`);

@@ -144,14 +144,6 @@
           {
             "type": "object",
             "properties": {
-              "appId": {
-                "type": "string",
-                "description": "App ID"
-              },
-              "orgId": {
-                "type": "string",
-                "description": "Organization ID"
-              },
               "brandId": {
                 "type": "string",
                 "description": "Brand ID"
@@ -164,17 +156,13 @@
                 "type": "string",
                 "description": "Lead ID from lead-service for end-to-end tracking"
               },
-              "runId": {
+              "parentRunId": {
                 "type": "string",
-                "description": "Run ID for tracking"
+                "description": "Parent run ID for tracking"
               },
               "workflowName": {
                 "type": "string",
                 "description": "Workflow name for tracking and grouping"
-              },
-              "userId": {
-                "type": "string",
-                "description": "User ID"
               },
               "to": {
                 "type": "string",
@@ -238,8 +226,7 @@
               }
             },
             "required": [
-              "appId",
-              "runId",
+              "parentRunId",
               "to",
               "recipientFirstName",
               "recipientLastName",
@@ -251,14 +238,6 @@
           {
             "type": "object",
             "properties": {
-              "appId": {
-                "type": "string",
-                "description": "App ID"
-              },
-              "orgId": {
-                "type": "string",
-                "description": "Organization ID"
-              },
               "brandId": {
                 "type": "string",
                 "description": "Brand ID"
@@ -271,17 +250,13 @@
                 "type": "string",
                 "description": "Lead ID from lead-service for end-to-end tracking"
               },
-              "runId": {
+              "parentRunId": {
                 "type": "string",
-                "description": "Run ID for tracking"
+                "description": "Parent run ID for tracking"
               },
               "workflowName": {
                 "type": "string",
                 "description": "Workflow name for tracking and grouping"
-              },
-              "userId": {
-                "type": "string",
-                "description": "User ID"
               },
               "to": {
                 "type": "string",
@@ -341,8 +316,7 @@
               }
             },
             "required": [
-              "appId",
-              "runId",
+              "parentRunId",
               "to",
               "recipientFirstName",
               "recipientLastName",
@@ -503,17 +477,9 @@
             },
             "description": "Filter by run IDs"
           },
-          "orgId": {
-            "type": "string",
-            "description": "Filter by organization ID"
-          },
           "brandId": {
             "type": "string",
             "description": "Filter by brand ID"
-          },
-          "appId": {
-            "type": "string",
-            "description": "Filter by app ID"
           },
           "campaignId": {
             "type": "string",
@@ -791,6 +757,28 @@
             "apiKey": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -856,6 +844,28 @@
             "apiKey": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -909,6 +919,28 @@
         "security": [
           {
             "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
           }
         ],
         "requestBody": {

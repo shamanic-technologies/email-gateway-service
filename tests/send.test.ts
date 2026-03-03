@@ -40,12 +40,10 @@ function mockBrandFailure() {
 function buildBroadcastBody(overrides = {}) {
   return {
     type: "broadcast",
-    appId: "app_1",
     brandId: "brand_1",
     campaignId: "campaign_1",
-    runId: "run_1",
+    parentRunId: "run_1",
     workflowName: "test-workflow",
-    orgId: "org_1",
     to: "lead@example.com",
     recipientFirstName: "Jane",
     recipientLastName: "Doe",
@@ -63,12 +61,10 @@ function buildBroadcastBody(overrides = {}) {
 function buildTransactionalBody(overrides = {}) {
   return {
     type: "transactional",
-    appId: "app_1",
     brandId: "brand_1",
     campaignId: "campaign_1",
-    runId: "run_1",
+    parentRunId: "run_1",
     workflowName: "test-workflow",
-    orgId: "org_1",
     to: "user@example.com",
     recipientFirstName: "John",
     recipientLastName: "Smith",
@@ -77,6 +73,14 @@ function buildTransactionalBody(overrides = {}) {
     htmlBody: "<p>Welcome</p>",
     ...overrides,
   };
+}
+
+function authedPost(path: string) {
+  return request(app)
+    .post(path)
+    .set("X-API-Key", API_KEY)
+    .set("x-org-id", "org_1")
+    .set("x-user-id", "user_1");
 }
 
 describe("POST /send", () => {
@@ -98,10 +102,7 @@ describe("POST /send", () => {
           }),
       });
 
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+      const res = await authedPost("/send").send(buildBroadcastBody());
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -124,10 +125,7 @@ describe("POST /send", () => {
           }),
       });
 
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+      const res = await authedPost("/send").send(buildBroadcastBody());
 
       expect(res.status).toBe(409);
       expect(res.body.success).toBe(false);
@@ -142,10 +140,7 @@ describe("POST /send", () => {
         text: () => Promise.resolve("Internal Server Error"),
       });
 
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+      const res = await authedPost("/send").send(buildBroadcastBody());
 
       expect(res.status).toBe(502);
       expect(res.body.error).toBe("Upstream service error");
@@ -163,14 +158,11 @@ describe("POST /send", () => {
           }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(
-          buildBroadcastBody({
-            metadata: { source: "test" },
-          })
-        );
+      await authedPost("/send").send(
+        buildBroadcastBody({
+          metadata: { source: "test" },
+        })
+      );
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url, options] = mockFetch.mock.calls[0];
@@ -190,8 +182,11 @@ describe("POST /send", () => {
       ]);
       expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
-      expect(body.runId).toBe("run_1");
+      expect(body.parentRunId).toBe("run_1");
+      expect(body.orgId).toBe("org_1");
+      expect(body.userId).toBe("user_1");
       expect(body.campaignId).toBe("campaign_1");
+      expect(body.appId).toBeUndefined();
     });
 
     it("forwards sequence as-is for broadcast (no signature, no brand fetch)", async () => {
@@ -201,10 +196,7 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+      await authedPost("/send").send(buildBroadcastBody());
 
       // Only 1 fetch call (instantly), no brand service
       expect(mockFetch).toHaveBeenCalledTimes(1);
@@ -227,10 +219,7 @@ describe("POST /send", () => {
           }),
       });
 
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody());
+      const res = await authedPost("/send").send(buildTransactionalBody());
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({
@@ -247,10 +236,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_2" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody({ from: "Custom <custom@example.com>" }));
+      await authedPost("/send").send(buildTransactionalBody({ from: "Custom <custom@example.com>" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.from).toBe("Custom <custom@example.com>");
@@ -263,10 +249,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_3" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody());
+      await authedPost("/send").send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.from).toBe("test@example.com");
@@ -279,10 +262,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_4" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody());
+      await authedPost("/send").send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.messageStream).toBeUndefined();
@@ -295,15 +275,28 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody());
+      await authedPost("/send").send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
       expect(body.htmlBody).not.toContain("Kevin Lourd");
       expect(body.htmlBody).not.toContain("growthagency.dev");
+    });
+
+    it("forwards orgId and userId from headers to postmark-service", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await authedPost("/send").send(buildTransactionalBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(body.orgId).toBe("org_1");
+      expect(body.userId).toBe("user_1");
+      expect(body.parentRunId).toBe("run_1");
+      expect(body.appId).toBeUndefined();
     });
   });
 
@@ -317,20 +310,14 @@ describe("POST /send", () => {
 
       const body = buildTransactionalBody({ idempotencyKey: "idem_1" });
 
-      const res1 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res1 = await authedPost("/send").send(body);
 
       expect(res1.status).toBe(200);
       expect(res1.body.messageId).toBe("pm_msg_1");
       expect(res1.body.deduplicated).toBeUndefined();
 
       // Second call with same key — should NOT call fetch again
-      const res2 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res2 = await authedPost("/send").send(body);
 
       expect(res2.status).toBe(200);
       expect(res2.body.messageId).toBe("pm_msg_1");
@@ -348,19 +335,13 @@ describe("POST /send", () => {
 
       const body = buildBroadcastBody({ idempotencyKey: "idem_2" });
 
-      const res1 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res1 = await authedPost("/send").send(body);
 
       expect(res1.status).toBe(200);
       expect(res1.body.campaignId).toBe("c1");
       expect(res1.body.deduplicated).toBeUndefined();
 
-      const res2 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res2 = await authedPost("/send").send(body);
 
       expect(res2.status).toBe(200);
       expect(res2.body.campaignId).toBe("c1");
@@ -377,17 +358,11 @@ describe("POST /send", () => {
 
       const body = buildBroadcastBody({ idempotencyKey: "idem_409" });
 
-      const res1 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res1 = await authedPost("/send").send(body);
 
       expect(res1.status).toBe(409);
 
-      const res2 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res2 = await authedPost("/send").send(body);
 
       expect(res2.status).toBe(409);
       expect(res2.body.deduplicated).toBe(true);
@@ -400,14 +375,10 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_msg_1" }),
       });
 
-      const res1 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
+      const res1 = await authedPost("/send")
         .send(buildTransactionalBody({ idempotencyKey: "key_a" }));
 
-      const res2 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
+      const res2 = await authedPost("/send")
         .send(buildTransactionalBody({ idempotencyKey: "key_b" }));
 
       expect(res1.status).toBe(200);
@@ -431,15 +402,9 @@ describe("POST /send", () => {
 
       const body = buildTransactionalBody();
 
-      const res1 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res1 = await authedPost("/send").send(body);
 
-      const res2 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res2 = await authedPost("/send").send(body);
 
       expect(res1.status).toBe(200);
       expect(res2.status).toBe(200);
@@ -459,10 +424,7 @@ describe("POST /send", () => {
 
       const body = buildTransactionalBody({ idempotencyKey: "idem_err" });
 
-      const res1 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res1 = await authedPost("/send").send(body);
 
       expect(res1.status).toBe(502);
 
@@ -473,10 +435,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_retry" }),
       });
 
-      const res2 = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res2 = await authedPost("/send").send(body);
 
       expect(res2.status).toBe(200);
       expect(res2.body.messageId).toBe("pm_retry");
@@ -492,10 +451,7 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ workflowName: "outreach-v2" }));
+      await authedPost("/send").send(buildBroadcastBody({ workflowName: "outreach-v2" }));
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.workflowName).toBe("outreach-v2");
@@ -508,10 +464,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody({ workflowName: "welcome-flow" }));
+      await authedPost("/send").send(buildTransactionalBody({ workflowName: "welcome-flow" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.workflowName).toBe("welcome-flow");
@@ -526,10 +479,7 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ leadId: "lead_abc" }));
+      await authedPost("/send").send(buildBroadcastBody({ leadId: "lead_abc" }));
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.leadId).toBe("lead_abc");
@@ -542,10 +492,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody({ leadId: "lead_xyz" }));
+      await authedPost("/send").send(buildTransactionalBody({ leadId: "lead_xyz" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.leadId).toBe("lead_xyz");
@@ -558,10 +505,7 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+      const res = await authedPost("/send").send(buildBroadcastBody());
 
       expect(res.status).toBe(200);
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -571,10 +515,7 @@ describe("POST /send", () => {
 
   describe("validation", () => {
     it("returns 400 for missing required fields", async () => {
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send({ type: "broadcast" });
+      const res = await authedPost("/send").send({ type: "broadcast" });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Invalid request");
@@ -588,19 +529,13 @@ describe("POST /send", () => {
       });
 
       const { workflowName, ...bodyWithout } = buildBroadcastBody();
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(bodyWithout);
+      const res = await authedPost("/send").send(bodyWithout);
 
       expect(res.status).toBe(200);
     });
 
     it("returns explicit error when to is null (lead has no email)", async () => {
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody({ to: null }));
+      const res = await authedPost("/send").send(buildBroadcastBody({ to: null }));
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBe("Invalid request");
@@ -611,10 +546,7 @@ describe("POST /send", () => {
 
     it("returns explicit error when recipientLastName is missing", async () => {
       const { recipientLastName, ...body } = buildBroadcastBody();
-      const res = await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(body);
+      const res = await authedPost("/send").send(body);
 
       expect(res.status).toBe(400);
       expect(res.body.details.fieldErrors.recipientLastName[0]).toContain(
@@ -629,6 +561,28 @@ describe("POST /send", () => {
 
       expect(res.status).toBe(401);
     });
+
+    it("returns 400 when x-org-id header is missing", async () => {
+      const res = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .set("x-user-id", "user_1")
+        .send(buildBroadcastBody());
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("x-org-id");
+    });
+
+    it("returns 400 when x-user-id header is missing", async () => {
+      const res = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .set("x-org-id", "org_1")
+        .send(buildBroadcastBody());
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("x-user-id");
+    });
   });
 
   describe("signature", () => {
@@ -639,10 +593,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildTransactionalBody());
+      await authedPost("/send").send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
@@ -657,10 +608,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      await request(app)
-        .post("/send")
-        .set("X-API-Key", API_KEY)
-        .send(buildBroadcastBody());
+      await authedPost("/send").send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.sequence).toHaveLength(3);
@@ -672,7 +620,7 @@ describe("POST /send", () => {
 
 describe("buildSignature", () => {
   it("returns unsubscribe for transactional", () => {
-    const sig = buildSignature("transactional", "any_app");
+    const sig = buildSignature("transactional");
     expect(sig).toContain("{{{pm:unsubscribe}}}");
     expect(sig).toContain("Unsubscribe");
     expect(sig).not.toContain("Kevin Lourd");
@@ -680,7 +628,7 @@ describe("buildSignature", () => {
   });
 
   it("returns empty string for broadcast", () => {
-    const sig = buildSignature("broadcast", "any_app");
+    const sig = buildSignature("broadcast");
     expect(sig).toBe("");
   });
 });
@@ -700,18 +648,18 @@ describe("buildDefaultFooter", () => {
 
 describe("appendSignature", () => {
   it("returns undefined when htmlBody is undefined", () => {
-    expect(appendSignature(undefined, "broadcast", "any_app")).toBeUndefined();
+    expect(appendSignature(undefined, "broadcast")).toBeUndefined();
   });
 
   it("appends unsubscribe for transactional", () => {
-    const result = appendSignature("<p>Hello</p>", "transactional", "any_app");
+    const result = appendSignature("<p>Hello</p>", "transactional");
     expect(result).toContain("<p>Hello</p>");
     expect(result).toContain("{{{pm:unsubscribe}}}");
     expect(result).not.toContain("Kevin Lourd");
   });
 
   it("returns original htmlBody for broadcast", () => {
-    const result = appendSignature("<p>Hello</p>", "broadcast", "any_app");
+    const result = appendSignature("<p>Hello</p>", "broadcast");
     expect(result).toBe("<p>Hello</p>");
   });
 });
