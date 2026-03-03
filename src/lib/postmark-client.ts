@@ -53,7 +53,7 @@ async function request<T>(
 export async function sendEmail(body: {
   orgId?: string;
   userId?: string;
-  parentRunId?: string;
+  runId?: string;
   brandId?: string;
   leadId?: string;
   workflowName?: string;
