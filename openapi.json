@@ -156,10 +156,6 @@
                 "type": "string",
                 "description": "Lead ID from lead-service for end-to-end tracking"
               },
-              "parentRunId": {
-                "type": "string",
-                "description": "Parent run ID for tracking"
-              },
               "workflowName": {
                 "type": "string",
                 "description": "Workflow name for tracking and grouping"
@@ -226,7 +222,6 @@
               }
             },
             "required": [
-              "parentRunId",
               "to",
               "recipientFirstName",
               "recipientLastName",
@@ -249,10 +244,6 @@
               "leadId": {
                 "type": "string",
                 "description": "Lead ID from lead-service for end-to-end tracking"
-              },
-              "parentRunId": {
-                "type": "string",
-                "description": "Parent run ID for tracking"
               },
               "workflowName": {
                 "type": "string",
@@ -316,7 +307,6 @@
               }
             },
             "required": [
-              "parentRunId",
               "to",
               "recipientFirstName",
               "recipientLastName",
@@ -777,6 +767,16 @@
             "description": "Internal user UUID from client-service",
             "name": "x-user-id",
             "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": true,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -864,6 +864,16 @@
             "description": "Internal user UUID from client-service",
             "name": "x-user-id",
             "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": true,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -940,6 +950,16 @@
             "required": true,
             "description": "Internal user UUID from client-service",
             "name": "x-user-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": true,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
             "in": "header"
           }
         ],

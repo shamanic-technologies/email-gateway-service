@@ -17,7 +17,7 @@ router.post("/send", async (req: Request, res: Response) => {
     console.error(
       `[send] Validation failed: missing/invalid fields=[${missingFields.join(", ")}]` +
       ` type=${req.body?.type} to=${req.body?.to ?? "NULL"} leadId=${req.body?.leadId ?? "none"}` +
-      ` campaignId=${req.body?.campaignId ?? "none"} parentRunId=${req.body?.parentRunId ?? "none"}`
+      ` campaignId=${req.body?.campaignId ?? "none"}`
     );
     res.status(400).json({ error: "Invalid request", details: flat });
     return;
@@ -35,9 +35,9 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  const { orgId, userId } = res.locals as { orgId: string; userId: string };
+  const { orgId, userId, runId } = res.locals as { orgId: string; userId: string; runId: string };
 
-  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} parentRunId=${body.parentRunId} workflow=${body.workflowName}`);
+  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} runId=${runId} workflow=${body.workflowName}`);
 
   try {
     if (body.type === "transactional") {
@@ -56,7 +56,7 @@ router.post("/send", async (req: Request, res: Response) => {
       const result = await postmarkClient.sendEmail({
         orgId,
         userId,
-        parentRunId: body.parentRunId,
+        runId,
         brandId: body.brandId,
         leadId: body.leadId,
         workflowName: body.workflowName,
@@ -84,7 +84,7 @@ router.post("/send", async (req: Request, res: Response) => {
       const result = await instantlyClient.atomicSend({
         orgId,
         userId,
-        parentRunId: body.parentRunId,
+        runId,
         brandId: body.brandId,
         leadId: body.leadId,
         workflowName: body.workflowName,

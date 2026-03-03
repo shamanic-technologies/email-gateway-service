@@ -62,7 +62,7 @@ export async function atomicSend(body: {
   userId?: string;
   brandId?: string;
   leadId?: string;
-  parentRunId?: string;
+  runId?: string;
   workflowName?: string;
   campaignId?: string;
   to: string;

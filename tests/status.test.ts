@@ -22,7 +22,8 @@ function authedPost(path: string) {
     .post(path)
     .set("X-API-Key", API_KEY)
     .set("x-org-id", "org_1")
-    .set("x-user-id", "user_1");
+    .set("x-user-id", "user_1")
+    .set("x-run-id", "run_1");
 }
 
 function buildStatusBody(overrides = {}) {
@@ -82,6 +83,7 @@ describe("POST /status", () => {
       .post("/status")
       .set("X-API-Key", API_KEY)
       .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
       .send(buildStatusBody());
 
     expect(res.status).toBe(400);
@@ -93,10 +95,23 @@ describe("POST /status", () => {
       .post("/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
+      .set("x-run-id", "run_1")
       .send(buildStatusBody());
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("x-user-id");
+  });
+
+  it("returns 400 when x-run-id header is missing", async () => {
+    const res = await request(app)
+      .post("/status")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1")
+      .set("x-user-id", "user_1")
+      .send(buildStatusBody());
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-run-id");
   });
 
   it("returns 400 for missing brandId", async () => {

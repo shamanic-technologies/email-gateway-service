@@ -42,7 +42,6 @@ function buildBroadcastBody(overrides = {}) {
     type: "broadcast",
     brandId: "brand_1",
     campaignId: "campaign_1",
-    parentRunId: "run_1",
     workflowName: "test-workflow",
     to: "lead@example.com",
     recipientFirstName: "Jane",
@@ -63,7 +62,6 @@ function buildTransactionalBody(overrides = {}) {
     type: "transactional",
     brandId: "brand_1",
     campaignId: "campaign_1",
-    parentRunId: "run_1",
     workflowName: "test-workflow",
     to: "user@example.com",
     recipientFirstName: "John",
@@ -80,7 +78,8 @@ function authedPost(path: string) {
     .post(path)
     .set("X-API-Key", API_KEY)
     .set("x-org-id", "org_1")
-    .set("x-user-id", "user_1");
+    .set("x-user-id", "user_1")
+    .set("x-run-id", "run_1");
 }
 
 describe("POST /send", () => {
@@ -182,11 +181,12 @@ describe("POST /send", () => {
       ]);
       expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
-      expect(body.parentRunId).toBe("run_1");
+      expect(body.runId).toBe("run_1");
       expect(body.orgId).toBe("org_1");
       expect(body.userId).toBe("user_1");
       expect(body.campaignId).toBe("campaign_1");
       expect(body.appId).toBeUndefined();
+      expect(body.parentRunId).toBeUndefined();
     });
 
     it("forwards sequence as-is for broadcast (no signature, no brand fetch)", async () => {
@@ -295,8 +295,9 @@ describe("POST /send", () => {
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.orgId).toBe("org_1");
       expect(body.userId).toBe("user_1");
-      expect(body.parentRunId).toBe("run_1");
+      expect(body.runId).toBe("run_1");
       expect(body.appId).toBeUndefined();
+      expect(body.parentRunId).toBeUndefined();
     });
   });
 
@@ -578,10 +579,23 @@ describe("POST /send", () => {
         .post("/send")
         .set("X-API-Key", API_KEY)
         .set("x-org-id", "org_1")
+        .set("x-run-id", "run_1")
         .send(buildBroadcastBody());
 
       expect(res.status).toBe(400);
       expect(res.body.error).toContain("x-user-id");
+    });
+
+    it("returns 400 when x-run-id header is missing", async () => {
+      const res = await request(app)
+        .post("/send")
+        .set("X-API-Key", API_KEY)
+        .set("x-org-id", "org_1")
+        .set("x-user-id", "user_1")
+        .send(buildBroadcastBody());
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain("x-run-id");
     });
   });
 

@@ -37,7 +37,6 @@ const SendBaseSchema = z.object({
   brandId: z.string().optional().describe("Brand ID"),
   campaignId: z.string().optional().describe("Campaign ID"),
   leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
-  parentRunId: z.string({ required_error: "parentRunId is required" }).describe("Parent run ID for tracking"),
   workflowName: z.string().optional().describe("Workflow name for tracking and grouping"),
   to: z.string({ required_error: "to (recipient email) is required — the lead has no email address", invalid_type_error: "to (recipient email) must be a string, got null — the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
   recipientFirstName: z.string({ required_error: "recipientFirstName is required", invalid_type_error: "recipientFirstName must be a string" }).describe("Recipient first name"),
@@ -267,6 +266,7 @@ export const HealthResponseSchema = z
 export const IdentityHeadersSchema = z.object({
   "x-org-id": z.string().describe("Internal organization UUID from client-service"),
   "x-user-id": z.string().describe("Internal user UUID from client-service"),
+  "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
 });
 
 // --- Register endpoints ---
