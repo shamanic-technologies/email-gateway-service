@@ -919,6 +919,61 @@
         }
       }
     },
+    "/stats/public": {
+      "post": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Get aggregated email stats (no identity headers required)",
+        "description": "Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregated stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/status": {
       "post": {
         "tags": [

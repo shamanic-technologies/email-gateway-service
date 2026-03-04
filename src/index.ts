@@ -6,7 +6,7 @@ import { requireIdentityHeaders } from "./middleware/identityHeaders";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
-import statsRoutes from "./routes/stats";
+import statsRoutes, { publicStatsRouter } from "./routes/stats";
 import webhooksRoutes from "./routes/webhooks";
 
 const app = express();
@@ -17,6 +17,9 @@ app.use(express.json());
 // Public routes (no auth)
 app.use(healthRoutes);
 app.use("/webhooks", webhooksRoutes);
+
+// Service-auth only (no identity headers required)
+app.use(serviceAuth, publicStatsRouter);
 
 // Protected routes (require X-API-Key + identity headers)
 app.use(serviceAuth, requireIdentityHeaders, sendRoutes);

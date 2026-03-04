@@ -26,6 +26,12 @@ function authedPost(path: string) {
     .set("x-run-id", "run_1");
 }
 
+function serviceAuthPost(path: string) {
+  return request(app)
+    .post(path)
+    .set("X-API-Key", API_KEY);
+}
+
 function mockPostmarkStats(overrides = {}) {
   return {
     ok: true,
@@ -675,5 +681,70 @@ describe("POST /stats", () => {
       expect(res.body.transactional.stepStats).toBeUndefined();
       expect(res.body.broadcast.stepStats).toEqual(steps);
     });
+  });
+});
+
+describe("POST /stats/public", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it("returns 401 without API key", async () => {
+    const res = await request(app).post("/stats/public").send({});
+    expect(res.status).toBe(401);
+  });
+
+  it("succeeds without identity headers", async () => {
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+    const res = await serviceAuthPost("/stats/public").send({ type: "broadcast" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.broadcast.emailsSent).toBe(80);
+  });
+
+  it("does not forward identity headers to downstream when not provided", async () => {
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+    await serviceAuthPost("/stats/public").send({ type: "broadcast" });
+
+    const headers = mockFetch.mock.calls[0][1].headers;
+    expect(headers["x-org-id"]).toBeUndefined();
+    expect(headers["x-user-id"]).toBeUndefined();
+    expect(headers["x-run-id"]).toBeUndefined();
+  });
+
+  it("does not include orgId/userId in downstream body when not provided", async () => {
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+    await serviceAuthPost("/stats/public").send({ type: "broadcast", brandId: "brand_1" });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.orgId).toBeUndefined();
+    expect(body.userId).toBeUndefined();
+    expect(body.brandId).toBe("brand_1");
+  });
+
+  it("returns grouped broadcast stats", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockGroupedInstantly([
+        { key: "brand_1", recipients: 30 },
+        { key: "brand_2", recipients: 20 },
+      ])
+    );
+
+    const res = await serviceAuthPost("/stats/public").send({ type: "broadcast", groupBy: "brandId" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.groups).toHaveLength(2);
+    expect(res.body.groups[0].key).toBe("brand_1");
+    expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
+  });
+
+  it("returns 400 for invalid type", async () => {
+    const res = await serviceAuthPost("/stats/public").send({ type: "invalid" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Invalid request");
   });
 });
