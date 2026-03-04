@@ -11,6 +11,7 @@ import type {
 } from "../lib/instantly-client";
 
 const router = Router();
+const publicRouter = Router();
 
 function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats {
   return {
@@ -43,17 +44,17 @@ function normalizeFlatResult(raw: ProviderStatsResult): Stats {
   return normalizePayload(flat.stats, flat.recipients);
 }
 
-router.post("/stats", async (req: Request, res: Response) => {
+async function statsHandler(req: Request, res: Response) {
   const parsed = StatsRequestSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
     return;
   }
 
-  const { orgId, userId, runId } = res.locals as { orgId: string; userId: string; runId: string };
-  const identityHeaders = { orgId, userId, runId };
+  const { orgId, userId, runId } = (res.locals ?? {}) as { orgId?: string; userId?: string; runId?: string };
+  const identityHeaders = orgId && userId && runId ? { orgId, userId, runId } : undefined;
   const { type, ...bodyFilters } = parsed.data;
-  const filters = { ...bodyFilters, orgId, userId };
+  const filters = { ...bodyFilters, ...(orgId && { orgId }), ...(userId && { userId }) };
 
   try {
     if (filters.groupBy) {
@@ -66,13 +67,16 @@ router.post("/stats", async (req: Request, res: Response) => {
     console.error(`[stats] Failed: ${message}`);
     res.status(502).json({ error: "Failed to fetch stats", details: message });
   }
-});
+}
+
+router.post("/stats", statsHandler);
+publicRouter.post("/stats/public", statsHandler);
 
 async function handleFlat(
   res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
-  identityHeaders: { orgId: string; userId: string; runId: string },
+  identityHeaders?: { orgId: string; userId: string; runId: string },
 ) {
   if (type === "transactional") {
     const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders);
@@ -117,7 +121,7 @@ async function handleGrouped(
   res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
-  identityHeaders: { orgId: string; userId: string; runId: string },
+  identityHeaders?: { orgId: string; userId: string; runId: string },
 ) {
   const castFilters = filters as Parameters<typeof postmarkClient.getStats>[0];
 
@@ -184,3 +188,4 @@ async function handleGrouped(
 }
 
 export default router;
+export { publicRouter as publicStatsRouter };

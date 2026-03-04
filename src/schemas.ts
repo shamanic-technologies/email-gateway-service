@@ -338,6 +338,28 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
+  path: "/stats/public",
+  tags: ["Stats"],
+  summary: "Get aggregated email stats (no identity headers required)",
+  description: "Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+  security: [{ apiKey: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: StatsRequestSchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Aggregated stats",
+      content: { "application/json": { schema: StatsResponseSchema } },
+    },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
   path: "/status",
   tags: ["Status"],
   summary: "Get delivery status for leads/emails",
