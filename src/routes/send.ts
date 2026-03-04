@@ -36,6 +36,7 @@ router.post("/send", async (req: Request, res: Response) => {
   }
 
   const { orgId, userId, runId } = res.locals as { orgId: string; userId: string; runId: string };
+  const identityHeaders = { orgId, userId, runId };
 
   console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} runId=${runId} workflow=${body.workflowName}`);
 
@@ -44,7 +45,7 @@ router.post("/send", async (req: Request, res: Response) => {
       let brandUrl: string | undefined;
       if (body.brandId) {
         try {
-          const brand = await brandClient.getBrand(body.brandId);
+          const brand = await brandClient.getBrand(body.brandId, identityHeaders);
           brandUrl = brand.brandUrl ?? undefined;
         } catch (err) {
           console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
@@ -69,7 +70,7 @@ router.post("/send", async (req: Request, res: Response) => {
         replyTo: body.replyTo,
         tag: body.tag,
         metadata: body.metadata,
-      });
+      }, identityHeaders);
 
       console.log(`[send] postmark response: messageId=${result.messageId}`);
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
@@ -96,7 +97,7 @@ router.post("/send", async (req: Request, res: Response) => {
         variables: body.metadata,
         subject: body.subject,
         sequence: body.sequence,
-      });
+      }, identityHeaders);
 
       console.log(`[send] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
 

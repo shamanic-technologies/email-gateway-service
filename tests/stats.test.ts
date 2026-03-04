@@ -220,6 +220,17 @@ describe("POST /stats", () => {
       expect(body.appId).toBeUndefined();
       expect(body.type).toBeUndefined();
     });
+
+    it("forwards identity headers to postmark-service", async () => {
+      mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+      await authedPost("/stats").send({ type: "transactional" });
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-org-id"]).toBe("org_1");
+      expect(headers["x-user-id"]).toBe("user_1");
+      expect(headers["x-run-id"]).toBe("run_1");
+    });
   });
 
   describe("type: broadcast", () => {
@@ -259,6 +270,17 @@ describe("POST /stats", () => {
       expect(body.userId).toBe("user_1");
       expect(body.appId).toBeUndefined();
       expect(body.type).toBeUndefined();
+    });
+
+    it("forwards identity headers to instantly-service", async () => {
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+      await authedPost("/stats").send({ type: "broadcast" });
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-org-id"]).toBe("org_1");
+      expect(headers["x-user-id"]).toBe("user_1");
+      expect(headers["x-run-id"]).toBe("run_1");
     });
   });
 

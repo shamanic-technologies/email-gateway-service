@@ -5,17 +5,28 @@ const { url, apiKey } = config.postmark;
 const TIMEOUT_MS = 10_000;
 const RETRY_DELAY_MS = 500;
 
+interface IdentityHeaders {
+  orgId: string;
+  userId: string;
+  runId: string;
+}
+
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown } = {}
+  options: { method?: string; body?: unknown; identityHeaders?: IdentityHeaders } = {}
 ): Promise<T> {
-  const { method = "GET", body } = options;
+  const { method = "GET", body, identityHeaders } = options;
   const fullUrl = `${url}${path}`;
   const fetchOptions: RequestInit = {
     method,
     headers: {
       "Content-Type": "application/json",
       "X-API-Key": apiKey,
+      ...(identityHeaders && {
+        "x-org-id": identityHeaders.orgId,
+        "x-user-id": identityHeaders.userId,
+        "x-run-id": identityHeaders.runId,
+      }),
     },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -66,7 +77,7 @@ export async function sendEmail(body: {
   replyTo?: string;
   tag?: string;
   metadata?: Record<string, string>;
-}) {
+}, identityHeaders?: IdentityHeaders) {
   return request<{
     success: boolean;
     messageId?: string;
@@ -74,7 +85,7 @@ export async function sendEmail(body: {
     sendingId?: string;
     errorCode?: number;
     message?: string;
-  }>("/send", { method: "POST", body });
+  }>("/send", { method: "POST", body, identityHeaders });
 }
 
 // Re-export shared provider types from instantly-client
@@ -88,8 +99,8 @@ export async function getStats(filters: {
   campaignId?: string;
   workflowName?: string;
   groupBy?: string;
-}) {
-  return request<ProviderStatsResult>("/stats", { method: "POST", body: filters });
+}, identityHeaders?: IdentityHeaders) {
+  return request<ProviderStatsResult>("/stats", { method: "POST", body: filters, identityHeaders });
 }
 
 export interface StatusScope {
@@ -109,8 +120,8 @@ export async function getStatus(body: {
   brandId: string;
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
-}) {
-  return request<{ results: StatusResult[] }>("/status", { method: "POST", body });
+}, identityHeaders?: IdentityHeaders) {
+  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, identityHeaders });
 }
 
 export async function forwardWebhook(body: unknown) {

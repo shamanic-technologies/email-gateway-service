@@ -14,13 +14,15 @@ router.post("/status", async (req: Request, res: Response) => {
 
   const { brandId, campaignId, items } = parsed.data;
   const payload = { brandId, campaignId, items };
+  const { orgId, userId, runId } = res.locals as { orgId: string; userId: string; runId: string };
+  const identityHeaders = { orgId, userId, runId };
 
   console.log(`[status] brandId=${brandId} campaignId=${campaignId ?? "none"} items=${items.length}`);
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
-      instantlyClient.getStatus(payload),
-      postmarkClient.getStatus(payload),
+      instantlyClient.getStatus(payload, identityHeaders),
+      postmarkClient.getStatus(payload, identityHeaders),
     ]);
 
     const broadcastMap = new Map<string, instantlyClient.StatusResult>();
