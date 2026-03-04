@@ -178,6 +178,24 @@ describe("POST /status", () => {
     expect(second.transactional).toBeUndefined();
   });
 
+  it("forwards identity headers to both sub-services", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await authedPost("/status").send(buildStatusBody());
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    for (const call of mockFetch.mock.calls) {
+      const headers = call[1].headers;
+      expect(headers["x-org-id"]).toBe("org_1");
+      expect(headers["x-user-id"]).toBe("user_1");
+      expect(headers["x-run-id"]).toBe("run_1");
+    }
+  });
+
   it("forwards brandId and campaignId to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,

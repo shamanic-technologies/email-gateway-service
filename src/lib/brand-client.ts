@@ -7,9 +7,22 @@ interface BrandDetail {
   domain: string | null;
 }
 
-export async function getBrand(brandId: string): Promise<BrandDetail> {
+interface IdentityHeaders {
+  orgId: string;
+  userId: string;
+  runId: string;
+}
+
+export async function getBrand(brandId: string, identityHeaders?: IdentityHeaders): Promise<BrandDetail> {
   const res = await fetch(`${config.brand.url}/brands/${brandId}`, {
-    headers: { "X-API-Key": config.brand.apiKey },
+    headers: {
+      "X-API-Key": config.brand.apiKey,
+      ...(identityHeaders && {
+        "x-org-id": identityHeaders.orgId,
+        "x-user-id": identityHeaders.userId,
+        "x-run-id": identityHeaders.runId,
+      }),
+    },
   });
 
   if (!res.ok) {

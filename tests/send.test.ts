@@ -189,6 +189,21 @@ describe("POST /send", () => {
       expect(body.parentRunId).toBeUndefined();
     });
 
+    it("forwards identity headers (x-org-id, x-user-id, x-run-id) to instantly-service", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/send").send(buildBroadcastBody());
+
+      const instantlyHeaders = mockFetch.mock.calls[0][1].headers;
+      expect(instantlyHeaders["x-org-id"]).toBe("org_1");
+      expect(instantlyHeaders["x-user-id"]).toBe("user_1");
+      expect(instantlyHeaders["x-run-id"]).toBe("run_1");
+    });
+
     it("forwards sequence as-is for broadcast (no signature, no brand fetch)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -298,6 +313,38 @@ describe("POST /send", () => {
       expect(body.runId).toBe("run_1");
       expect(body.appId).toBeUndefined();
       expect(body.parentRunId).toBeUndefined();
+    });
+
+    it("forwards identity headers (x-org-id, x-user-id, x-run-id) to postmark-service", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await authedPost("/send").send(buildTransactionalBody());
+
+      // postmark call is the second fetch (first is brand)
+      const postmarkHeaders = mockFetch.mock.calls[1][1].headers;
+      expect(postmarkHeaders["x-org-id"]).toBe("org_1");
+      expect(postmarkHeaders["x-user-id"]).toBe("user_1");
+      expect(postmarkHeaders["x-run-id"]).toBe("run_1");
+    });
+
+    it("forwards identity headers to brand-service", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await authedPost("/send").send(buildTransactionalBody());
+
+      // brand call is the first fetch
+      const brandHeaders = mockFetch.mock.calls[0][1].headers;
+      expect(brandHeaders["x-org-id"]).toBe("org_1");
+      expect(brandHeaders["x-user-id"]).toBe("user_1");
+      expect(brandHeaders["x-run-id"]).toBe("run_1");
     });
   });
 
