@@ -140,7 +140,8 @@ export async function getStats(filters: {
   workflowName?: string;
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders) {
-  return request<ProviderStatsResult>("/stats", { method: "POST", body: filters, identityHeaders });
+  const path = identityHeaders ? "/stats" : "/stats/public";
+  return request<ProviderStatsResult>(path, { method: "POST", body: filters, identityHeaders });
 }
 
 export interface StatusScope {
