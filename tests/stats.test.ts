@@ -741,6 +741,39 @@ describe("POST /stats/public", () => {
     expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
   });
 
+  it("forwards identity headers to downstream when caller provides them", async () => {
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+    await request(app)
+      .post("/stats/public")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_pub")
+      .set("x-user-id", "user_pub")
+      .set("x-run-id", "run_pub")
+      .send({ type: "broadcast" });
+
+    const headers = mockFetch.mock.calls[0][1].headers;
+    expect(headers["x-org-id"]).toBe("org_pub");
+    expect(headers["x-user-id"]).toBe("user_pub");
+    expect(headers["x-run-id"]).toBe("run_pub");
+  });
+
+  it("includes orgId/userId in downstream body when caller provides identity headers", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+    await request(app)
+      .post("/stats/public")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_pub")
+      .set("x-user-id", "user_pub")
+      .set("x-run-id", "run_pub")
+      .send({ type: "transactional" });
+
+    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    expect(body.orgId).toBe("org_pub");
+    expect(body.userId).toBe("user_pub");
+  });
+
   it("returns 400 for invalid type", async () => {
     const res = await serviceAuthPost("/stats/public").send({ type: "invalid" });
 

@@ -51,7 +51,9 @@ async function statsHandler(req: Request, res: Response) {
     return;
   }
 
-  const { orgId, userId, runId } = (res.locals ?? {}) as { orgId?: string; userId?: string; runId?: string };
+  const orgId = (res.locals.orgId ?? req.headers["x-org-id"]) as string | undefined;
+  const userId = (res.locals.userId ?? req.headers["x-user-id"]) as string | undefined;
+  const runId = (res.locals.runId ?? req.headers["x-run-id"]) as string | undefined;
   const identityHeaders = orgId && userId && runId ? { orgId, userId, runId } : undefined;
   const { type, ...bodyFilters } = parsed.data;
   const filters = { ...bodyFilters, ...(orgId && { orgId }), ...(userId && { userId }) };
