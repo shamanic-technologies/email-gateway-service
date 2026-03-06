@@ -703,23 +703,27 @@ describe("POST /stats/public", () => {
     expect(res.body.broadcast.emailsSent).toBe(80);
   });
 
-  it("does not forward identity headers to downstream when not provided", async () => {
+  it("calls downstream /stats/public when no identity headers provided", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
     await serviceAuthPost("/stats/public").send({ type: "broadcast" });
 
-    const headers = mockFetch.mock.calls[0][1].headers;
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("http://localhost:3011/stats/public");
+    const headers = options.headers;
     expect(headers["x-org-id"]).toBeUndefined();
     expect(headers["x-user-id"]).toBeUndefined();
     expect(headers["x-run-id"]).toBeUndefined();
   });
 
-  it("does not include orgId/userId in downstream body when not provided", async () => {
-    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+  it("calls downstream /stats/public for postmark when no identity headers", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-    await serviceAuthPost("/stats/public").send({ type: "broadcast", brandId: "brand_1" });
+    await serviceAuthPost("/stats/public").send({ type: "transactional", brandId: "brand_1" });
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("http://localhost:3010/stats/public");
+    const body = JSON.parse(options.body);
     expect(body.orgId).toBeUndefined();
     expect(body.userId).toBeUndefined();
     expect(body.brandId).toBe("brand_1");
@@ -741,7 +745,7 @@ describe("POST /stats/public", () => {
     expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
   });
 
-  it("forwards identity headers to downstream when caller provides them", async () => {
+  it("calls downstream /stats (not /stats/public) and forwards headers when caller provides them", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
     await request(app)
@@ -752,10 +756,11 @@ describe("POST /stats/public", () => {
       .set("x-run-id", "run_pub")
       .send({ type: "broadcast" });
 
-    const headers = mockFetch.mock.calls[0][1].headers;
-    expect(headers["x-org-id"]).toBe("org_pub");
-    expect(headers["x-user-id"]).toBe("user_pub");
-    expect(headers["x-run-id"]).toBe("run_pub");
+    const [url, options] = mockFetch.mock.calls[0];
+    expect(url).toBe("http://localhost:3011/stats");
+    expect(options.headers["x-org-id"]).toBe("org_pub");
+    expect(options.headers["x-user-id"]).toBe("user_pub");
+    expect(options.headers["x-run-id"]).toBe("run_pub");
   });
 
   it("includes orgId/userId in downstream body when caller provides identity headers", async () => {
