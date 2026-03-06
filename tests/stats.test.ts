@@ -6,7 +6,7 @@ vi.mock("../src/config", () => ({
   config: {
     port: 3009,
     apiKey: "test-api-key",
-    emailFromAddress: "test@example.com",
+
     postmark: { url: "http://localhost:3010", apiKey: "pm-key" },
     instantly: { url: "http://localhost:3011", apiKey: "inst-key" },
     brand: { url: "http://localhost:3005", apiKey: "brand-key" },

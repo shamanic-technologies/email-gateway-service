@@ -64,7 +64,7 @@ const TransactionalSendSchema = SendBaseSchema.extend({
   subject: z.string().describe("Email subject line"),
   htmlBody: z.string().optional().describe("HTML email body"),
   textBody: z.string().optional().describe("Plain text email body"),
-  from: z.string().optional().describe("Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the gateway default is used."),
+  from: z.string().optional().describe("Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the downstream provider resolves its own default."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({

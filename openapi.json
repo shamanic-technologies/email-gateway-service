@@ -218,7 +218,7 @@
               },
               "from": {
                 "type": "string",
-                "description": "Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the gateway default is used."
+                "description": "Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the downstream provider resolves its own default."
               }
             },
             "required": [

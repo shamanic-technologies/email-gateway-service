@@ -9,7 +9,7 @@ vi.mock("../src/config", () => ({
   config: {
     port: 3009,
     apiKey: "test-api-key",
-    emailFromAddress: "test@example.com",
+
     postmark: { url: "http://localhost:3010", apiKey: "pm-key" },
     instantly: { url: "http://localhost:3011", apiKey: "inst-key" },
     brand: { url: "http://localhost:3005", apiKey: "brand-key" },
@@ -257,7 +257,7 @@ describe("POST /send", () => {
       expect(body.from).toBe("Custom <custom@example.com>");
     });
 
-    it("falls back to config default when from is omitted", async () => {
+    it("does not inject a from when omitted (downstream resolves it)", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -267,7 +267,7 @@ describe("POST /send", () => {
       await authedPost("/send").send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.from).toBe("test@example.com");
+      expect(body.from).toBeUndefined();
     });
 
     it("does not send messageStream to postmark-service (resolved server-side)", async () => {
