@@ -69,7 +69,7 @@ export async function sendEmail(body: {
   leadId?: string;
   workflowName?: string;
   campaignId?: string;
-  from: string;
+  from?: string;
   to: string;
   subject: string;
   htmlBody?: string;

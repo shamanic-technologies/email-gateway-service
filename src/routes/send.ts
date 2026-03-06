@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { SendRequestSchema } from "../schemas";
-import { config } from "../config";
+
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import * as brandClient from "../lib/brand-client";
@@ -62,7 +62,7 @@ router.post("/send", async (req: Request, res: Response) => {
         leadId: body.leadId,
         workflowName: body.workflowName,
         campaignId: body.campaignId,
-        from: body.from ?? config.emailFromAddress,
+        from: body.from,
         to: body.to,
         subject: body.subject,
         htmlBody: htmlWithSignature,
