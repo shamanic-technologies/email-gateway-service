@@ -132,6 +132,42 @@ describe("POST /send", () => {
       expect(res.body.campaignId).toBe("inst_camp_123");
     });
 
+    it("retries on timeout with a fresh AbortSignal", async () => {
+      // First call: simulate a network timeout (AbortError)
+      mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"));
+      // Retry: succeed
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const res = await authedPost("/send").send(buildBroadcastBody());
+
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // Verify each call got its own signal (not the same object)
+      const signal1 = mockFetch.mock.calls[0][1].signal;
+      const signal2 = mockFetch.mock.calls[1][1].signal;
+      expect(signal1).not.toBe(signal2);
+    });
+
+    it("retries on timeout with a fresh AbortSignal (transactional)", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      // First postmark call: timeout
+      mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"));
+      // Retry: succeed
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_retry" }),
+      });
+
+      const res = await authedPost("/send").send(buildTransactionalBody());
+
+      expect(res.status).toBe(200);
+      expect(res.body.messageId).toBe("pm_retry");
+    });
+
     it("returns 502 when instantly-service is down", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,

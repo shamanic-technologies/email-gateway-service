@@ -17,26 +17,27 @@ async function request<T>(
 ): Promise<T> {
   const { method = "GET", body, identityHeaders } = options;
   const fullUrl = `${url}${path}`;
-  const fetchOptions: RequestInit = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-      "X-API-Key": apiKey,
-      ...(identityHeaders && {
-        "x-org-id": identityHeaders.orgId,
-        "x-user-id": identityHeaders.userId,
-        "x-run-id": identityHeaders.runId,
-      }),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-API-Key": apiKey,
+    ...(identityHeaders && {
+      "x-org-id": identityHeaders.orgId,
+      "x-user-id": identityHeaders.userId,
+      "x-run-id": identityHeaders.runId,
+    }),
   };
+  const jsonBody = body ? JSON.stringify(body) : undefined;
 
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const response = await fetch(fullUrl, fetchOptions);
+      const response = await fetch(fullUrl, {
+        method,
+        headers,
+        body: jsonBody,
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
 
       if (!response.ok) {
         const errorText = await response.text();
