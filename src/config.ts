@@ -17,4 +17,8 @@ export const config = {
     url: process.env.BRAND_SERVICE_URL || "http://localhost:3005",
     apiKey: process.env.BRAND_SERVICE_API_KEY || "",
   },
+  key: {
+    url: process.env.KEY_SERVICE_URL || "http://localhost:3001",
+    apiKey: process.env.KEY_SERVICE_API_KEY || "",
+  },
 } as const;
