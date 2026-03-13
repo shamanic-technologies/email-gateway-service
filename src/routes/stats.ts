@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { StatsRequestSchema, StatsQuerySchema, Stats, BroadcastStats } from "../schemas";
+import { StatsQuerySchema, Stats, BroadcastStats } from "../schemas";
 import { extractTrackingHeaders, TrackingHeaders } from "../middleware/identityHeaders";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
@@ -46,18 +46,12 @@ function normalizeFlatResult(raw: ProviderStatsResult): Stats {
 }
 
 function parseStatsInput(req: Request): { success: true; type?: string; filters: Record<string, unknown> } | { success: false; error: unknown } {
-  if (req.method === "GET") {
-    const parsed = StatsQuerySchema.safeParse(req.query);
-    if (!parsed.success) return { success: false, error: parsed.error.flatten() };
-    const { type, runIds, ...rest } = parsed.data;
-    const filters: Record<string, unknown> = { ...rest };
-    if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());
-    return { success: true, type, filters };
-  }
-  const parsed = StatsRequestSchema.safeParse(req.body);
+  const parsed = StatsQuerySchema.safeParse(req.query);
   if (!parsed.success) return { success: false, error: parsed.error.flatten() };
-  const { type, ...rest } = parsed.data;
-  return { success: true, type, filters: rest };
+  const { type, runIds, ...rest } = parsed.data;
+  const filters: Record<string, unknown> = { ...rest };
+  if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());
+  return { success: true, type, filters };
 }
 
 async function statsHandler(req: Request, res: Response) {
@@ -88,9 +82,7 @@ async function statsHandler(req: Request, res: Response) {
   }
 }
 
-router.post("/stats", statsHandler);
 router.get("/stats", statsHandler);
-publicRouter.post("/stats/public", statsHandler);
 publicRouter.get("/stats/public", statsHandler);
 
 async function handleFlat(
