@@ -102,17 +102,17 @@ router.post("/send", async (req: Request, res: Response) => {
       console.log(`[send] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
 
       if (result.added === 0) {
-        console.warn(`[send] lead not added to=${body.to} campaign=${result.campaignId}`);
+        console.log(`[send] lead already in campaign to=${body.to} campaign=${result.campaignId} — returning 200 (idempotent)`);
         const response = {
-          success: false,
+          success: true,
           provider: "broadcast" as const,
-          error: "Lead was not added to campaign (possibly duplicate)",
           campaignId: result.campaignId,
+          deduplicated: true,
         };
         if (body.idempotencyKey) {
-          idempotencyStore.set(body.idempotencyKey, 409, response);
+          idempotencyStore.set(body.idempotencyKey, 200, response);
         }
-        res.status(409).json(response);
+        res.json(response);
         return;
       }
 
