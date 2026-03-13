@@ -97,17 +97,6 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowName", "leadEmail"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
-export const StatsRequestSchema = z
-  .object({
-    type: EmailTypeSchema.optional().describe("Filter by email channel type"),
-    runIds: z.array(z.string()).optional().describe("Filter by run IDs"),
-    brandId: z.string().optional().describe("Filter by brand ID"),
-    campaignId: z.string().optional().describe("Filter by campaign ID"),
-    workflowName: z.string().optional().describe("Filter by workflow name"),
-    groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension. When set, response is { groups: [...] } instead of flat stats."),
-  })
-  .openapi("StatsRequest");
-
 export const StatsQuerySchema = z
   .object({
     type: EmailTypeSchema.optional().describe("Filter by email channel type"),
@@ -119,7 +108,7 @@ export const StatsQuerySchema = z
   })
   .openapi("StatsQuery");
 
-export type StatsRequest = z.infer<typeof StatsRequestSchema>;
+export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
 export const StatsSchema = z
   .object({
@@ -328,29 +317,6 @@ registry.registerPath({
 });
 
 registry.registerPath({
-  method: "post",
-  path: "/stats",
-  tags: ["Stats"],
-  summary: "Get aggregated email stats (POST, deprecated)",
-  description: "DEPRECATED — use GET /stats instead. Get aggregated email stats. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
-  security: [{ apiKey: [] }],
-  request: {
-    headers: IdentityHeadersSchema,
-    body: {
-      content: { "application/json": { schema: StatsRequestSchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: "Aggregated stats",
-      content: { "application/json": { schema: StatsResponseSchema } },
-    },
-    401: { description: "Unauthorized", content: errorContent },
-    502: { description: "Upstream service error", content: errorContent },
-  },
-});
-
-registry.registerPath({
   method: "get",
   path: "/stats",
   tags: ["Stats"],
@@ -360,28 +326,6 @@ registry.registerPath({
   request: {
     headers: IdentityHeadersSchema,
     query: StatsQuerySchema,
-  },
-  responses: {
-    200: {
-      description: "Aggregated stats",
-      content: { "application/json": { schema: StatsResponseSchema } },
-    },
-    401: { description: "Unauthorized", content: errorContent },
-    502: { description: "Upstream service error", content: errorContent },
-  },
-});
-
-registry.registerPath({
-  method: "post",
-  path: "/stats/public",
-  tags: ["Stats"],
-  summary: "Get aggregated email stats, no identity (POST, deprecated)",
-  description: "DEPRECATED — use GET /stats/public instead. Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
-  security: [{ apiKey: [] }],
-  request: {
-    body: {
-      content: { "application/json": { schema: StatsRequestSchema } },
-    },
   },
   responses: {
     200: {
