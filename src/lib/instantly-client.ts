@@ -141,6 +141,20 @@ export interface ProviderStatsGrouped {
 
 export type ProviderStatsResult = ProviderStatsFlat | ProviderStatsGrouped;
 
+function buildStatsQuery(filters: Record<string, unknown>): string {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === null) continue;
+    if (Array.isArray(value)) {
+      params.set(key, value.join(","));
+    } else {
+      params.set(key, String(value));
+    }
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export async function getStats(filters: {
   runIds?: string[];
   orgId?: string;
@@ -150,8 +164,9 @@ export async function getStats(filters: {
   workflowName?: string;
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  const path = identityHeaders ? "/stats" : "/stats/public";
-  return request<ProviderStatsResult>(path, { method: "POST", body: filters, identityHeaders, trackingHeaders });
+  const basePath = identityHeaders ? "/stats" : "/stats/public";
+  const path = basePath + buildStatsQuery(filters);
+  return request<ProviderStatsResult>(path, { identityHeaders, trackingHeaders });
 }
 
 export interface StatusScope {

@@ -215,15 +215,13 @@ describe("GET /stats", () => {
 
       await authedGet("/stats?type=transactional&campaignId=camp_1");
 
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe("http://localhost:3010/stats");
-      expect(options.method).toBe("POST");
-      const body = JSON.parse(options.body);
-      expect(body.orgId).toBe("org_1");
-      expect(body.userId).toBe("user_1");
-      expect(body.campaignId).toBe("camp_1");
-      expect(body.appId).toBeUndefined();
-      expect(body.type).toBeUndefined();
+      const [fetchUrl] = mockFetch.mock.calls[0];
+      const params = new URL(fetchUrl).searchParams;
+      expect(fetchUrl).toContain("http://localhost:3010/stats?");
+      expect(params.get("orgId")).toBe("org_1");
+      expect(params.get("userId")).toBe("user_1");
+      expect(params.get("campaignId")).toBe("camp_1");
+      expect(params.has("type")).toBe(false);
     });
 
     it("forwards identity headers to postmark-service", async () => {
@@ -267,14 +265,12 @@ describe("GET /stats", () => {
 
       await authedGet("/stats?type=broadcast");
 
-      const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe("http://localhost:3011/stats");
-      expect(options.method).toBe("POST");
-      const body = JSON.parse(options.body);
-      expect(body.orgId).toBe("org_1");
-      expect(body.userId).toBe("user_1");
-      expect(body.appId).toBeUndefined();
-      expect(body.type).toBeUndefined();
+      const [fetchUrl] = mockFetch.mock.calls[0];
+      const params = new URL(fetchUrl).searchParams;
+      expect(fetchUrl).toContain("http://localhost:3011/stats?");
+      expect(params.get("orgId")).toBe("org_1");
+      expect(params.get("userId")).toBe("user_1");
+      expect(params.has("type")).toBe(false);
     });
 
     it("forwards identity headers to instantly-service", async () => {
@@ -435,8 +431,8 @@ describe("GET /stats", () => {
 
       await authedGet("/stats?type=transactional&workflowName=welcome-flow");
 
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.workflowName).toBe("welcome-flow");
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("workflowName")).toBe("welcome-flow");
     });
 
     it("passes brandId to provider", async () => {
@@ -444,17 +440,17 @@ describe("GET /stats", () => {
 
       await authedGet("/stats?type=transactional&brandId=brand_1");
 
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandId).toBe("brand_1");
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("brandId")).toBe("brand_1");
     });
 
-    it("parses comma-separated runIds", async () => {
+    it("parses comma-separated runIds and forwards to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
       await authedGet("/stats?type=transactional&runIds=run_a,run_b,run_c");
 
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.runIds).toEqual(["run_a", "run_b", "run_c"]);
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("runIds")).toBe("run_a,run_b,run_c");
     });
   });
 
@@ -534,7 +530,7 @@ describe("GET /stats", () => {
       expect(brand3.broadcast.emailsSent).toBe(40);
     });
 
-    it("passes groupBy to providers in request body", async () => {
+    it("passes groupBy to providers in query params", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010"))
           return Promise.resolve(mockGroupedPostmark([{ key: "wf_1" }]));
@@ -546,8 +542,8 @@ describe("GET /stats", () => {
       await authedGet("/stats?groupBy=workflowName");
 
       for (const call of mockFetch.mock.calls) {
-        const body = JSON.parse(call[1].body);
-        expect(body.groupBy).toBe("workflowName");
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("groupBy")).toBe("workflowName");
       }
     });
 
@@ -751,8 +747,8 @@ describe("GET /stats/public", () => {
 
     await serviceAuthGet("/stats/public?type=broadcast");
 
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe("http://localhost:3011/stats/public");
+    const [fetchUrl, options] = mockFetch.mock.calls[0];
+    expect(fetchUrl).toContain("http://localhost:3011/stats/public");
     const headers = options.headers;
     expect(headers["x-org-id"]).toBeUndefined();
     expect(headers["x-user-id"]).toBeUndefined();
@@ -764,12 +760,12 @@ describe("GET /stats/public", () => {
 
     await serviceAuthGet("/stats/public?type=transactional&brandId=brand_1");
 
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe("http://localhost:3010/stats/public");
-    const body = JSON.parse(options.body);
-    expect(body.orgId).toBeUndefined();
-    expect(body.userId).toBeUndefined();
-    expect(body.brandId).toBe("brand_1");
+    const [fetchUrl] = mockFetch.mock.calls[0];
+    expect(fetchUrl).toContain("http://localhost:3010/stats/public");
+    const params = new URL(fetchUrl).searchParams;
+    expect(params.has("orgId")).toBe(false);
+    expect(params.has("userId")).toBe(false);
+    expect(params.get("brandId")).toBe("brand_1");
   });
 
   it("returns grouped broadcast stats", async () => {
@@ -798,14 +794,15 @@ describe("GET /stats/public", () => {
       .set("x-user-id", "user_pub")
       .set("x-run-id", "run_pub");
 
-    const [url, options] = mockFetch.mock.calls[0];
-    expect(url).toBe("http://localhost:3011/stats");
+    const [fetchUrl, options] = mockFetch.mock.calls[0];
+    expect(fetchUrl).toContain("http://localhost:3011/stats?");
+    expect(fetchUrl).not.toContain("/stats/public");
     expect(options.headers["x-org-id"]).toBe("org_pub");
     expect(options.headers["x-user-id"]).toBe("user_pub");
     expect(options.headers["x-run-id"]).toBe("run_pub");
   });
 
-  it("includes orgId/userId in downstream body when caller provides identity headers", async () => {
+  it("includes orgId/userId in downstream query when caller provides identity headers", async () => {
     mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
     await request(app)
@@ -815,9 +812,9 @@ describe("GET /stats/public", () => {
       .set("x-user-id", "user_pub")
       .set("x-run-id", "run_pub");
 
-    const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-    expect(body.orgId).toBe("org_pub");
-    expect(body.userId).toBe("user_pub");
+    const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+    expect(params.get("orgId")).toBe("org_pub");
+    expect(params.get("userId")).toBe("user_pub");
   });
 
   it("returns 400 for invalid type", async () => {
