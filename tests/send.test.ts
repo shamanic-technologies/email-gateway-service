@@ -118,7 +118,7 @@ describe("POST /send", () => {
       });
     });
 
-    it("returns 409 when added === 0 (duplicate lead)", async () => {
+    it("returns 200 with deduplicated flag when added === 0 (duplicate lead)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -132,9 +132,9 @@ describe("POST /send", () => {
 
       const res = await authedPost("/send").send(buildBroadcastBody());
 
-      expect(res.status).toBe(409);
-      expect(res.body.success).toBe(false);
-      expect(res.body.error).toContain("not added");
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.deduplicated).toBe(true);
       expect(res.body.campaignId).toBe("inst_camp_123");
     });
 
@@ -439,22 +439,23 @@ describe("POST /send", () => {
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
-    it("caches 409 responses for broadcast duplicates", async () => {
+    it("caches 200 responses for broadcast duplicates (added=0)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: null, added: 0 }),
       });
 
-      const body = buildBroadcastBody({ idempotencyKey: "idem_409" });
+      const body = buildBroadcastBody({ idempotencyKey: "idem_dedup" });
 
       const res1 = await authedPost("/send").send(body);
 
-      expect(res1.status).toBe(409);
+      expect(res1.status).toBe(200);
+      expect(res1.body.deduplicated).toBe(true);
 
       const res2 = await authedPost("/send").send(body);
 
-      expect(res2.status).toBe(409);
+      expect(res2.status).toBe(200);
       expect(res2.body.deduplicated).toBe(true);
       expect(mockFetch).toHaveBeenCalledTimes(1);
     });
