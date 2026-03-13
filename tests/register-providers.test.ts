@@ -153,23 +153,19 @@ describe("registerProviderRequirements", () => {
     );
   });
 
-  it("skips registration when key-service config is missing", async () => {
-    // Temporarily override config
+  it("throws when key-service config is missing", async () => {
     const { config } = await import("../src/config");
     const origUrl = config.key.url;
-    const origKey = config.key.apiKey;
     Object.defineProperty(config.key, "url", { value: "", writable: true, configurable: true });
 
-    await registerProviderRequirements();
+    await expect(registerProviderRequirements()).rejects.toThrow(
+      "KEY_SERVICE_URL and KEY_SERVICE_API_KEY are required"
+    );
 
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining("skipping provider registration")
-    );
 
     // Restore
     Object.defineProperty(config.key, "url", { value: origUrl, writable: true, configurable: true });
-    Object.defineProperty(config.key, "apiKey", { value: origKey, writable: true, configurable: true });
   });
 
   it("logs warning for non-404 decrypt failures", async () => {

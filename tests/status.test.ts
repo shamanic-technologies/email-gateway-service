@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { app } from "../src/index";
 
+vi.mock("../src/lib/register-providers", () => ({
+  registerProviderRequirements: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("../src/config", () => ({
   config: {
     port: 3009,
