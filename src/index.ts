@@ -8,6 +8,7 @@ import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
 import statsRoutes, { publicStatsRouter } from "./routes/stats";
 import webhooksRoutes from "./routes/webhooks";
+import { registerProviderRequirements } from "./lib/register-providers";
 
 const app = express();
 
@@ -28,6 +29,9 @@ app.use(serviceAuth, requireIdentityHeaders, statsRoutes);
 
 app.listen(config.port, () => {
   console.log(`email-gateway running on port ${config.port}`);
+  registerProviderRequirements().catch((err) =>
+    console.error("Provider registration failed:", err.message)
+  );
 });
 
 export { app };
