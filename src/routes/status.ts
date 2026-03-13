@@ -57,6 +57,11 @@ router.post("/status", async (req: Request, res: Response) => {
       const broadcast = broadcastMap.get(item.email);
       if (broadcast) {
         entry.broadcast = { campaign: broadcast.campaign, brand: broadcast.brand, global: broadcast.global };
+        const campaignContacted = broadcast.campaign?.lead?.contacted ?? false;
+        const brandContacted = broadcast.brand?.lead?.contacted ?? false;
+        console.log(`[status] email=${item.email} leadId=${item.leadId} broadcast.campaign.contacted=${campaignContacted} broadcast.brand.contacted=${brandContacted}`);
+      } else {
+        console.log(`[status] email=${item.email} leadId=${item.leadId} broadcast=none`);
       }
 
       const transactional = transactionalMap.get(item.email);
