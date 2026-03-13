@@ -267,6 +267,9 @@ export const IdentityHeadersSchema = z.object({
   "x-org-id": z.string().describe("Internal organization UUID from client-service"),
   "x-user-id": z.string().describe("Internal user UUID from client-service"),
   "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
+  "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
+  "x-brand-id": z.string().optional().describe("Brand ID injected by workflow-service (optional, used for tracking)"),
+  "x-workflow-name": z.string().optional().describe("Workflow name injected by workflow-service (optional, used for tracking)"),
 });
 
 // --- Register endpoints ---

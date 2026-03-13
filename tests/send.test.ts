@@ -689,6 +689,117 @@ describe("POST /send", () => {
     });
   });
 
+  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name)", () => {
+    function authedPostWithTracking(path: string) {
+      return authedPost(path)
+        .set("x-campaign-id", "hdr_campaign")
+        .set("x-brand-id", "hdr_brand")
+        .set("x-workflow-name", "hdr_workflow");
+    }
+
+    it("forwards tracking headers to instantly-service for broadcast", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPostWithTracking("/send").send(buildBroadcastBody());
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-campaign-id"]).toBe("hdr_campaign");
+      expect(headers["x-brand-id"]).toBe("hdr_brand");
+      expect(headers["x-workflow-name"]).toBe("hdr_workflow");
+    });
+
+    it("forwards tracking headers to postmark-service and brand-service for transactional", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      await authedPostWithTracking("/send").send(buildTransactionalBody());
+
+      // brand call
+      const brandHeaders = mockFetch.mock.calls[0][1].headers;
+      expect(brandHeaders["x-campaign-id"]).toBe("hdr_campaign");
+      expect(brandHeaders["x-brand-id"]).toBe("hdr_brand");
+      expect(brandHeaders["x-workflow-name"]).toBe("hdr_workflow");
+
+      // postmark call
+      const postmarkHeaders = mockFetch.mock.calls[1][1].headers;
+      expect(postmarkHeaders["x-campaign-id"]).toBe("hdr_campaign");
+      expect(postmarkHeaders["x-brand-id"]).toBe("hdr_brand");
+      expect(postmarkHeaders["x-workflow-name"]).toBe("hdr_workflow");
+    });
+
+    it("uses header values as fallback when body fields are missing (broadcast)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      // Send without brandId, campaignId, workflowName in body
+      const { brandId, campaignId, workflowName, ...bodyWithout } = buildBroadcastBody();
+      await authedPostWithTracking("/send").send(bodyWithout);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.brandId).toBe("hdr_brand");
+      expect(body.campaignId).toBe("hdr_campaign");
+      expect(body.workflowName).toBe("hdr_workflow");
+    });
+
+    it("uses header values as fallback when body fields are missing (transactional)", async () => {
+      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
+      });
+
+      const { brandId, campaignId, workflowName, ...bodyWithout } = buildTransactionalBody();
+      await authedPostWithTracking("/send").send(bodyWithout);
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      expect(body.brandId).toBe("hdr_brand");
+      expect(body.campaignId).toBe("hdr_campaign");
+      expect(body.workflowName).toBe("hdr_workflow");
+    });
+
+    it("body fields take precedence over tracking headers", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPostWithTracking("/send").send(
+        buildBroadcastBody({ brandId: "body_brand", campaignId: "body_campaign", workflowName: "body_workflow" })
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.brandId).toBe("body_brand");
+      expect(body.campaignId).toBe("body_campaign");
+      expect(body.workflowName).toBe("body_workflow");
+    });
+
+    it("works without tracking headers (no breakage)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/send").send(buildBroadcastBody());
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-campaign-id"]).toBeUndefined();
+      expect(headers["x-brand-id"]).toBeUndefined();
+      expect(headers["x-workflow-name"]).toBeUndefined();
+    });
+  });
+
   describe("signature", () => {
     it("appends default unsubscribe for transactional", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());

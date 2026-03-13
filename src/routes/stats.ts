@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { StatsRequestSchema, Stats, BroadcastStats } from "../schemas";
+import { extractTrackingHeaders, TrackingHeaders } from "../middleware/identityHeaders";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import type {
@@ -55,15 +56,16 @@ async function statsHandler(req: Request, res: Response) {
   const userId = (res.locals.userId ?? req.headers["x-user-id"]) as string | undefined;
   const runId = (res.locals.runId ?? req.headers["x-run-id"]) as string | undefined;
   const identityHeaders = orgId && userId && runId ? { orgId, userId, runId } : undefined;
+  const trackingHeaders: TrackingHeaders = res.locals.trackingHeaders ?? extractTrackingHeaders(req);
   const { type, ...bodyFilters } = parsed.data;
   const filters = { ...bodyFilters, ...(orgId && { orgId }), ...(userId && { userId }) };
 
   try {
     if (filters.groupBy) {
-      return await handleGrouped(res, type, filters, identityHeaders);
+      return await handleGrouped(res, type, filters, identityHeaders, trackingHeaders);
     }
 
-    return await handleFlat(res, type, filters, identityHeaders);
+    return await handleFlat(res, type, filters, identityHeaders, trackingHeaders);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[stats] Failed: ${message}`);
@@ -79,15 +81,16 @@ async function handleFlat(
   type: string | undefined,
   filters: Record<string, unknown>,
   identityHeaders?: { orgId: string; userId: string; runId: string },
+  trackingHeaders?: TrackingHeaders,
 ) {
   if (type === "transactional") {
-    const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders);
+    const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders, trackingHeaders);
     res.json({ transactional: normalizeFlatResult(raw) });
     return;
   }
 
   if (type === "broadcast") {
-    const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], identityHeaders);
+    const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], identityHeaders, trackingHeaders);
     const flat = raw as ProviderStatsFlat;
     res.json({ broadcast: normalizeBroadcastFlat(flat) });
     return;
@@ -95,8 +98,8 @@ async function handleFlat(
 
   // No type specified: aggregate both
   const [postmarkResult, instantlyResult] = await Promise.allSettled([
-    postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders),
-    instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], identityHeaders),
+    postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders, trackingHeaders),
+    instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], identityHeaders, trackingHeaders),
   ]);
 
   const response: Record<string, unknown> = {};
@@ -124,11 +127,12 @@ async function handleGrouped(
   type: string | undefined,
   filters: Record<string, unknown>,
   identityHeaders?: { orgId: string; userId: string; runId: string },
+  trackingHeaders?: TrackingHeaders,
 ) {
   const castFilters = filters as Parameters<typeof postmarkClient.getStats>[0];
 
   if (type === "transactional") {
-    const raw = await postmarkClient.getStats(castFilters, identityHeaders);
+    const raw = await postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders);
     if (!isGrouped(raw)) {
       res.json({ groups: [] });
       return;
@@ -142,7 +146,7 @@ async function handleGrouped(
   }
 
   if (type === "broadcast") {
-    const raw = await instantlyClient.getStats(castFilters, identityHeaders);
+    const raw = await instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders);
     if (!isGrouped(raw)) {
       res.json({ groups: [] });
       return;
@@ -157,8 +161,8 @@ async function handleGrouped(
 
   // No type: merge groups from both providers by key
   const [postmarkResult, instantlyResult] = await Promise.allSettled([
-    postmarkClient.getStats(castFilters, identityHeaders),
-    instantlyClient.getStats(castFilters, identityHeaders),
+    postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders),
+    instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders),
   ]);
 
   const merged = new Map<string, { transactional?: Stats; broadcast?: Stats }>();

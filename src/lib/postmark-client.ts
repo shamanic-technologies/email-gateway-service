@@ -11,11 +11,17 @@ interface IdentityHeaders {
   runId: string;
 }
 
+interface TrackingHeaders {
+  campaignId?: string;
+  brandId?: string;
+  workflowName?: string;
+}
+
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; identityHeaders?: IdentityHeaders } = {}
+  options: { method?: string; body?: unknown; identityHeaders?: IdentityHeaders; trackingHeaders?: TrackingHeaders } = {}
 ): Promise<T> {
-  const { method = "GET", body, identityHeaders } = options;
+  const { method = "GET", body, identityHeaders, trackingHeaders } = options;
   const fullUrl = `${url}${path}`;
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -25,6 +31,9 @@ async function request<T>(
       "x-user-id": identityHeaders.userId,
       "x-run-id": identityHeaders.runId,
     }),
+    ...(trackingHeaders?.campaignId && { "x-campaign-id": trackingHeaders.campaignId }),
+    ...(trackingHeaders?.brandId && { "x-brand-id": trackingHeaders.brandId }),
+    ...(trackingHeaders?.workflowName && { "x-workflow-name": trackingHeaders.workflowName }),
   };
   const jsonBody = body ? JSON.stringify(body) : undefined;
 
@@ -78,7 +87,7 @@ export async function sendEmail(body: {
   replyTo?: string;
   tag?: string;
   metadata?: Record<string, string>;
-}, identityHeaders?: IdentityHeaders) {
+}, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
   return request<{
     success: boolean;
     messageId?: string;
@@ -86,7 +95,7 @@ export async function sendEmail(body: {
     sendingId?: string;
     errorCode?: number;
     message?: string;
-  }>("/send", { method: "POST", body, identityHeaders });
+  }>("/send", { method: "POST", body, identityHeaders, trackingHeaders });
 }
 
 // Re-export shared provider types from instantly-client
@@ -100,9 +109,9 @@ export async function getStats(filters: {
   campaignId?: string;
   workflowName?: string;
   groupBy?: string;
-}, identityHeaders?: IdentityHeaders) {
+}, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
   const path = identityHeaders ? "/stats" : "/stats/public";
-  return request<ProviderStatsResult>(path, { method: "POST", body: filters, identityHeaders });
+  return request<ProviderStatsResult>(path, { method: "POST", body: filters, identityHeaders, trackingHeaders });
 }
 
 export interface StatusScope {
@@ -122,8 +131,8 @@ export async function getStatus(body: {
   brandId: string;
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
-}, identityHeaders?: IdentityHeaders) {
-  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, identityHeaders });
+}, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
+  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, identityHeaders, trackingHeaders });
 }
 
 export async function forwardWebhook(body: unknown) {
