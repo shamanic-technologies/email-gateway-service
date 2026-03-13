@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { SendRequestSchema } from "../schemas";
+import { TrackingHeaders } from "../middleware/identityHeaders";
 
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
@@ -35,20 +36,28 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  const { orgId, userId, runId } = res.locals as { orgId: string; userId: string; runId: string };
+  const { orgId, userId, runId, trackingHeaders: th } = res.locals as {
+    orgId: string; userId: string; runId: string; trackingHeaders: TrackingHeaders;
+  };
   const identityHeaders = { orgId, userId, runId };
+  const trackingHeaders: TrackingHeaders = th ?? {};
 
-  console.log(`[send] type=${body.type} to=${body.to} campaign=${body.campaignId} runId=${runId} workflow=${body.workflowName}`);
+  // Use tracking headers as fallbacks for body fields the LLM may have omitted
+  const effectiveCampaignId = body.campaignId ?? trackingHeaders.campaignId;
+  const effectiveBrandId = body.brandId ?? trackingHeaders.brandId;
+  const effectiveWorkflowName = body.workflowName ?? trackingHeaders.workflowName;
+
+  console.log(`[send] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${runId} workflow=${effectiveWorkflowName}`);
 
   try {
     if (body.type === "transactional") {
       let brandUrl: string | undefined;
-      if (body.brandId) {
+      if (effectiveBrandId) {
         try {
-          const brand = await brandClient.getBrand(body.brandId, identityHeaders);
+          const brand = await brandClient.getBrand(effectiveBrandId, identityHeaders, trackingHeaders);
           brandUrl = brand.brandUrl ?? undefined;
         } catch (err) {
-          console.warn(`[send] failed to fetch brand ${body.brandId}, signature will use fallback`);
+          console.warn(`[send] failed to fetch brand ${effectiveBrandId}, signature will use fallback`);
         }
       }
 
@@ -58,10 +67,10 @@ router.post("/send", async (req: Request, res: Response) => {
         orgId,
         userId,
         runId,
-        brandId: body.brandId,
+        brandId: effectiveBrandId,
         leadId: body.leadId,
-        workflowName: body.workflowName,
-        campaignId: body.campaignId,
+        workflowName: effectiveWorkflowName,
+        campaignId: effectiveCampaignId,
         from: body.from,
         to: body.to,
         subject: body.subject,
@@ -70,7 +79,7 @@ router.post("/send", async (req: Request, res: Response) => {
         replyTo: body.replyTo,
         tag: body.tag,
         metadata: body.metadata,
-      }, identityHeaders);
+      }, identityHeaders, trackingHeaders);
 
       console.log(`[send] postmark response: messageId=${result.messageId}`);
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
@@ -86,10 +95,10 @@ router.post("/send", async (req: Request, res: Response) => {
         orgId,
         userId,
         runId,
-        brandId: body.brandId,
+        brandId: effectiveBrandId,
         leadId: body.leadId,
-        workflowName: body.workflowName,
-        campaignId: body.campaignId,
+        workflowName: effectiveWorkflowName,
+        campaignId: effectiveCampaignId,
         to: body.to,
         firstName: body.recipientFirstName,
         lastName: body.recipientLastName,
@@ -97,7 +106,7 @@ router.post("/send", async (req: Request, res: Response) => {
         variables: body.metadata,
         subject: body.subject,
         sequence: body.sequence,
-      }, identityHeaders);
+      }, identityHeaders, trackingHeaders);
 
       console.log(`[send] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
 

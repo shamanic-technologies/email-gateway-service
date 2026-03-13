@@ -406,6 +406,55 @@ describe("POST /stats", () => {
     });
   });
 
+  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name)", () => {
+    it("forwards tracking headers to downstream providers", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      await authedPost("/stats")
+        .set("x-campaign-id", "camp_hdr")
+        .set("x-brand-id", "brand_hdr")
+        .set("x-workflow-name", "wf_hdr")
+        .send({});
+
+      for (const call of mockFetch.mock.calls) {
+        const headers = call[1].headers;
+        expect(headers["x-campaign-id"]).toBe("camp_hdr");
+        expect(headers["x-brand-id"]).toBe("brand_hdr");
+        expect(headers["x-workflow-name"]).toBe("wf_hdr");
+      }
+    });
+
+    it("works without tracking headers (no breakage)", async () => {
+      mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+      await authedPost("/stats").send({ type: "transactional" });
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-campaign-id"]).toBeUndefined();
+      expect(headers["x-brand-id"]).toBeUndefined();
+      expect(headers["x-workflow-name"]).toBeUndefined();
+    });
+
+    it("forwards tracking headers from /stats/public route", async () => {
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+      await serviceAuthPost("/stats/public")
+        .set("x-campaign-id", "camp_pub")
+        .set("x-brand-id", "brand_pub")
+        .set("x-workflow-name", "wf_pub")
+        .send({ type: "broadcast" });
+
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-campaign-id"]).toBe("camp_pub");
+      expect(headers["x-brand-id"]).toBe("brand_pub");
+      expect(headers["x-workflow-name"]).toBe("wf_pub");
+    });
+  });
+
   describe("workflowName filter", () => {
     it("passes workflowName to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());

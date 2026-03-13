@@ -13,7 +13,13 @@ interface IdentityHeaders {
   runId: string;
 }
 
-export async function getBrand(brandId: string, identityHeaders?: IdentityHeaders): Promise<BrandDetail> {
+interface TrackingHeaders {
+  campaignId?: string;
+  brandId?: string;
+  workflowName?: string;
+}
+
+export async function getBrand(brandId: string, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders): Promise<BrandDetail> {
   const res = await fetch(`${config.brand.url}/brands/${brandId}`, {
     headers: {
       "X-API-Key": config.brand.apiKey,
@@ -22,6 +28,9 @@ export async function getBrand(brandId: string, identityHeaders?: IdentityHeader
         "x-user-id": identityHeaders.userId,
         "x-run-id": identityHeaders.runId,
       }),
+      ...(trackingHeaders?.campaignId && { "x-campaign-id": trackingHeaders.campaignId }),
+      ...(trackingHeaders?.brandId && { "x-brand-id": trackingHeaders.brandId }),
+      ...(trackingHeaders?.workflowName && { "x-workflow-name": trackingHeaders.workflowName }),
     },
   });
 

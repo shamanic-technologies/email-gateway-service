@@ -344,6 +344,44 @@ describe("POST /status", () => {
     consoleSpy.mockRestore();
   });
 
+  it("forwards tracking headers to both sub-services", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await authedPost("/status")
+      .set("x-campaign-id", "camp_hdr")
+      .set("x-brand-id", "brand_hdr")
+      .set("x-workflow-name", "wf_hdr")
+      .send(buildStatusBody());
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    for (const call of mockFetch.mock.calls) {
+      const headers = call[1].headers;
+      expect(headers["x-campaign-id"]).toBe("camp_hdr");
+      expect(headers["x-brand-id"]).toBe("brand_hdr");
+      expect(headers["x-workflow-name"]).toBe("wf_hdr");
+    }
+  });
+
+  it("works without tracking headers (no breakage)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await authedPost("/status").send(buildStatusBody());
+
+    for (const call of mockFetch.mock.calls) {
+      const headers = call[1].headers;
+      expect(headers["x-campaign-id"]).toBeUndefined();
+      expect(headers["x-brand-id"]).toBeUndefined();
+      expect(headers["x-workflow-name"]).toBeUndefined();
+    }
+  });
+
   it("includes brand scope in merged results", async () => {
     const brandDelivered = {
       lead: { contacted: true, delivered: true, replied: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },

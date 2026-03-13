@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { StatusRequestSchema } from "../schemas";
+import { TrackingHeaders } from "../middleware/identityHeaders";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 
@@ -14,15 +15,17 @@ router.post("/status", async (req: Request, res: Response) => {
 
   const { brandId, campaignId, items } = parsed.data;
   const payload = { brandId, campaignId, items };
-  const { orgId, userId, runId } = res.locals as { orgId: string; userId: string; runId: string };
+  const { orgId, userId, runId, trackingHeaders } = res.locals as {
+    orgId: string; userId: string; runId: string; trackingHeaders: TrackingHeaders;
+  };
   const identityHeaders = { orgId, userId, runId };
 
   console.log(`[status] brandId=${brandId} campaignId=${campaignId ?? "none"} items=${items.length}`);
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
-      instantlyClient.getStatus(payload, identityHeaders),
-      postmarkClient.getStatus(payload, identityHeaders),
+      instantlyClient.getStatus(payload, identityHeaders, trackingHeaders),
+      postmarkClient.getStatus(payload, identityHeaders, trackingHeaders),
     ]);
 
     const broadcastMap = new Map<string, instantlyClient.StatusResult>();
