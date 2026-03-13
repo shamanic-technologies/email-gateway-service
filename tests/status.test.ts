@@ -292,6 +292,58 @@ describe("POST /status", () => {
     expect(res.body.error).toBe("Both upstream services failed");
   });
 
+  it("logs contacted status per item", async () => {
+    const consoleSpy = vi.spyOn(console, "log");
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: emptyScope, global: emptyGlobal },
+          { leadId: "lead_2", email: "jane@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    await authedPost("/status").send(buildStatusBody());
+
+    const statusLogs = consoleSpy.mock.calls
+      .map((c) => c[0] as string)
+      .filter((msg) => msg.includes("[status] email="));
+
+    expect(statusLogs).toHaveLength(2);
+    expect(statusLogs[0]).toContain("email=john@acme.com");
+    expect(statusLogs[0]).toContain("broadcast.campaign.contacted=true");
+    expect(statusLogs[0]).toContain("broadcast.brand.contacted=false");
+    expect(statusLogs[1]).toContain("email=jane@acme.com");
+    expect(statusLogs[1]).toContain("broadcast.campaign.contacted=false");
+
+    consoleSpy.mockRestore();
+  });
+
+  it("logs broadcast=none when instantly has no data for item", async () => {
+    const consoleSpy = vi.spyOn(console, "log");
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    await authedPost("/status")
+      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+
+    const statusLogs = consoleSpy.mock.calls
+      .map((c) => c[0] as string)
+      .filter((msg) => msg.includes("[status] email="));
+
+    expect(statusLogs).toHaveLength(1);
+    expect(statusLogs[0]).toContain("broadcast=none");
+
+    consoleSpy.mockRestore();
+  });
+
   it("includes brand scope in merged results", async () => {
     const brandDelivered = {
       lead: { contacted: true, delivered: true, replied: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },
