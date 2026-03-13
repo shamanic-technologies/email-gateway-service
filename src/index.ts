@@ -29,9 +29,10 @@ app.use(serviceAuth, requireIdentityHeaders, statsRoutes);
 
 app.listen(config.port, () => {
   console.log(`email-gateway running on port ${config.port}`);
-  registerProviderRequirements().catch((err) =>
-    console.error("Provider registration failed:", err.message)
-  );
+  registerProviderRequirements().catch((err) => {
+    console.error("Provider registration failed:", err.message);
+    process.exit(1);
+  });
 });
 
 export { app };

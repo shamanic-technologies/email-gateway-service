@@ -4,6 +4,11 @@ import { app } from "../src/index";
 import { buildSignature, appendSignature, buildDefaultFooter } from "../src/lib/signature";
 import * as idempotencyStore from "../src/lib/idempotency-store";
 
+// Mock provider registration to no-op (tested separately)
+vi.mock("../src/lib/register-providers", () => ({
+  registerProviderRequirements: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock config - vi.mock is hoisted, so use literal values
 vi.mock("../src/config", () => ({
   config: {

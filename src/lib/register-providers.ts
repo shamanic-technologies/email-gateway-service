@@ -33,10 +33,9 @@ const GATEWAY_ENDPOINTS = [
  */
 export async function registerProviderRequirements(): Promise<void> {
   if (!config.key.url || !config.key.apiKey) {
-    console.warn(
-      "KEY_SERVICE_URL or KEY_SERVICE_API_KEY not set — skipping provider registration"
+    throw new Error(
+      "KEY_SERVICE_URL and KEY_SERVICE_API_KEY are required — cannot start without key-service config"
     );
-    return;
   }
 
   // Step 1: Query key-service for downstream provider requirements
