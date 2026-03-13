@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { StatsRequestSchema, Stats, BroadcastStats } from "../schemas";
+import { StatsRequestSchema, StatsQuerySchema, Stats, BroadcastStats } from "../schemas";
 import { extractTrackingHeaders, TrackingHeaders } from "../middleware/identityHeaders";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
@@ -45,10 +45,25 @@ function normalizeFlatResult(raw: ProviderStatsResult): Stats {
   return normalizePayload(flat.stats, flat.recipients);
 }
 
-async function statsHandler(req: Request, res: Response) {
+function parseStatsInput(req: Request): { success: true; type?: string; filters: Record<string, unknown> } | { success: false; error: unknown } {
+  if (req.method === "GET") {
+    const parsed = StatsQuerySchema.safeParse(req.query);
+    if (!parsed.success) return { success: false, error: parsed.error.flatten() };
+    const { type, runIds, ...rest } = parsed.data;
+    const filters: Record<string, unknown> = { ...rest };
+    if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());
+    return { success: true, type, filters };
+  }
   const parsed = StatsRequestSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+  if (!parsed.success) return { success: false, error: parsed.error.flatten() };
+  const { type, ...rest } = parsed.data;
+  return { success: true, type, filters: rest };
+}
+
+async function statsHandler(req: Request, res: Response) {
+  const input = parseStatsInput(req);
+  if (!input.success) {
+    res.status(400).json({ error: "Invalid request", details: input.error });
     return;
   }
 
@@ -57,8 +72,8 @@ async function statsHandler(req: Request, res: Response) {
   const runId = (res.locals.runId ?? req.headers["x-run-id"]) as string | undefined;
   const identityHeaders = orgId && userId && runId ? { orgId, userId, runId } : undefined;
   const trackingHeaders: TrackingHeaders = res.locals.trackingHeaders ?? extractTrackingHeaders(req);
-  const { type, ...bodyFilters } = parsed.data;
-  const filters = { ...bodyFilters, ...(orgId && { orgId }), ...(userId && { userId }) };
+  const { type } = input;
+  const filters: Record<string, unknown> = { ...input.filters, ...(orgId && { orgId }), ...(userId && { userId }) };
 
   try {
     if (filters.groupBy) {
@@ -74,7 +89,9 @@ async function statsHandler(req: Request, res: Response) {
 }
 
 router.post("/stats", statsHandler);
+router.get("/stats", statsHandler);
 publicRouter.post("/stats/public", statsHandler);
+publicRouter.get("/stats/public", statsHandler);
 
 async function handleFlat(
   res: Response,
