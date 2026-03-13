@@ -92,7 +92,7 @@ export const SendResponseSchema = z
 
 export type SendResponse = z.infer<typeof SendResponseSchema>;
 
-// --- POST /stats ---
+// --- Stats ---
 
 export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowName", "leadEmail"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
@@ -107,6 +107,17 @@ export const StatsRequestSchema = z
     groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension. When set, response is { groups: [...] } instead of flat stats."),
   })
   .openapi("StatsRequest");
+
+export const StatsQuerySchema = z
+  .object({
+    type: EmailTypeSchema.optional().describe("Filter by email channel type"),
+    runIds: z.string().optional().describe("Comma-separated run IDs"),
+    brandId: z.string().optional().describe("Filter by brand ID"),
+    campaignId: z.string().optional().describe("Filter by campaign ID"),
+    workflowName: z.string().optional().describe("Filter by workflow name"),
+    groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension"),
+  })
+  .openapi("StatsQuery");
 
 export type StatsRequest = z.infer<typeof StatsRequestSchema>;
 
@@ -320,8 +331,8 @@ registry.registerPath({
   method: "post",
   path: "/stats",
   tags: ["Stats"],
-  summary: "Get aggregated email stats",
-  description: "Get aggregated email stats. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
+  summary: "Get aggregated email stats (POST, deprecated)",
+  description: "DEPRECATED — use GET /stats instead. Get aggregated email stats. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
   security: [{ apiKey: [] }],
   request: {
     headers: IdentityHeadersSchema,
@@ -340,16 +351,57 @@ registry.registerPath({
 });
 
 registry.registerPath({
+  method: "get",
+  path: "/stats",
+  tags: ["Stats"],
+  summary: "Get aggregated email stats",
+  description: "Get aggregated email stats via query params. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
+  security: [{ apiKey: [] }],
+  request: {
+    headers: IdentityHeadersSchema,
+    query: StatsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Aggregated stats",
+      content: { "application/json": { schema: StatsResponseSchema } },
+    },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
   method: "post",
   path: "/stats/public",
   tags: ["Stats"],
-  summary: "Get aggregated email stats (no identity headers required)",
-  description: "Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+  summary: "Get aggregated email stats, no identity (POST, deprecated)",
+  description: "DEPRECATED — use GET /stats/public instead. Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
   security: [{ apiKey: [] }],
   request: {
     body: {
       content: { "application/json": { schema: StatsRequestSchema } },
     },
+  },
+  responses: {
+    200: {
+      description: "Aggregated stats",
+      content: { "application/json": { schema: StatsResponseSchema } },
+    },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/stats/public",
+  tags: ["Stats"],
+  summary: "Get aggregated email stats (no identity headers required)",
+  description: "Same as GET /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+  security: [{ apiKey: [] }],
+  request: {
+    query: StatsQuerySchema,
   },
   responses: {
     200: {

@@ -867,8 +867,8 @@
         "tags": [
           "Stats"
         ],
-        "summary": "Get aggregated email stats",
-        "description": "Get aggregated email stats. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
+        "summary": "Get aggregated email stats (POST, deprecated)",
+        "description": "DEPRECATED — use GET /stats instead. Get aggregated email stats. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
         "security": [
           {
             "apiKey": []
@@ -977,6 +977,182 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Get aggregated email stats",
+        "description": "Get aggregated email stats via query params. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "transactional",
+                "broadcast"
+              ],
+              "description": "Filter by email channel type"
+            },
+            "required": false,
+            "description": "Filter by email channel type",
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated run IDs"
+            },
+            "required": false,
+            "description": "Comma-separated run IDs",
+            "name": "runIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by brand ID"
+            },
+            "required": false,
+            "description": "Filter by brand ID",
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by campaign ID"
+            },
+            "required": false,
+            "description": "Filter by campaign ID",
+            "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by workflow name"
+            },
+            "required": false,
+            "description": "Filter by workflow name",
+            "name": "workflowName",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brandId",
+                "campaignId",
+                "workflowName",
+                "leadEmail"
+              ],
+              "description": "Group results by dimension"
+            },
+            "required": false,
+            "description": "Group results by dimension",
+            "name": "groupBy",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": true,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Campaign ID injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Campaign ID injected by workflow-service (optional, used for tracking)",
+            "name": "x-campaign-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Brand ID injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Brand ID injected by workflow-service (optional, used for tracking)",
+            "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workflow name injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Workflow name injected by workflow-service (optional, used for tracking)",
+            "name": "x-workflow-name",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/stats/public": {
@@ -984,8 +1160,8 @@
         "tags": [
           "Stats"
         ],
-        "summary": "Get aggregated email stats (no identity headers required)",
-        "description": "Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+        "summary": "Get aggregated email stats, no identity (POST, deprecated)",
+        "description": "DEPRECATED — use GET /stats/public instead. Same as POST /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
         "security": [
           {
             "apiKey": []
@@ -1000,6 +1176,122 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Aggregated stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Get aggregated email stats (no identity headers required)",
+        "description": "Same as GET /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "transactional",
+                "broadcast"
+              ],
+              "description": "Filter by email channel type"
+            },
+            "required": false,
+            "description": "Filter by email channel type",
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated run IDs"
+            },
+            "required": false,
+            "description": "Comma-separated run IDs",
+            "name": "runIds",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by brand ID"
+            },
+            "required": false,
+            "description": "Filter by brand ID",
+            "name": "brandId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by campaign ID"
+            },
+            "required": false,
+            "description": "Filter by campaign ID",
+            "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter by workflow name"
+            },
+            "required": false,
+            "description": "Filter by workflow name",
+            "name": "workflowName",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "brandId",
+                "campaignId",
+                "workflowName",
+                "leadEmail"
+              ],
+              "description": "Group results by dimension"
+            },
+            "required": false,
+            "description": "Group results by dimension",
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
             "description": "Aggregated stats",
