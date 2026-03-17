@@ -43,6 +43,7 @@ function mockPostmarkStats(overrides = {}) {
     json: () =>
       Promise.resolve({
         stats: {
+          emailsContacted: 100,
           emailsSent: 100,
           emailsDelivered: 95,
           emailsOpened: 40,
@@ -66,6 +67,7 @@ function mockInstantlyStats(overrides = {}, stepStats?: Array<{ step: number; em
     json: () =>
       Promise.resolve({
         stats: {
+          emailsContacted: 85,
           emailsSent: 80,
           emailsDelivered: 75,
           emailsOpened: 30,
@@ -92,6 +94,7 @@ function mockGroupedPostmark(groups: Array<{ key: string; overrides?: Record<str
         groups: groups.map((g) => ({
           key: g.key,
           stats: {
+            emailsContacted: 50,
             emailsSent: 50,
             emailsDelivered: 45,
             emailsOpened: 20,
@@ -119,6 +122,7 @@ function mockGroupedInstantly(groups: Array<{ key: string; overrides?: Record<st
         groups: groups.map((g) => ({
           key: g.key,
           stats: {
+            emailsContacted: 42,
             emailsSent: 40,
             emailsDelivered: 38,
             emailsOpened: 15,
@@ -194,6 +198,7 @@ describe("GET /stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional).toEqual({
+        emailsContacted: 100,
         emailsSent: 100,
         emailsDelivered: 95,
         emailsOpened: 40,
@@ -244,6 +249,7 @@ describe("GET /stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast).toEqual({
+        emailsContacted: 85,
         emailsSent: 80,
         emailsDelivered: 75,
         emailsOpened: 30,
@@ -370,6 +376,31 @@ describe("GET /stats", () => {
       const res = await authedGet("/stats?type=broadcast");
 
       expect(res.body.broadcast.recipients).toBe(75);
+    });
+
+    it("falls back to emailsSent for emailsContacted when field is missing from provider", async () => {
+      // Simulate a provider that hasn't shipped emailsContacted yet
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({
+            stats: {
+              emailsSent: 80,
+              emailsDelivered: 75,
+              emailsOpened: 30,
+              emailsClicked: 3,
+              emailsReplied: 2,
+              emailsBounced: 5,
+            },
+            recipients: 75,
+          }),
+      });
+
+      const res = await authedGet("/stats?type=broadcast");
+
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.emailsContacted).toBe(80); // falls back to emailsSent
+      expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
     it("falls back to emailsSent for recipients when field is missing (Postmark)", async () => {

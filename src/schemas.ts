@@ -112,6 +112,7 @@ export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
 export const StatsSchema = z
   .object({
+    emailsContacted: z.number().describe("Total leads contacted (added to campaign / send attempted)"),
     emailsSent: z.number().describe("Total emails sent"),
     emailsDelivered: z.number().describe("Total emails delivered"),
     emailsOpened: z.number().describe("Total emails opened"),

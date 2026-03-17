@@ -321,6 +321,10 @@
       "Stats": {
         "type": "object",
         "properties": {
+          "emailsContacted": {
+            "type": "number",
+            "description": "Total leads contacted (added to campaign / send attempted)"
+          },
           "emailsSent": {
             "type": "number",
             "description": "Total emails sent"
@@ -371,6 +375,7 @@
           }
         },
         "required": [
+          "emailsContacted",
           "emailsSent",
           "emailsDelivered",
           "emailsOpened",
