@@ -16,7 +16,7 @@ const publicRouter = Router();
 
 function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats {
   return {
-    emailsContacted: raw.emailsContacted ?? raw.emailsSent,
+    emailsContacted: raw.emailsContacted ?? 0,
     emailsSent: raw.emailsSent,
     emailsDelivered: raw.emailsDelivered,
     emailsOpened: raw.emailsOpened,
