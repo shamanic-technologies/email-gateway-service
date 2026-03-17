@@ -103,6 +103,7 @@ export async function atomicSend(body: {
 }
 
 export interface ProviderStatsPayload {
+  emailsContacted?: number;
   emailsSent: number;
   emailsDelivered: number;
   emailsOpened: number;
