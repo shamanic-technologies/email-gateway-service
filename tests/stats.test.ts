@@ -378,8 +378,7 @@ describe("GET /stats", () => {
       expect(res.body.broadcast.recipients).toBe(75);
     });
 
-    it("falls back to emailsSent for emailsContacted when field is missing from provider", async () => {
-      // Simulate a provider that hasn't shipped emailsContacted yet
+    it("defaults emailsContacted to 0 when field is missing from provider", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -399,7 +398,7 @@ describe("GET /stats", () => {
       const res = await authedGet("/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.emailsContacted).toBe(80); // falls back to emailsSent
+      expect(res.body.broadcast.emailsContacted).toBe(0);
       expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
