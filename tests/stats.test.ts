@@ -37,6 +37,12 @@ function serviceAuthGet(path: string) {
     .set("X-API-Key", API_KEY);
 }
 
+function serviceAuthPost(path: string) {
+  return request(app)
+    .post(path)
+    .set("X-API-Key", API_KEY);
+}
+
 function mockPostmarkStats(overrides = {}) {
   return {
     ok: true,
@@ -866,5 +872,135 @@ describe("GET /stats/public", () => {
     expect(headers["x-campaign-id"]).toBe("camp_pub");
     expect(headers["x-brand-id"]).toBe("brand_pub");
     expect(headers["x-workflow-name"]).toBe("wf_pub");
+  });
+});
+
+describe("POST /public/stats", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it("returns 401 without API key", async () => {
+    const res = await request(app)
+      .post("/public/stats")
+      .send({ runIds: ["run_1"] });
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when runIds is missing", async () => {
+    const res = await serviceAuthPost("/public/stats").send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Invalid request");
+  });
+
+  it("returns 400 when runIds is empty", async () => {
+    const res = await serviceAuthPost("/public/stats").send({ runIds: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for invalid type", async () => {
+    const res = await serviceAuthPost("/public/stats").send({ runIds: ["r1"], type: "invalid" });
+    expect(res.status).toBe(400);
+  });
+
+  it("returns both transactional and broadcast stats", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+      if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+      return Promise.reject(new Error("Unexpected URL"));
+    });
+
+    const res = await serviceAuthPost("/public/stats").send({ runIds: ["run_a", "run_b"] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.transactional.emailsSent).toBe(100);
+    expect(res.body.broadcast.emailsSent).toBe(80);
+  });
+
+  it("filters by type: transactional", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+    const res = await serviceAuthPost("/public/stats").send({ runIds: ["run_a"], type: "transactional" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.transactional.emailsSent).toBe(100);
+    expect(res.body.broadcast).toBeUndefined();
+  });
+
+  it("filters by type: broadcast", async () => {
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+    const res = await serviceAuthPost("/public/stats").send({ runIds: ["run_a"], type: "broadcast" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.broadcast.emailsSent).toBe(80);
+    expect(res.body.transactional).toBeUndefined();
+  });
+
+  it("calls downstream /stats/public without identity headers", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+    await serviceAuthPost("/public/stats").send({ runIds: ["run_a"], type: "transactional" });
+
+    const [fetchUrl, options] = mockFetch.mock.calls[0];
+    expect(fetchUrl).toContain("/stats/public");
+    expect(options.headers["x-org-id"]).toBeUndefined();
+    expect(options.headers["x-user-id"]).toBeUndefined();
+    expect(options.headers["x-run-id"]).toBeUndefined();
+  });
+
+  it("forwards runIds as comma-separated query param to provider", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+    await serviceAuthPost("/public/stats").send({ runIds: ["run_a", "run_b", "run_c"], type: "transactional" });
+
+    const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+    expect(params.get("runIds")).toBe("run_a,run_b,run_c");
+  });
+
+  it("forwards optional filters (brandId, campaignId, workflowName)", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+    await serviceAuthPost("/public/stats").send({
+      runIds: ["run_a"],
+      type: "transactional",
+      brandId: "brand_1",
+      campaignId: "camp_1",
+      workflowName: "wf_1",
+    });
+
+    const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+    expect(params.get("brandId")).toBe("brand_1");
+    expect(params.get("campaignId")).toBe("camp_1");
+    expect(params.get("workflowName")).toBe("wf_1");
+  });
+
+  it("supports groupBy", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockGroupedInstantly([
+        { key: "brand_1", recipients: 30 },
+        { key: "brand_2", recipients: 20 },
+      ])
+    );
+
+    const res = await serviceAuthPost("/public/stats").send({
+      runIds: ["run_a"],
+      type: "broadcast",
+      groupBy: "brandId",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.groups).toHaveLength(2);
+    expect(res.body.groups[0].key).toBe("brand_1");
+  });
+
+  it("does not require identity headers (no orgId/userId in downstream query)", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+    await serviceAuthPost("/public/stats").send({ runIds: ["run_a"], type: "transactional" });
+
+    const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+    expect(params.has("orgId")).toBe(false);
+    expect(params.has("userId")).toBe(false);
   });
 });

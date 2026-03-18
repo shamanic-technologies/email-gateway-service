@@ -454,6 +454,52 @@
           }
         }
       },
+      "StatsBody": {
+        "type": "object",
+        "properties": {
+          "runIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Array of run IDs to fetch stats for"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "transactional",
+              "broadcast"
+            ],
+            "description": "Filter by email channel type"
+          },
+          "brandId": {
+            "type": "string",
+            "description": "Filter by brand ID"
+          },
+          "campaignId": {
+            "type": "string",
+            "description": "Filter by campaign ID"
+          },
+          "workflowName": {
+            "type": "string",
+            "description": "Filter by workflow name"
+          },
+          "groupBy": {
+            "type": "string",
+            "enum": [
+              "brandId",
+              "campaignId",
+              "workflowName",
+              "leadEmail"
+            ],
+            "description": "Group results by dimension"
+          }
+        },
+        "required": [
+          "runIds"
+        ]
+      },
       "LeadStatus": {
         "type": "object",
         "properties": {
@@ -1094,6 +1140,71 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/stats": {
+      "post": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Get aggregated email stats via POST (no identity headers required)",
+        "description": "Same as GET /stats/public but accepts runIds as a JSON array in the request body instead of comma-separated query params. Intended for clients that need to pass many run IDs without URL length limits.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Aggregated stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
