@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { StatsQuerySchema, Stats, BroadcastStats } from "../schemas";
+import { StatsQuerySchema, StatsBodySchema, Stats, BroadcastStats } from "../schemas";
 import { extractTrackingHeaders, TrackingHeaders } from "../middleware/identityHeaders";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
@@ -85,6 +85,31 @@ async function statsHandler(req: Request, res: Response) {
 
 router.get("/stats", statsHandler);
 publicRouter.get("/stats/public", statsHandler);
+
+async function postPublicStatsHandler(req: Request, res: Response) {
+  const parsed = StatsBodySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    return;
+  }
+
+  const { runIds, type, ...rest } = parsed.data;
+  const filters: Record<string, unknown> = { ...rest, runIds };
+  const trackingHeaders: TrackingHeaders = extractTrackingHeaders(req);
+
+  try {
+    if (filters.groupBy) {
+      return await handleGrouped(res, type, filters, undefined, trackingHeaders);
+    }
+    return await handleFlat(res, type, filters, undefined, trackingHeaders);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[stats] Failed: ${message}`);
+    res.status(502).json({ error: "Failed to fetch stats", details: message });
+  }
+}
+
+publicRouter.post("/public/stats", postPublicStatsHandler);
 
 async function handleFlat(
   res: Response,

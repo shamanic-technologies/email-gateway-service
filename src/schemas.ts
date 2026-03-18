@@ -110,6 +110,19 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
+export const StatsBodySchema = z
+  .object({
+    runIds: z.array(z.string()).min(1).describe("Array of run IDs to fetch stats for"),
+    type: EmailTypeSchema.optional().describe("Filter by email channel type"),
+    brandId: z.string().optional().describe("Filter by brand ID"),
+    campaignId: z.string().optional().describe("Filter by campaign ID"),
+    workflowName: z.string().optional().describe("Filter by workflow name"),
+    groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension"),
+  })
+  .openapi("StatsBody");
+
+export type StatsBody = z.infer<typeof StatsBodySchema>;
+
 export const StatsSchema = z
   .object({
     emailsContacted: z.number().describe("Total leads contacted (added to campaign / send attempted)"),
@@ -353,6 +366,29 @@ registry.registerPath({
       description: "Aggregated stats",
       content: { "application/json": { schema: StatsResponseSchema } },
     },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/public/stats",
+  tags: ["Stats"],
+  summary: "Get aggregated email stats via POST (no identity headers required)",
+  description: "Same as GET /stats/public but accepts runIds as a JSON array in the request body instead of comma-separated query params. Intended for clients that need to pass many run IDs without URL length limits.",
+  security: [{ apiKey: [] }],
+  request: {
+    body: {
+      content: { "application/json": { schema: StatsBodySchema } },
+    },
+  },
+  responses: {
+    200: {
+      description: "Aggregated stats",
+      content: { "application/json": { schema: StatsResponseSchema } },
+    },
+    400: { description: "Invalid request", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
     502: { description: "Upstream service error", content: errorContent },
   },
