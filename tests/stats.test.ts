@@ -474,6 +474,31 @@ describe("GET /stats", () => {
       expect(params.get("brandId")).toBe("brand_1");
     });
 
+    it("parses comma-separated workflowNames and forwards to provider", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockGroupedPostmark([{ key: "wf1" }, { key: "wf2" }]));
+        if (url.includes("3011")) return Promise.resolve(mockGroupedInstantly([{ key: "wf1" }, { key: "wf2" }]));
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await authedGet("/stats?groupBy=workflowName&workflowNames=wf1,wf2");
+
+      expect(res.status).toBe(200);
+      for (const call of mockFetch.mock.calls) {
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("workflowNames")).toBe("wf1,wf2");
+      }
+    });
+
+    it("trims whitespace in workflowNames", async () => {
+      mockFetch.mockResolvedValueOnce(mockGroupedPostmark([{ key: "wf1" }]));
+
+      await authedGet("/stats?type=transactional&groupBy=workflowName&workflowNames= wf1 , wf2 ");
+
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("workflowNames")).toBe("wf1,wf2");
+    });
+
     it("parses comma-separated runIds and forwards to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 

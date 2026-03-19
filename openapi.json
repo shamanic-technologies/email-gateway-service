@@ -895,6 +895,16 @@
           {
             "schema": {
               "type": "string",
+              "description": "Comma-separated workflow names to filter by (returns only these workflows when used with groupBy=workflowName)"
+            },
+            "required": false,
+            "description": "Comma-separated workflow names to filter by (returns only these workflows when used with groupBy=workflowName)",
+            "name": "workflowNames",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "enum": [
                 "brandId",
                 "campaignId",
@@ -1068,6 +1078,16 @@
             "required": false,
             "description": "Filter by workflow name",
             "name": "workflowName",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated workflow names to filter by (returns only these workflows when used with groupBy=workflowName)"
+            },
+            "required": false,
+            "description": "Comma-separated workflow names to filter by (returns only these workflows when used with groupBy=workflowName)",
+            "name": "workflowNames",
             "in": "query"
           },
           {

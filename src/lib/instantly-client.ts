@@ -163,6 +163,7 @@ export async function getStats(filters: {
   brandId?: string;
   campaignId?: string;
   workflowName?: string;
+  workflowNames?: string[];
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
   const basePath = identityHeaders ? "/stats" : "/stats/public";

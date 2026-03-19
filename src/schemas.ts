@@ -104,6 +104,7 @@ export const StatsQuerySchema = z
     brandId: z.string().optional().describe("Filter by brand ID"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
     workflowName: z.string().optional().describe("Filter by workflow name"),
+    workflowNames: z.string().optional().describe("Comma-separated workflow names to filter by (returns only these workflows when used with groupBy=workflowName)"),
     groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension"),
   })
   .openapi("StatsQuery");
