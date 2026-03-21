@@ -20,8 +20,6 @@ router.post("/status", async (req: Request, res: Response) => {
   };
   const identityHeaders = { orgId, userId, runId };
 
-  console.log(`[status] brandId=${brandId} campaignId=${campaignId ?? "none"} items=${items.length}`);
-
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
       instantlyClient.getStatus(payload, identityHeaders, trackingHeaders),
