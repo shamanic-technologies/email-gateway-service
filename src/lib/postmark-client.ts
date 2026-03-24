@@ -15,6 +15,7 @@ interface TrackingHeaders {
   campaignId?: string;
   brandId?: string;
   workflowName?: string;
+  featureSlug?: string;
 }
 
 async function request<T>(
@@ -34,6 +35,7 @@ async function request<T>(
     ...(trackingHeaders?.campaignId && { "x-campaign-id": trackingHeaders.campaignId }),
     ...(trackingHeaders?.brandId && { "x-brand-id": trackingHeaders.brandId }),
     ...(trackingHeaders?.workflowName && { "x-workflow-name": trackingHeaders.workflowName }),
+    ...(trackingHeaders?.featureSlug && { "x-feature-slug": trackingHeaders.featureSlug }),
   };
   const jsonBody = body ? JSON.stringify(body) : undefined;
 

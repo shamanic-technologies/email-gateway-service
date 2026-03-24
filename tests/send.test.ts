@@ -689,12 +689,13 @@ describe("POST /send", () => {
     });
   });
 
-  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name)", () => {
+  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name, x-feature-slug)", () => {
     function authedPostWithTracking(path: string) {
       return authedPost(path)
         .set("x-campaign-id", "hdr_campaign")
         .set("x-brand-id", "hdr_brand")
-        .set("x-workflow-name", "hdr_workflow");
+        .set("x-workflow-name", "hdr_workflow")
+        .set("x-feature-slug", "hdr_feature");
     }
 
     it("forwards tracking headers to instantly-service for broadcast", async () => {
@@ -710,6 +711,7 @@ describe("POST /send", () => {
       expect(headers["x-campaign-id"]).toBe("hdr_campaign");
       expect(headers["x-brand-id"]).toBe("hdr_brand");
       expect(headers["x-workflow-name"]).toBe("hdr_workflow");
+      expect(headers["x-feature-slug"]).toBe("hdr_feature");
     });
 
     it("forwards tracking headers to postmark-service and brand-service for transactional", async () => {
@@ -726,12 +728,14 @@ describe("POST /send", () => {
       expect(brandHeaders["x-campaign-id"]).toBe("hdr_campaign");
       expect(brandHeaders["x-brand-id"]).toBe("hdr_brand");
       expect(brandHeaders["x-workflow-name"]).toBe("hdr_workflow");
+      expect(brandHeaders["x-feature-slug"]).toBe("hdr_feature");
 
       // postmark call
       const postmarkHeaders = mockFetch.mock.calls[1][1].headers;
       expect(postmarkHeaders["x-campaign-id"]).toBe("hdr_campaign");
       expect(postmarkHeaders["x-brand-id"]).toBe("hdr_brand");
       expect(postmarkHeaders["x-workflow-name"]).toBe("hdr_workflow");
+      expect(postmarkHeaders["x-feature-slug"]).toBe("hdr_feature");
     });
 
     it("uses header values as fallback when body fields are missing (broadcast)", async () => {
@@ -797,6 +801,7 @@ describe("POST /send", () => {
       expect(headers["x-campaign-id"]).toBeUndefined();
       expect(headers["x-brand-id"]).toBeUndefined();
       expect(headers["x-workflow-name"]).toBeUndefined();
+      expect(headers["x-feature-slug"]).toBeUndefined();
     });
   });
 

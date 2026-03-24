@@ -272,6 +272,7 @@ export const IdentityHeadersSchema = z.object({
   "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
   "x-brand-id": z.string().optional().describe("Brand ID injected by workflow-service (optional, used for tracking)"),
   "x-workflow-name": z.string().optional().describe("Workflow name injected by workflow-service (optional, used for tracking)"),
+  "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
 });
 
 // --- Register endpoints ---

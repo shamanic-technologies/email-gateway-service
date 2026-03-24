@@ -422,7 +422,7 @@ describe("GET /stats", () => {
     });
   });
 
-  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name)", () => {
+  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name, x-feature-slug)", () => {
     it("forwards tracking headers to downstream providers", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
@@ -433,13 +433,15 @@ describe("GET /stats", () => {
       await authedGet("/stats")
         .set("x-campaign-id", "camp_hdr")
         .set("x-brand-id", "brand_hdr")
-        .set("x-workflow-name", "wf_hdr");
+        .set("x-workflow-name", "wf_hdr")
+        .set("x-feature-slug", "feat_hdr");
 
       for (const call of mockFetch.mock.calls) {
         const headers = call[1].headers;
         expect(headers["x-campaign-id"]).toBe("camp_hdr");
         expect(headers["x-brand-id"]).toBe("brand_hdr");
         expect(headers["x-workflow-name"]).toBe("wf_hdr");
+        expect(headers["x-feature-slug"]).toBe("feat_hdr");
       }
     });
 
@@ -452,6 +454,7 @@ describe("GET /stats", () => {
       expect(headers["x-campaign-id"]).toBeUndefined();
       expect(headers["x-brand-id"]).toBeUndefined();
       expect(headers["x-workflow-name"]).toBeUndefined();
+      expect(headers["x-feature-slug"]).toBeUndefined();
     });
   });
 
@@ -885,11 +888,13 @@ describe("GET /stats/public", () => {
     await serviceAuthGet("/stats/public?type=broadcast")
       .set("x-campaign-id", "camp_pub")
       .set("x-brand-id", "brand_pub")
-      .set("x-workflow-name", "wf_pub");
+      .set("x-workflow-name", "wf_pub")
+      .set("x-feature-slug", "feat_pub");
 
     const headers = mockFetch.mock.calls[0][1].headers;
     expect(headers["x-campaign-id"]).toBe("camp_pub");
     expect(headers["x-brand-id"]).toBe("brand_pub");
     expect(headers["x-workflow-name"]).toBe("wf_pub");
+    expect(headers["x-feature-slug"]).toBe("feat_pub");
   });
 });

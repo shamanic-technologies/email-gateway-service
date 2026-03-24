@@ -770,6 +770,16 @@
             "description": "Workflow name injected by workflow-service (optional, used for tracking)",
             "name": "x-workflow-name",
             "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug for tracking (optional, propagated through the chain)"
+            },
+            "required": false,
+            "description": "Feature slug for tracking (optional, propagated through the chain)",
+            "name": "x-feature-slug",
+            "in": "header"
           }
         ],
         "requestBody": {
@@ -976,6 +986,16 @@
             "required": false,
             "description": "Workflow name injected by workflow-service (optional, used for tracking)",
             "name": "x-workflow-name",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug for tracking (optional, propagated through the chain)"
+            },
+            "required": false,
+            "description": "Feature slug for tracking (optional, propagated through the chain)",
+            "name": "x-feature-slug",
             "in": "header"
           }
         ],
@@ -1212,6 +1232,16 @@
             "required": false,
             "description": "Workflow name injected by workflow-service (optional, used for tracking)",
             "name": "x-workflow-name",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug for tracking (optional, propagated through the chain)"
+            },
+            "required": false,
+            "description": "Feature slug for tracking (optional, propagated through the chain)",
+            "name": "x-feature-slug",
             "in": "header"
           }
         ],
