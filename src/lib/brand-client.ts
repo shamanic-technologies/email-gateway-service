@@ -17,6 +17,7 @@ interface TrackingHeaders {
   campaignId?: string;
   brandId?: string;
   workflowName?: string;
+  featureSlug?: string;
 }
 
 export async function getBrand(brandId: string, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders): Promise<BrandDetail> {
@@ -31,6 +32,7 @@ export async function getBrand(brandId: string, identityHeaders?: IdentityHeader
       ...(trackingHeaders?.campaignId && { "x-campaign-id": trackingHeaders.campaignId }),
       ...(trackingHeaders?.brandId && { "x-brand-id": trackingHeaders.brandId }),
       ...(trackingHeaders?.workflowName && { "x-workflow-name": trackingHeaders.workflowName }),
+      ...(trackingHeaders?.featureSlug && { "x-feature-slug": trackingHeaders.featureSlug }),
     },
   });
 

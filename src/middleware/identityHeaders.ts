@@ -4,6 +4,7 @@ export interface TrackingHeaders {
   campaignId?: string;
   brandId?: string;
   workflowName?: string;
+  featureSlug?: string;
 }
 
 export function extractTrackingHeaders(req: Request): TrackingHeaders {
@@ -14,6 +15,8 @@ export function extractTrackingHeaders(req: Request): TrackingHeaders {
   if (typeof brandId === "string") headers.brandId = brandId;
   const workflowName = req.headers["x-workflow-name"];
   if (typeof workflowName === "string") headers.workflowName = workflowName;
+  const featureSlug = req.headers["x-feature-slug"];
+  if (typeof featureSlug === "string") headers.featureSlug = featureSlug;
   return headers;
 }
 
