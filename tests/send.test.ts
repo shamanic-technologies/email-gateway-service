@@ -48,7 +48,7 @@ function buildBroadcastBody(overrides = {}) {
     type: "broadcast",
     brandId: "brand_1",
     campaignId: "campaign_1",
-    workflowName: "test-workflow",
+    workflowSlug: "test-workflow",
     to: "lead@example.com",
     recipientFirstName: "Jane",
     recipientLastName: "Doe",
@@ -68,7 +68,7 @@ function buildTransactionalBody(overrides = {}) {
     type: "transactional",
     brandId: "brand_1",
     campaignId: "campaign_1",
-    workflowName: "test-workflow",
+    workflowSlug: "test-workflow",
     to: "user@example.com",
     recipientFirstName: "John",
     recipientLastName: "Smith",
@@ -534,31 +534,31 @@ describe("POST /send", () => {
     });
   });
 
-  describe("workflowName forwarding", () => {
-    it("forwards workflowName to instantly-service for broadcast", async () => {
+  describe("workflowSlug forwarding", () => {
+    it("forwards workflowSlug to instantly-service for broadcast", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      await authedPost("/send").send(buildBroadcastBody({ workflowName: "outreach-v2" }));
+      await authedPost("/send").send(buildBroadcastBody({ workflowSlug: "outreach-v2" }));
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.workflowName).toBe("outreach-v2");
+      expect(body.workflowSlug).toBe("outreach-v2");
     });
 
-    it("forwards workflowName to postmark-service for transactional", async () => {
+    it("forwards workflowSlug to postmark-service for transactional", async () => {
       mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      await authedPost("/send").send(buildTransactionalBody({ workflowName: "welcome-flow" }));
+      await authedPost("/send").send(buildTransactionalBody({ workflowSlug: "welcome-flow" }));
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.workflowName).toBe("welcome-flow");
+      expect(body.workflowSlug).toBe("welcome-flow");
     });
   });
 
@@ -612,14 +612,14 @@ describe("POST /send", () => {
       expect(res.body.error).toBe("Invalid request");
     });
 
-    it("accepts request without workflowName (optional)", async () => {
+    it("accepts request without workflowSlug (optional)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      const { workflowName, ...bodyWithout } = buildBroadcastBody();
+      const { workflowSlug, ...bodyWithout } = buildBroadcastBody();
       const res = await authedPost("/send").send(bodyWithout);
 
       expect(res.status).toBe(200);
@@ -689,12 +689,12 @@ describe("POST /send", () => {
     });
   });
 
-  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name, x-feature-slug)", () => {
+  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-slug, x-feature-slug)", () => {
     function authedPostWithTracking(path: string) {
       return authedPost(path)
         .set("x-campaign-id", "hdr_campaign")
         .set("x-brand-id", "hdr_brand")
-        .set("x-workflow-name", "hdr_workflow")
+        .set("x-workflow-slug", "hdr_workflow")
         .set("x-feature-slug", "hdr_feature");
     }
 
@@ -710,7 +710,7 @@ describe("POST /send", () => {
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-campaign-id"]).toBe("hdr_campaign");
       expect(headers["x-brand-id"]).toBe("hdr_brand");
-      expect(headers["x-workflow-name"]).toBe("hdr_workflow");
+      expect(headers["x-workflow-slug"]).toBe("hdr_workflow");
       expect(headers["x-feature-slug"]).toBe("hdr_feature");
     });
 
@@ -727,14 +727,14 @@ describe("POST /send", () => {
       const brandHeaders = mockFetch.mock.calls[0][1].headers;
       expect(brandHeaders["x-campaign-id"]).toBe("hdr_campaign");
       expect(brandHeaders["x-brand-id"]).toBe("hdr_brand");
-      expect(brandHeaders["x-workflow-name"]).toBe("hdr_workflow");
+      expect(brandHeaders["x-workflow-slug"]).toBe("hdr_workflow");
       expect(brandHeaders["x-feature-slug"]).toBe("hdr_feature");
 
       // postmark call
       const postmarkHeaders = mockFetch.mock.calls[1][1].headers;
       expect(postmarkHeaders["x-campaign-id"]).toBe("hdr_campaign");
       expect(postmarkHeaders["x-brand-id"]).toBe("hdr_brand");
-      expect(postmarkHeaders["x-workflow-name"]).toBe("hdr_workflow");
+      expect(postmarkHeaders["x-workflow-slug"]).toBe("hdr_workflow");
       expect(postmarkHeaders["x-feature-slug"]).toBe("hdr_feature");
     });
 
@@ -745,14 +745,14 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      // Send without brandId, campaignId, workflowName in body
-      const { brandId, campaignId, workflowName, ...bodyWithout } = buildBroadcastBody();
+      // Send without brandId, campaignId, workflowSlug in body
+      const { brandId, campaignId, workflowSlug, ...bodyWithout } = buildBroadcastBody();
       await authedPostWithTracking("/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.brandId).toBe("hdr_brand");
       expect(body.campaignId).toBe("hdr_campaign");
-      expect(body.workflowName).toBe("hdr_workflow");
+      expect(body.workflowSlug).toBe("hdr_workflow");
     });
 
     it("uses header values as fallback when body fields are missing (transactional)", async () => {
@@ -762,13 +762,13 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      const { brandId, campaignId, workflowName, ...bodyWithout } = buildTransactionalBody();
+      const { brandId, campaignId, workflowSlug, ...bodyWithout } = buildTransactionalBody();
       await authedPostWithTracking("/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.brandId).toBe("hdr_brand");
       expect(body.campaignId).toBe("hdr_campaign");
-      expect(body.workflowName).toBe("hdr_workflow");
+      expect(body.workflowSlug).toBe("hdr_workflow");
     });
 
     it("body fields take precedence over tracking headers", async () => {
@@ -779,13 +779,13 @@ describe("POST /send", () => {
       });
 
       await authedPostWithTracking("/send").send(
-        buildBroadcastBody({ brandId: "body_brand", campaignId: "body_campaign", workflowName: "body_workflow" })
+        buildBroadcastBody({ brandId: "body_brand", campaignId: "body_campaign", workflowSlug: "body_workflow" })
       );
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.brandId).toBe("body_brand");
       expect(body.campaignId).toBe("body_campaign");
-      expect(body.workflowName).toBe("body_workflow");
+      expect(body.workflowSlug).toBe("body_workflow");
     });
 
     it("works without tracking headers (no breakage)", async () => {
@@ -800,7 +800,7 @@ describe("POST /send", () => {
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-campaign-id"]).toBeUndefined();
       expect(headers["x-brand-id"]).toBeUndefined();
-      expect(headers["x-workflow-name"]).toBeUndefined();
+      expect(headers["x-workflow-slug"]).toBeUndefined();
       expect(headers["x-feature-slug"]).toBeUndefined();
     });
   });

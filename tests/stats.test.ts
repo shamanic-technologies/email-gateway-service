@@ -422,7 +422,7 @@ describe("GET /stats", () => {
     });
   });
 
-  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-name, x-feature-slug)", () => {
+  describe("tracking headers (x-campaign-id, x-brand-id, x-workflow-slug, x-feature-slug)", () => {
     it("forwards tracking headers to downstream providers", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
@@ -433,14 +433,14 @@ describe("GET /stats", () => {
       await authedGet("/stats")
         .set("x-campaign-id", "camp_hdr")
         .set("x-brand-id", "brand_hdr")
-        .set("x-workflow-name", "wf_hdr")
+        .set("x-workflow-slug", "wf_hdr")
         .set("x-feature-slug", "feat_hdr");
 
       for (const call of mockFetch.mock.calls) {
         const headers = call[1].headers;
         expect(headers["x-campaign-id"]).toBe("camp_hdr");
         expect(headers["x-brand-id"]).toBe("brand_hdr");
-        expect(headers["x-workflow-name"]).toBe("wf_hdr");
+        expect(headers["x-workflow-slug"]).toBe("wf_hdr");
         expect(headers["x-feature-slug"]).toBe("feat_hdr");
       }
     });
@@ -453,19 +453,19 @@ describe("GET /stats", () => {
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-campaign-id"]).toBeUndefined();
       expect(headers["x-brand-id"]).toBeUndefined();
-      expect(headers["x-workflow-name"]).toBeUndefined();
+      expect(headers["x-workflow-slug"]).toBeUndefined();
       expect(headers["x-feature-slug"]).toBeUndefined();
     });
   });
 
   describe("filters", () => {
-    it("passes workflowName to provider", async () => {
+    it("passes workflowSlug to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&workflowName=welcome-flow");
+      await authedGet("/stats?type=transactional&workflowSlug=welcome-flow");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("workflowName")).toBe("welcome-flow");
+      expect(params.get("workflowSlug")).toBe("welcome-flow");
     });
 
     it("passes brandId to provider", async () => {
@@ -477,29 +477,29 @@ describe("GET /stats", () => {
       expect(params.get("brandId")).toBe("brand_1");
     });
 
-    it("parses comma-separated workflowNames and forwards to provider", async () => {
+    it("parses comma-separated workflowSlugs and forwards to provider", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockGroupedPostmark([{ key: "wf1" }, { key: "wf2" }]));
         if (url.includes("3011")) return Promise.resolve(mockGroupedInstantly([{ key: "wf1" }, { key: "wf2" }]));
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?groupBy=workflowName&workflowNames=wf1,wf2");
+      const res = await authedGet("/stats?groupBy=workflowSlug&workflowSlugs=wf1,wf2");
 
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("workflowNames")).toBe("wf1,wf2");
+        expect(params.get("workflowSlugs")).toBe("wf1,wf2");
       }
     });
 
-    it("trims whitespace in workflowNames", async () => {
+    it("trims whitespace in workflowSlugs", async () => {
       mockFetch.mockResolvedValueOnce(mockGroupedPostmark([{ key: "wf1" }]));
 
-      await authedGet("/stats?type=transactional&groupBy=workflowName&workflowNames= wf1 , wf2 ");
+      await authedGet("/stats?type=transactional&groupBy=workflowSlug&workflowSlugs= wf1 , wf2 ");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("workflowNames")).toBe("wf1,wf2");
+      expect(params.get("workflowSlugs")).toBe("wf1,wf2");
     });
 
     it("parses comma-separated runIds and forwards to provider", async () => {
@@ -597,11 +597,11 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      await authedGet("/stats?groupBy=workflowName");
+      await authedGet("/stats?groupBy=workflowSlug");
 
       for (const call of mockFetch.mock.calls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("groupBy")).toBe("workflowName");
+        expect(params.get("groupBy")).toBe("workflowSlug");
       }
     });
 
@@ -888,13 +888,13 @@ describe("GET /stats/public", () => {
     await serviceAuthGet("/stats/public?type=broadcast")
       .set("x-campaign-id", "camp_pub")
       .set("x-brand-id", "brand_pub")
-      .set("x-workflow-name", "wf_pub")
+      .set("x-workflow-slug", "wf_pub")
       .set("x-feature-slug", "feat_pub");
 
     const headers = mockFetch.mock.calls[0][1].headers;
     expect(headers["x-campaign-id"]).toBe("camp_pub");
     expect(headers["x-brand-id"]).toBe("brand_pub");
-    expect(headers["x-workflow-name"]).toBe("wf_pub");
+    expect(headers["x-workflow-slug"]).toBe("wf_pub");
     expect(headers["x-feature-slug"]).toBe("feat_pub");
   });
 });

@@ -301,7 +301,7 @@ describe("POST /status", () => {
     await authedPost("/status")
       .set("x-campaign-id", "camp_hdr")
       .set("x-brand-id", "brand_hdr")
-      .set("x-workflow-name", "wf_hdr")
+      .set("x-workflow-slug", "wf_hdr")
       .set("x-feature-slug", "feat_hdr")
       .send(buildStatusBody());
 
@@ -311,7 +311,7 @@ describe("POST /status", () => {
       const headers = call[1].headers;
       expect(headers["x-campaign-id"]).toBe("camp_hdr");
       expect(headers["x-brand-id"]).toBe("brand_hdr");
-      expect(headers["x-workflow-name"]).toBe("wf_hdr");
+      expect(headers["x-workflow-slug"]).toBe("wf_hdr");
       expect(headers["x-feature-slug"]).toBe("feat_hdr");
     }
   });
@@ -328,7 +328,7 @@ describe("POST /status", () => {
       const headers = call[1].headers;
       expect(headers["x-campaign-id"]).toBeUndefined();
       expect(headers["x-brand-id"]).toBeUndefined();
-      expect(headers["x-workflow-name"]).toBeUndefined();
+      expect(headers["x-workflow-slug"]).toBeUndefined();
       expect(headers["x-feature-slug"]).toBeUndefined();
     }
   });
