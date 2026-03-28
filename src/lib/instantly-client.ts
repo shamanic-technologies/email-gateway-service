@@ -14,7 +14,7 @@ interface IdentityHeaders {
 interface TrackingHeaders {
   campaignId?: string;
   brandId?: string;
-  workflowName?: string;
+  workflowSlug?: string;
   featureSlug?: string;
 }
 
@@ -34,7 +34,7 @@ async function request<T>(
     }),
     ...(trackingHeaders?.campaignId && { "x-campaign-id": trackingHeaders.campaignId }),
     ...(trackingHeaders?.brandId && { "x-brand-id": trackingHeaders.brandId }),
-    ...(trackingHeaders?.workflowName && { "x-workflow-name": trackingHeaders.workflowName }),
+    ...(trackingHeaders?.workflowSlug && { "x-workflow-slug": trackingHeaders.workflowSlug }),
     ...(trackingHeaders?.featureSlug && { "x-feature-slug": trackingHeaders.featureSlug }),
   };
   const jsonBody = body ? JSON.stringify(body) : undefined;
@@ -86,7 +86,7 @@ export async function atomicSend(body: {
   brandId?: string;
   leadId?: string;
   runId?: string;
-  workflowName?: string;
+  workflowSlug?: string;
   campaignId?: string;
   to: string;
   firstName?: string;
@@ -164,8 +164,8 @@ export async function getStats(filters: {
   userId?: string;
   brandId?: string;
   campaignId?: string;
-  workflowName?: string;
-  workflowNames?: string[];
+  workflowSlug?: string;
+  workflowSlugs?: string[];
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
   const basePath = identityHeaders ? "/stats" : "/stats/public";

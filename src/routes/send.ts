@@ -45,7 +45,7 @@ router.post("/send", async (req: Request, res: Response) => {
   // Use tracking headers as fallbacks for body fields the LLM may have omitted
   const effectiveCampaignId = body.campaignId ?? trackingHeaders.campaignId;
   const effectiveBrandId = body.brandId ?? trackingHeaders.brandId;
-  const effectiveWorkflowName = body.workflowName ?? trackingHeaders.workflowName;
+  const effectiveWorkflowName = body.workflowSlug ?? trackingHeaders.workflowSlug;
 
   console.log(`[send] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${runId} workflow=${effectiveWorkflowName}`);
 
@@ -69,7 +69,7 @@ router.post("/send", async (req: Request, res: Response) => {
         runId,
         brandId: effectiveBrandId,
         leadId: body.leadId,
-        workflowName: effectiveWorkflowName,
+        workflowSlug: effectiveWorkflowName,
         campaignId: effectiveCampaignId,
         from: body.from,
         to: body.to,
@@ -97,7 +97,7 @@ router.post("/send", async (req: Request, res: Response) => {
         runId,
         brandId: effectiveBrandId,
         leadId: body.leadId,
-        workflowName: effectiveWorkflowName,
+        workflowSlug: effectiveWorkflowName,
         campaignId: effectiveCampaignId,
         to: body.to,
         firstName: body.recipientFirstName,

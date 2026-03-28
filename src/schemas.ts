@@ -37,7 +37,7 @@ const SendBaseSchema = z.object({
   brandId: z.string().optional().describe("Brand ID"),
   campaignId: z.string().optional().describe("Campaign ID"),
   leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
-  workflowName: z.string().optional().describe("Workflow name for tracking and grouping"),
+  workflowSlug: z.string().optional().describe("Workflow slug for tracking and grouping"),
   to: z.string({ required_error: "to (recipient email) is required — the lead has no email address", invalid_type_error: "to (recipient email) must be a string, got null — the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
   recipientFirstName: z.string({ required_error: "recipientFirstName is required", invalid_type_error: "recipientFirstName must be a string" }).describe("Recipient first name"),
   recipientLastName: z.string({ required_error: "recipientLastName is required", invalid_type_error: "recipientLastName must be a string" }).describe("Recipient last name"),
@@ -94,7 +94,7 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 // --- Stats ---
 
-export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowName", "leadEmail"]);
+export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "leadEmail"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
 export const StatsQuerySchema = z
@@ -103,8 +103,8 @@ export const StatsQuerySchema = z
     runIds: z.string().optional().describe("Comma-separated run IDs"),
     brandId: z.string().optional().describe("Filter by brand ID"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
-    workflowName: z.string().optional().describe("Filter by workflow name"),
-    workflowNames: z.string().optional().describe("Comma-separated workflow names to filter by (returns only these workflows when used with groupBy=workflowName)"),
+    workflowSlug: z.string().optional().describe("Filter by workflow slug"),
+    workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by (returns only these workflows when used with groupBy=workflowSlug)"),
     groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension"),
   })
   .openapi("StatsQuery");
@@ -271,7 +271,7 @@ export const IdentityHeadersSchema = z.object({
   "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
   "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
   "x-brand-id": z.string().optional().describe("Brand ID injected by workflow-service (optional, used for tracking)"),
-  "x-workflow-name": z.string().optional().describe("Workflow name injected by workflow-service (optional, used for tracking)"),
+  "x-workflow-slug": z.string().optional().describe("Workflow slug injected by workflow-service (optional, used for tracking)"),
   "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
 });
 
