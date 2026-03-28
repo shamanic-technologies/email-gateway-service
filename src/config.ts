@@ -21,4 +21,12 @@ export const config = {
     url: process.env.KEY_SERVICE_URL || "",
     apiKey: process.env.KEY_SERVICE_API_KEY || "",
   },
+  features: {
+    url: process.env.FEATURES_SERVICE_URL || "",
+    apiKey: process.env.FEATURES_SERVICE_API_KEY || "",
+  },
+  workflow: {
+    url: process.env.WORKFLOW_SERVICE_URL || "",
+    apiKey: process.env.WORKFLOW_SERVICE_API_KEY || "",
+  },
 } as const;

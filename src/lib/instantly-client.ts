@@ -166,6 +166,8 @@ export async function getStats(filters: {
   campaignId?: string;
   workflowSlug?: string;
   workflowSlugs?: string[];
+  featureSlug?: string;
+  featureSlugs?: string[];
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
   const basePath = identityHeaders ? "/stats" : "/stats/public";

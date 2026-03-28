@@ -94,7 +94,7 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 // --- Stats ---
 
-export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "leadEmail"]);
+export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "leadEmail", "workflowDynastySlug", "featureDynastySlug"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
 export const StatsQuerySchema = z
@@ -105,6 +105,9 @@ export const StatsQuerySchema = z
     campaignId: z.string().optional().describe("Filter by campaign ID"),
     workflowSlug: z.string().optional().describe("Filter by workflow slug"),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by (returns only these workflows when used with groupBy=workflowSlug)"),
+    featureSlug: z.string().optional().describe("Filter by feature slug"),
+    workflowDynastySlug: z.string().optional().describe("Filter by workflow dynasty slug (resolved to all versioned slugs)"),
+    featureDynastySlug: z.string().optional().describe("Filter by feature dynasty slug (resolved to all versioned slugs)"),
     groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension"),
   })
   .openapi("StatsQuery");
