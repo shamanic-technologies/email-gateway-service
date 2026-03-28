@@ -15,6 +15,8 @@ vi.mock("../src/config", () => ({
     instantly: { url: "http://localhost:3011", apiKey: "inst-key" },
     brand: { url: "http://localhost:3005", apiKey: "brand-key" },
     key: { url: "", apiKey: "" },
+    features: { url: "http://features:3020", apiKey: "feat-key" },
+    workflow: { url: "http://workflow:3021", apiKey: "wf-key" },
   },
 }));
 
@@ -777,6 +779,302 @@ describe("GET /stats", () => {
       expect(res.status).toBe(200);
       expect(res.body.transactional.stepStats).toBeUndefined();
       expect(res.body.broadcast.stepStats).toEqual(steps);
+    });
+  });
+
+  describe("dynasty slug filters", () => {
+    it("resolves workflowDynastySlug to workflowSlugs and forwards to providers", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ slugs: ["cold-email", "cold-email-v2"] }),
+          });
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?workflowDynastySlug=cold-email");
+
+      expect(res.status).toBe(200);
+      expect(res.body.transactional.emailsSent).toBe(100);
+      expect(res.body.broadcast.emailsSent).toBe(80);
+
+      // Verify providers got workflowSlugs, not workflowDynastySlug
+      const providerCalls = mockFetch.mock.calls.filter(
+        (c) => c[0].includes("3010") || c[0].includes("3011")
+      );
+      for (const call of providerCalls) {
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("workflowSlugs")).toBe("cold-email,cold-email-v2");
+        expect(params.has("workflowDynastySlug")).toBe(false);
+      }
+    });
+
+    it("resolves featureDynastySlug to featureSlugs and forwards to providers", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("features:3020") && url.includes("/features/dynasty/slugs"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ slugs: ["feat-a", "feat-a-v2"] }),
+          });
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?featureDynastySlug=feat-a");
+
+      expect(res.status).toBe(200);
+      const providerCalls = mockFetch.mock.calls.filter(
+        (c) => c[0].includes("3010") || c[0].includes("3011")
+      );
+      for (const call of providerCalls) {
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("featureSlugs")).toBe("feat-a,feat-a-v2");
+        expect(params.has("featureDynastySlug")).toBe(false);
+      }
+    });
+
+    it("returns zero stats when workflowDynastySlug resolves to empty", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ slugs: [] }),
+          });
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?workflowDynastySlug=nonexistent");
+
+      expect(res.status).toBe(200);
+      expect(res.body.transactional.emailsSent).toBe(0);
+      expect(res.body.broadcast.emailsSent).toBe(0);
+      // Should NOT call providers at all
+      const providerCalls = mockFetch.mock.calls.filter(
+        (c) => c[0].includes("3010") || c[0].includes("3011")
+      );
+      expect(providerCalls).toHaveLength(0);
+    });
+
+    it("returns zero stats for single type when dynasty resolves to empty", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("features:3020") && url.includes("/features/dynasty/slugs"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ slugs: [] }),
+          });
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?type=transactional&featureDynastySlug=empty");
+
+      expect(res.status).toBe(200);
+      expect(res.body.transactional.emailsSent).toBe(0);
+      expect(res.body.broadcast).toBeUndefined();
+    });
+
+    it("returns empty groups when dynasty resolves to empty in grouped mode", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ slugs: [] }),
+          });
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?groupBy=brandId&workflowDynastySlug=nonexistent");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toEqual([]);
+    });
+
+    it("combines workflowDynastySlug with other filters", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ slugs: ["wf-1", "wf-1-v2"] }),
+          });
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?type=transactional&workflowDynastySlug=wf-1&brandId=brand_1");
+
+      expect(res.status).toBe(200);
+      const params = new URL(mockFetch.mock.calls.find((c) => c[0].includes("3010"))![0]).searchParams;
+      expect(params.get("workflowSlugs")).toBe("wf-1,wf-1-v2");
+      expect(params.get("brandId")).toBe("brand_1");
+    });
+
+    it("passes featureSlug filter directly to providers", async () => {
+      mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+
+      await authedGet("/stats?type=transactional&featureSlug=my-feature");
+
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("featureSlug")).toBe("my-feature");
+    });
+  });
+
+  describe("dynasty slug groupBy", () => {
+    it("regroups by workflowDynastySlug (transactional)", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasties"))
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                dynasties: [
+                  { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+                ],
+              }),
+          });
+        if (url.includes("3010"))
+          return Promise.resolve(
+            mockGroupedPostmark([
+              { key: "cold-email", overrides: { emailsSent: 30 } },
+              { key: "cold-email-v2", overrides: { emailsSent: 20 } },
+            ])
+          );
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?type=transactional&groupBy=workflowDynastySlug");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toHaveLength(1);
+      expect(res.body.groups[0].key).toBe("cold-email");
+      // 30 + 20 = 50
+      expect(res.body.groups[0].transactional.emailsSent).toBe(50);
+    });
+
+    it("regroups by featureDynastySlug (broadcast)", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("features:3020") && url.includes("/features/dynasties"))
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                dynasties: [
+                  { dynastySlug: "feat-alpha", slugs: ["feat-alpha", "feat-alpha-v2"] },
+                ],
+              }),
+          });
+        if (url.includes("3011"))
+          return Promise.resolve(
+            mockGroupedInstantly([
+              { key: "feat-alpha", overrides: { emailsSent: 25 }, recipients: 20 },
+              { key: "feat-alpha-v2", overrides: { emailsSent: 15 }, recipients: 10 },
+            ])
+          );
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?type=broadcast&groupBy=featureDynastySlug");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toHaveLength(1);
+      expect(res.body.groups[0].key).toBe("feat-alpha");
+      expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
+      expect(res.body.groups[0].broadcast.recipients).toBe(30);
+    });
+
+    it("sends groupBy=workflowSlug to providers when dynasty groupBy requested", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasties"))
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ dynasties: [] }),
+          });
+        if (url.includes("3010"))
+          return Promise.resolve(mockGroupedPostmark([{ key: "wf-1" }]));
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      await authedGet("/stats?type=transactional&groupBy=workflowDynastySlug");
+
+      const postmarkCall = mockFetch.mock.calls.find((c) => c[0].includes("3010"));
+      const params = new URL(postmarkCall![0]).searchParams;
+      expect(params.get("groupBy")).toBe("workflowSlug");
+    });
+
+    it("falls back to raw slug for orphan slugs not in any dynasty", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasties"))
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                dynasties: [
+                  { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+                ],
+              }),
+          });
+        if (url.includes("3010"))
+          return Promise.resolve(
+            mockGroupedPostmark([
+              { key: "cold-email", overrides: { emailsSent: 30 } },
+              { key: "orphan-slug", overrides: { emailsSent: 10 } },
+            ])
+          );
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?type=transactional&groupBy=workflowDynastySlug");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toHaveLength(2);
+      const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
+      expect(byKey.get("cold-email").transactional.emailsSent).toBe(30);
+      expect(byKey.get("orphan-slug").transactional.emailsSent).toBe(10);
+    });
+
+    it("merges dynasty groups from both providers", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasties"))
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                dynasties: [
+                  { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+                ],
+              }),
+          });
+        if (url.includes("3010"))
+          return Promise.resolve(
+            mockGroupedPostmark([
+              { key: "cold-email" },
+              { key: "cold-email-v2" },
+            ])
+          );
+        if (url.includes("3011"))
+          return Promise.resolve(
+            mockGroupedInstantly([
+              { key: "cold-email", recipients: 20 },
+              { key: "cold-email-v2", recipients: 15 },
+            ])
+          );
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/stats?groupBy=workflowDynastySlug");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toHaveLength(1);
+      expect(res.body.groups[0].key).toBe("cold-email");
+      // Both provider groups merged under same dynasty
+      expect(res.body.groups[0].transactional).toBeDefined();
+      expect(res.body.groups[0].broadcast).toBeDefined();
+      // Transactional: 50 + 50 = 100
+      expect(res.body.groups[0].transactional.emailsSent).toBe(100);
+      // Broadcast: 40 + 40 = 80
+      expect(res.body.groups[0].broadcast.emailsSent).toBe(80);
     });
   });
 });
