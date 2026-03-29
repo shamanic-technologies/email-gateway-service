@@ -92,13 +92,13 @@ function parseStatsInput(req: Request): { success: true; type?: string; filters:
 }
 
 /** Resolve dynasty slugs into versioned slug arrays and rewrite filters for downstream providers */
-async function resolveDynastyFilters(filters: Record<string, unknown>): Promise<Record<string, unknown>> {
+async function resolveDynastyFilters(filters: Record<string, unknown>, identityHeaders?: { orgId: string; userId: string; runId: string }): Promise<Record<string, unknown>> {
   const resolved = { ...filters };
 
   // workflowDynastySlug → resolve to workflowSlugs
   const workflowDynastySlug = resolved.workflowDynastySlug as string | undefined;
   if (workflowDynastySlug) {
-    const slugs = await dynastyClient.resolveWorkflowDynastySlugs(workflowDynastySlug);
+    const slugs = await dynastyClient.resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
     if (slugs.length === 0) return { __empty: true };
     resolved.workflowSlugs = slugs;
     delete resolved.workflowSlug;
@@ -108,7 +108,7 @@ async function resolveDynastyFilters(filters: Record<string, unknown>): Promise<
   // featureDynastySlug → resolve to featureSlugs
   const featureDynastySlug = resolved.featureDynastySlug as string | undefined;
   if (featureDynastySlug) {
-    const slugs = await dynastyClient.resolveFeatureDynastySlugs(featureDynastySlug);
+    const slugs = await dynastyClient.resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
     if (slugs.length === 0) return { __empty: true };
     resolved.featureSlugs = slugs;
     delete resolved.featureSlug;
@@ -159,7 +159,7 @@ async function statsHandler(req: Request, res: Response) {
 
   try {
     // Resolve dynasty filters
-    const resolvedFilters = await resolveDynastyFilters(input.filters);
+    const resolvedFilters = await resolveDynastyFilters(input.filters, identityHeaders);
 
     // If dynasty slug resolved to empty → return zero stats immediately
     if (resolvedFilters.__empty) {
@@ -332,7 +332,7 @@ async function handleDynastyGrouped(
   if (type === "transactional") {
     const [raw, dynasties] = await Promise.all([
       postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders),
-      fetchDynasties(),
+      fetchDynasties(identityHeaders),
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
     if (!isGrouped(raw)) {
@@ -347,7 +347,7 @@ async function handleDynastyGrouped(
   if (type === "broadcast") {
     const [raw, dynasties] = await Promise.all([
       instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders),
-      fetchDynasties(),
+      fetchDynasties(identityHeaders),
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
     if (!isGrouped(raw)) {
@@ -363,7 +363,7 @@ async function handleDynastyGrouped(
   const [postmarkResult, instantlyResult, dynasties] = await Promise.all([
     postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders).catch((e: Error) => e),
     instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders).catch((e: Error) => e),
-    fetchDynasties(),
+    fetchDynasties(identityHeaders),
   ]);
 
   const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);

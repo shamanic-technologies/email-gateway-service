@@ -40,6 +40,36 @@ describe("dynasty-client", () => {
       expect(opts.headers["X-API-Key"]).toBe("wf-key");
     });
 
+    it("forwards identity headers when provided", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ slugs: ["cold-email"] }),
+      });
+
+      const { resolveWorkflowDynastySlugs } = await import("../src/lib/dynasty-client");
+      await resolveWorkflowDynastySlugs("cold-email", { orgId: "org-1", userId: "user-1", runId: "run-1" });
+
+      const [, opts] = mockFetch.mock.calls[0];
+      expect(opts.headers["x-org-id"]).toBe("org-1");
+      expect(opts.headers["x-user-id"]).toBe("user-1");
+      expect(opts.headers["x-run-id"]).toBe("run-1");
+    });
+
+    it("omits identity headers when not provided", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ slugs: ["cold-email"] }),
+      });
+
+      const { resolveWorkflowDynastySlugs } = await import("../src/lib/dynasty-client");
+      await resolveWorkflowDynastySlugs("cold-email");
+
+      const [, opts] = mockFetch.mock.calls[0];
+      expect(opts.headers["x-org-id"]).toBeUndefined();
+      expect(opts.headers["x-user-id"]).toBeUndefined();
+      expect(opts.headers["x-run-id"]).toBeUndefined();
+    });
+
     it("returns empty array when dynasty has no slugs", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -97,6 +127,21 @@ describe("dynasty-client", () => {
 
       expect(result).toEqual(dynasties);
       expect(mockFetch.mock.calls[0][0]).toContain("/workflows/dynasties");
+    });
+
+    it("forwards identity headers when provided", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ dynasties: [] }),
+      });
+
+      const { fetchWorkflowDynasties } = await import("../src/lib/dynasty-client");
+      await fetchWorkflowDynasties({ orgId: "org-1", userId: "user-1", runId: "run-1" });
+
+      const [, opts] = mockFetch.mock.calls[0];
+      expect(opts.headers["x-org-id"]).toBe("org-1");
+      expect(opts.headers["x-user-id"]).toBe("user-1");
+      expect(opts.headers["x-run-id"]).toBe("run-1");
     });
   });
 
