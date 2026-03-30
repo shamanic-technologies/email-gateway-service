@@ -357,4 +357,22 @@ describe("POST /status", () => {
     expect(broadcast.brand.email.unsubscribed).toBe(true);
     expect(broadcast.global.email.unsubscribed).toBe(true);
   });
+
+  it("accepts large payloads without 413 error", async () => {
+    const largeItems = Array.from({ length: 2000 }, (_, i) => ({
+      leadId: `lead_${i}`,
+      email: `user${i}@example.com`,
+    }));
+
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    const res = await authedPost("/status")
+      .send({ brandId: "brand_1", campaignId: "camp_1", items: largeItems });
+
+    expect(res.status).not.toBe(413);
+    expect(res.status).toBe(200);
+  });
 });
