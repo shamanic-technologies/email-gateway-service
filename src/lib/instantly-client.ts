@@ -83,7 +83,7 @@ export interface AtomicSendResponse {
 export async function atomicSend(body: {
   orgId?: string;
   userId?: string;
-  brandId?: string;
+  brandIds?: string[];
   leadId?: string;
   runId?: string;
   workflowSlug?: string;
@@ -162,7 +162,7 @@ export async function getStats(filters: {
   runIds?: string[];
   orgId?: string;
   userId?: string;
-  brandId?: string;
+  brandIds?: string;
   campaignId?: string;
   workflowSlug?: string;
   workflowSlugs?: string[];
@@ -189,7 +189,7 @@ export interface StatusResult {
 }
 
 export async function getStatus(body: {
-  brandId: string;
+  brandIds: string[];
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {

@@ -470,13 +470,13 @@ describe("GET /stats", () => {
       expect(params.get("workflowSlug")).toBe("welcome-flow");
     });
 
-    it("passes brandId to provider", async () => {
+    it("passes brandIds to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&brandId=brand_1");
+      await authedGet("/stats?type=transactional&brandIds=brand_1");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("brandId")).toBe("brand_1");
+      expect(params.get("brandIds")).toBe("brand_1");
     });
 
     it("parses comma-separated workflowSlugs and forwards to provider", async () => {
@@ -903,12 +903,12 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?type=transactional&workflowDynastySlug=wf-1&brandId=brand_1");
+      const res = await authedGet("/stats?type=transactional&workflowDynastySlug=wf-1&brandIds=brand_1");
 
       expect(res.status).toBe(200);
       const params = new URL(mockFetch.mock.calls.find((c) => c[0].includes("3010"))![0]).searchParams;
       expect(params.get("workflowSlugs")).toBe("wf-1,wf-1-v2");
-      expect(params.get("brandId")).toBe("brand_1");
+      expect(params.get("brandIds")).toBe("brand_1");
     });
 
     it("passes featureSlug filter directly to providers", async () => {
@@ -1114,14 +1114,14 @@ describe("GET /stats/public", () => {
   it("calls downstream /stats/public for postmark when no identity headers", async () => {
     mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-    await serviceAuthGet("/stats/public?type=transactional&brandId=brand_1");
+    await serviceAuthGet("/stats/public?type=transactional&brandIds=brand_1");
 
     const [fetchUrl] = mockFetch.mock.calls[0];
     expect(fetchUrl).toContain("http://localhost:3010/stats/public");
     const params = new URL(fetchUrl).searchParams;
     expect(params.has("orgId")).toBe(false);
     expect(params.has("userId")).toBe(false);
-    expect(params.get("brandId")).toBe("brand_1");
+    expect(params.get("brandIds")).toBe("brand_1");
   });
 
   it("returns grouped broadcast stats", async () => {

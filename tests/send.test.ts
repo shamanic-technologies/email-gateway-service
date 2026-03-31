@@ -28,25 +28,10 @@ const API_KEY = "test-api-key";
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-function mockBrandResponse(brandUrl = "https://acme.com") {
-  return {
-    ok: true,
-    json: () => Promise.resolve({ brand: { id: "brand_1", brandUrl, name: "Acme", domain: "acme.com" } }),
-  };
-}
-
-function mockBrandFailure() {
-  return {
-    ok: false,
-    status: 500,
-    text: () => Promise.resolve("Brand service error"),
-  };
-}
-
 function buildBroadcastBody(overrides = {}) {
   return {
     type: "broadcast",
-    brandId: "brand_1",
+    brandIds: ["brand_1"],
     campaignId: "campaign_1",
     workflowSlug: "test-workflow",
     to: "lead@example.com",
@@ -66,7 +51,7 @@ function buildBroadcastBody(overrides = {}) {
 function buildTransactionalBody(overrides = {}) {
   return {
     type: "transactional",
-    brandId: "brand_1",
+    brandIds: ["brand_1"],
     campaignId: "campaign_1",
     workflowSlug: "test-workflow",
     to: "user@example.com",
@@ -159,7 +144,6 @@ describe("POST /send", () => {
     });
 
     it("retries on timeout with a fresh AbortSignal (transactional)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       // First postmark call: timeout
       mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"));
       // Retry: succeed
@@ -266,7 +250,6 @@ describe("POST /send", () => {
 
   describe("transactional (Postmark)", () => {
     it("returns success with messageId", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -287,7 +270,6 @@ describe("POST /send", () => {
     });
 
     it("uses custom from when provided", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_2" }),
@@ -295,12 +277,11 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody({ from: "Custom <custom@example.com>" }));
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.from).toBe("Custom <custom@example.com>");
     });
 
     it("does not inject a from when omitted (downstream resolves it)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_3" }),
@@ -308,12 +289,11 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody());
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.from).toBeUndefined();
     });
 
     it("does not send messageStream to postmark-service (resolved server-side)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_4" }),
@@ -321,12 +301,11 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody());
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.messageStream).toBeUndefined();
     });
 
     it("appends default unsubscribe for transactional", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -334,14 +313,13 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody());
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
       expect(body.htmlBody).not.toContain("Kevin Lourd");
       expect(body.htmlBody).not.toContain("growthagency.dev");
     });
 
     it("forwards orgId and userId from headers to postmark-service", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -349,7 +327,7 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody());
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.orgId).toBe("org_1");
       expect(body.userId).toBe("user_1");
       expect(body.runId).toBe("run_1");
@@ -358,7 +336,6 @@ describe("POST /send", () => {
     });
 
     it("forwards identity headers (x-org-id, x-user-id, x-run-id) to postmark-service", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -366,33 +343,15 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody());
 
-      // postmark call is the second fetch (first is brand)
-      const postmarkHeaders = mockFetch.mock.calls[1][1].headers;
+      const postmarkHeaders = mockFetch.mock.calls[0][1].headers;
       expect(postmarkHeaders["x-org-id"]).toBe("org_1");
       expect(postmarkHeaders["x-user-id"]).toBe("user_1");
       expect(postmarkHeaders["x-run-id"]).toBe("run_1");
-    });
-
-    it("forwards identity headers to brand-service", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
-      });
-
-      await authedPost("/send").send(buildTransactionalBody());
-
-      // brand call is the first fetch
-      const brandHeaders = mockFetch.mock.calls[0][1].headers;
-      expect(brandHeaders["x-org-id"]).toBe("org_1");
-      expect(brandHeaders["x-user-id"]).toBe("user_1");
-      expect(brandHeaders["x-run-id"]).toBe("run_1");
     });
   });
 
   describe("idempotency", () => {
     it("returns cached result on duplicate idempotencyKey (transactional)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_msg_1" }),
@@ -412,8 +371,8 @@ describe("POST /send", () => {
       expect(res2.status).toBe(200);
       expect(res2.body.messageId).toBe("pm_msg_1");
       expect(res2.body.deduplicated).toBe(true);
-      // Only 2 fetch calls total (brand + postmark from first request)
-      expect(mockFetch).toHaveBeenCalledTimes(2);
+      // Only 1 fetch call total (postmark from first request)
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it("returns cached result on duplicate idempotencyKey (broadcast)", async () => {
@@ -474,18 +433,15 @@ describe("POST /send", () => {
 
       expect(res1.status).toBe(200);
       expect(res2.status).toBe(200);
-      // Both should have called fetch (no brand service since no brandId resolution failure)
-      // 2 calls per request: brand + postmark
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // 1 call per request: postmark only
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it("sends normally when no idempotencyKey is provided", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_msg_1" }),
       });
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_msg_2" }),
@@ -501,12 +457,11 @@ describe("POST /send", () => {
       expect(res2.status).toBe(200);
       expect(res1.body.deduplicated).toBeUndefined();
       expect(res2.body.deduplicated).toBeUndefined();
-      // Both requests hit the providers
-      expect(mockFetch).toHaveBeenCalledTimes(4);
+      // Both requests hit postmark
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it("does not cache upstream errors (502)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -520,7 +475,6 @@ describe("POST /send", () => {
       expect(res1.status).toBe(502);
 
       // Retry should actually attempt to send again
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_retry" }),
@@ -549,7 +503,6 @@ describe("POST /send", () => {
     });
 
     it("forwards workflowSlug to postmark-service for transactional", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -557,7 +510,7 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody({ workflowSlug: "welcome-flow" }));
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.workflowSlug).toBe("welcome-flow");
     });
   });
@@ -577,7 +530,6 @@ describe("POST /send", () => {
     });
 
     it("forwards leadId to postmark-service for transactional", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -585,7 +537,7 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody({ leadId: "lead_xyz" }));
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.leadId).toBe("lead_xyz");
     });
 
@@ -714,8 +666,7 @@ describe("POST /send", () => {
       expect(headers["x-feature-slug"]).toBe("hdr_feature");
     });
 
-    it("forwards tracking headers to postmark-service and brand-service for transactional", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
+    it("forwards tracking headers to postmark-service for transactional", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -723,15 +674,7 @@ describe("POST /send", () => {
 
       await authedPostWithTracking("/send").send(buildTransactionalBody());
 
-      // brand call
-      const brandHeaders = mockFetch.mock.calls[0][1].headers;
-      expect(brandHeaders["x-campaign-id"]).toBe("hdr_campaign");
-      expect(brandHeaders["x-brand-id"]).toBe("hdr_brand");
-      expect(brandHeaders["x-workflow-slug"]).toBe("hdr_workflow");
-      expect(brandHeaders["x-feature-slug"]).toBe("hdr_feature");
-
-      // postmark call
-      const postmarkHeaders = mockFetch.mock.calls[1][1].headers;
+      const postmarkHeaders = mockFetch.mock.calls[0][1].headers;
       expect(postmarkHeaders["x-campaign-id"]).toBe("hdr_campaign");
       expect(postmarkHeaders["x-brand-id"]).toBe("hdr_brand");
       expect(postmarkHeaders["x-workflow-slug"]).toBe("hdr_workflow");
@@ -745,28 +688,27 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      // Send without brandId, campaignId, workflowSlug in body
-      const { brandId, campaignId, workflowSlug, ...bodyWithout } = buildBroadcastBody();
+      // Send without brandIds, campaignId, workflowSlug in body
+      const { brandIds, campaignId, workflowSlug, ...bodyWithout } = buildBroadcastBody();
       await authedPostWithTracking("/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandId).toBe("hdr_brand");
+      expect(body.brandIds).toEqual(["hdr_brand"]);
       expect(body.campaignId).toBe("hdr_campaign");
       expect(body.workflowSlug).toBe("hdr_workflow");
     });
 
     it("uses header values as fallback when body fields are missing (transactional)", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      const { brandId, campaignId, workflowSlug, ...bodyWithout } = buildTransactionalBody();
+      const { brandIds, campaignId, workflowSlug, ...bodyWithout } = buildTransactionalBody();
       await authedPostWithTracking("/send").send(bodyWithout);
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
-      expect(body.brandId).toBe("hdr_brand");
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.brandIds).toEqual(["hdr_brand"]);
       expect(body.campaignId).toBe("hdr_campaign");
       expect(body.workflowSlug).toBe("hdr_workflow");
     });
@@ -779,11 +721,11 @@ describe("POST /send", () => {
       });
 
       await authedPostWithTracking("/send").send(
-        buildBroadcastBody({ brandId: "body_brand", campaignId: "body_campaign", workflowSlug: "body_workflow" })
+        buildBroadcastBody({ brandIds: ["body_brand"], campaignId: "body_campaign", workflowSlug: "body_workflow" })
       );
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandId).toBe("body_brand");
+      expect(body.brandIds).toEqual(["body_brand"]);
       expect(body.campaignId).toBe("body_campaign");
       expect(body.workflowSlug).toBe("body_workflow");
     });
@@ -803,11 +745,41 @@ describe("POST /send", () => {
       expect(headers["x-workflow-slug"]).toBeUndefined();
       expect(headers["x-feature-slug"]).toBeUndefined();
     });
+
+    it("parses CSV x-brand-id header into brandIds array when body omits brandIds", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const { brandIds, ...bodyWithout } = buildBroadcastBody();
+      await authedPost("/send")
+        .set("x-brand-id", "brand_a,brand_b,brand_c")
+        .send(bodyWithout);
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.brandIds).toEqual(["brand_a", "brand_b", "brand_c"]);
+    });
+
+    it("body brandIds take precedence over CSV x-brand-id header", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/send")
+        .set("x-brand-id", "hdr_a,hdr_b")
+        .send(buildBroadcastBody({ brandIds: ["body_brand"] }));
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.brandIds).toEqual(["body_brand"]);
+    });
   });
 
   describe("signature", () => {
     it("appends default unsubscribe for transactional", async () => {
-      mockFetch.mockResolvedValueOnce(mockBrandResponse());
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
@@ -815,7 +787,7 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildTransactionalBody());
 
-      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
       expect(body.htmlBody).toContain("Unsubscribe");
       expect(body.htmlBody).not.toContain("Kevin Lourd");

@@ -4,7 +4,6 @@ import { TrackingHeaders } from "../middleware/identityHeaders";
 
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
-import * as brandClient from "../lib/brand-client";
 import { appendSignature } from "../lib/signature";
 import * as idempotencyStore from "../lib/idempotency-store";
 
@@ -44,30 +43,20 @@ router.post("/send", async (req: Request, res: Response) => {
 
   // Use tracking headers as fallbacks for body fields the LLM may have omitted
   const effectiveCampaignId = body.campaignId ?? trackingHeaders.campaignId;
-  const effectiveBrandId = body.brandId ?? trackingHeaders.brandId;
+  const effectiveBrandIds = body.brandIds ?? (trackingHeaders.brandId ? trackingHeaders.brandId.split(",").map(s => s.trim()).filter(Boolean) : undefined);
   const effectiveWorkflowName = body.workflowSlug ?? trackingHeaders.workflowSlug;
 
   console.log(`[send] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${runId} workflow=${effectiveWorkflowName}`);
 
   try {
     if (body.type === "transactional") {
-      let brandUrl: string | undefined;
-      if (effectiveBrandId) {
-        try {
-          const brand = await brandClient.getBrand(effectiveBrandId, identityHeaders, trackingHeaders);
-          brandUrl = brand.brandUrl ?? undefined;
-        } catch (err) {
-          console.warn(`[send] failed to fetch brand ${effectiveBrandId}, signature will use fallback`);
-        }
-      }
-
       const htmlWithSignature = appendSignature(body.htmlBody, body.type);
 
       const result = await postmarkClient.sendEmail({
         orgId,
         userId,
         runId,
-        brandId: effectiveBrandId,
+        brandIds: effectiveBrandIds,
         leadId: body.leadId,
         workflowSlug: effectiveWorkflowName,
         campaignId: effectiveCampaignId,
@@ -95,7 +84,7 @@ router.post("/send", async (req: Request, res: Response) => {
         orgId,
         userId,
         runId,
-        brandId: effectiveBrandId,
+        brandIds: effectiveBrandIds,
         leadId: body.leadId,
         workflowSlug: effectiveWorkflowName,
         campaignId: effectiveCampaignId,
