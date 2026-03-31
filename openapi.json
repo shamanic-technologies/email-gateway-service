@@ -144,13 +144,6 @@
           {
             "type": "object",
             "properties": {
-              "brandIds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Brand IDs (supports multi-brand campaigns)"
-              },
               "campaignId": {
                 "type": "string",
                 "description": "Campaign ID"
@@ -236,13 +229,6 @@
           {
             "type": "object",
             "properties": {
-              "brandIds": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Brand IDs (supports multi-brand campaigns)"
-              },
               "campaignId": {
                 "type": "string",
                 "description": "Campaign ID"
@@ -642,14 +628,6 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
-          "brandIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "minItems": 1,
-            "description": "Brand IDs — primary scope for dedup (supports multi-brand campaigns)"
-          },
           "campaignId": {
             "type": "string",
             "description": "Campaign ID — if absent, campaign scope is null"
@@ -679,7 +657,6 @@
           }
         },
         "required": [
-          "brandIds",
           "items"
         ]
       }
@@ -714,7 +691,7 @@
           "Email Routing"
         ],
         "summary": "Send an email",
-        "description": "Send a transactional or broadcast email via the appropriate provider",
+        "description": "Send a transactional or broadcast email via the appropriate provider. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs).",
         "security": [
           {
             "apiKey": []
@@ -764,10 +741,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
+              "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field."
             },
-            "required": false,
-            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
+            "required": true,
+            "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field.",
             "name": "x-brand-id",
             "in": "header"
           },
@@ -1243,7 +1220,7 @@
           "Status"
         ],
         "summary": "Get delivery status for leads/emails",
-        "description": "Batch lookup of delivery status scoped by brand(s) (required) and optionally by campaign. Supports multi-brand campaigns via brandIds array. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+        "description": "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs). Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
         "security": [
           {
             "apiKey": []
@@ -1293,10 +1270,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
+              "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field."
             },
-            "required": false,
-            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
+            "required": true,
+            "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field.",
             "name": "x-brand-id",
             "in": "header"
           },

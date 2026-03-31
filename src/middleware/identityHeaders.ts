@@ -2,17 +2,28 @@ import { Request, Response, NextFunction } from "express";
 
 export interface TrackingHeaders {
   campaignId?: string;
+  /** Raw x-brand-id header value (CSV string) — used for forwarding to downstream services */
   brandId?: string;
+  /** Parsed brand IDs from the x-brand-id header */
+  brandIds: string[];
   workflowSlug?: string;
   featureSlug?: string;
 }
 
+export function parseBrandIds(raw: string | undefined): string[] {
+  if (!raw) return [];
+  return raw.split(",").map(s => s.trim()).filter(Boolean);
+}
+
 export function extractTrackingHeaders(req: Request): TrackingHeaders {
-  const headers: TrackingHeaders = {};
+  const headers: TrackingHeaders = { brandIds: [] };
   const campaignId = req.headers["x-campaign-id"];
   if (typeof campaignId === "string") headers.campaignId = campaignId;
   const brandId = req.headers["x-brand-id"];
-  if (typeof brandId === "string") headers.brandId = brandId;
+  if (typeof brandId === "string") {
+    headers.brandId = brandId;
+    headers.brandIds = parseBrandIds(brandId);
+  }
   const workflowSlug = req.headers["x-workflow-slug"];
   if (typeof workflowSlug === "string") headers.workflowSlug = workflowSlug;
   const featureSlug = req.headers["x-feature-slug"];
