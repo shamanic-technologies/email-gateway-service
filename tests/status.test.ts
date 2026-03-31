@@ -28,12 +28,12 @@ function authedPost(path: string) {
     .set("X-API-Key", API_KEY)
     .set("x-org-id", "org_1")
     .set("x-user-id", "user_1")
-    .set("x-run-id", "run_1");
+    .set("x-run-id", "run_1")
+    .set("x-brand-id", "brand_1");
 }
 
 function buildStatusBody(overrides = {}) {
   return {
-    brandIds: ["brand_1"],
     campaignId: "camp_1",
     items: [
       { leadId: "lead_1", email: "john@acme.com" },
@@ -119,30 +119,36 @@ describe("POST /status", () => {
     expect(res.body.error).toContain("x-run-id");
   });
 
-  it("returns 400 for missing brandIds", async () => {
-    const res = await authedPost("/status")
-      .send({ campaignId: "camp_1", items: [{ leadId: "l1", email: "john@acme.com" }] });
+  it("returns 400 for missing x-brand-id header", async () => {
+    const res = await request(app)
+      .post("/status")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1")
+      .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
+      .send({ items: [{ leadId: "l1", email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-brand-id");
   });
 
   it("returns 400 for empty items array", async () => {
     const res = await authedPost("/status")
-      .send({ brandIds: ["brand_1"], items: [] });
+      .send({ items: [] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for missing leadId in items", async () => {
     const res = await authedPost("/status")
-      .send({ brandIds: ["brand_1"], items: [{ email: "john@acme.com" }] });
+      .send({ items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for invalid email in items", async () => {
     const res = await authedPost("/status")
-      .send({ brandIds: ["brand_1"], items: [{ leadId: "l1", email: "not-an-email" }] });
+      .send({ items: [{ leadId: "l1", email: "not-an-email" }] });
 
     expect(res.status).toBe(400);
   });
@@ -201,7 +207,7 @@ describe("POST /status", () => {
     }
   });
 
-  it("forwards brandIds and campaignId to both sub-services", async () => {
+  it("forwards brandIds (from header) and campaignId to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
@@ -316,7 +322,7 @@ describe("POST /status", () => {
     }
   });
 
-  it("works without tracking headers (no breakage)", async () => {
+  it("works without optional tracking headers (x-campaign-id, x-workflow-slug, x-feature-slug)", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
@@ -327,7 +333,8 @@ describe("POST /status", () => {
     for (const call of mockFetch.mock.calls) {
       const headers = call[1].headers;
       expect(headers["x-campaign-id"]).toBeUndefined();
-      expect(headers["x-brand-id"]).toBeUndefined();
+      // x-brand-id IS present (required, set by authedPost)
+      expect(headers["x-brand-id"]).toBe("brand_1");
       expect(headers["x-workflow-slug"]).toBeUndefined();
       expect(headers["x-feature-slug"]).toBeUndefined();
     }
@@ -358,13 +365,15 @@ describe("POST /status", () => {
     expect(broadcast.global.email.unsubscribed).toBe(true);
   });
 
-  it("forwards multiple brandIds to both sub-services", async () => {
+  it("forwards multiple brandIds from CSV header to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await authedPost("/status").send(buildStatusBody({ brandIds: ["brand_a", "brand_b", "brand_c"] }));
+    await authedPost("/status")
+      .set("x-brand-id", "brand_a,brand_b,brand_c")
+      .send(buildStatusBody());
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
@@ -386,7 +395,7 @@ describe("POST /status", () => {
     });
 
     const res = await authedPost("/status")
-      .send({ brandIds: ["brand_1"], campaignId: "camp_1", items: largeItems });
+      .send({ campaignId: "camp_1", items: largeItems });
 
     expect(res.status).not.toBe(413);
     expect(res.status).toBe(200);

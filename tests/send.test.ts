@@ -31,7 +31,6 @@ global.fetch = mockFetch;
 function buildBroadcastBody(overrides = {}) {
   return {
     type: "broadcast",
-    brandIds: ["brand_1"],
     campaignId: "campaign_1",
     workflowSlug: "test-workflow",
     to: "lead@example.com",
@@ -51,7 +50,6 @@ function buildBroadcastBody(overrides = {}) {
 function buildTransactionalBody(overrides = {}) {
   return {
     type: "transactional",
-    brandIds: ["brand_1"],
     campaignId: "campaign_1",
     workflowSlug: "test-workflow",
     to: "user@example.com",
@@ -70,7 +68,8 @@ function authedPost(path: string) {
     .set("X-API-Key", API_KEY)
     .set("x-org-id", "org_1")
     .set("x-user-id", "user_1")
-    .set("x-run-id", "run_1");
+    .set("x-run-id", "run_1")
+    .set("x-brand-id", "brand_1");
 }
 
 describe("POST /send", () => {
@@ -688,8 +687,8 @@ describe("POST /send", () => {
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      // Send without brandIds, campaignId, workflowSlug in body
-      const { brandIds, campaignId, workflowSlug, ...bodyWithout } = buildBroadcastBody();
+      // Send without campaignId, workflowSlug in body — brandIds comes from header
+      const { campaignId, workflowSlug, ...bodyWithout } = buildBroadcastBody();
       await authedPostWithTracking("/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -704,7 +703,7 @@ describe("POST /send", () => {
         json: () => Promise.resolve({ success: true, messageId: "pm_1" }),
       });
 
-      const { brandIds, campaignId, workflowSlug, ...bodyWithout } = buildTransactionalBody();
+      const { campaignId, workflowSlug, ...bodyWithout } = buildTransactionalBody();
       await authedPostWithTracking("/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
@@ -713,7 +712,7 @@ describe("POST /send", () => {
       expect(body.workflowSlug).toBe("hdr_workflow");
     });
 
-    it("body fields take precedence over tracking headers", async () => {
+    it("body fields take precedence over tracking headers (campaignId, workflowSlug)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -721,16 +720,15 @@ describe("POST /send", () => {
       });
 
       await authedPostWithTracking("/send").send(
-        buildBroadcastBody({ brandIds: ["body_brand"], campaignId: "body_campaign", workflowSlug: "body_workflow" })
+        buildBroadcastBody({ campaignId: "body_campaign", workflowSlug: "body_workflow" })
       );
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toEqual(["body_brand"]);
       expect(body.campaignId).toBe("body_campaign");
       expect(body.workflowSlug).toBe("body_workflow");
     });
 
-    it("works without tracking headers (no breakage)", async () => {
+    it("reads brandIds from x-brand-id header (not body)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -739,42 +737,23 @@ describe("POST /send", () => {
 
       await authedPost("/send").send(buildBroadcastBody());
 
-      const headers = mockFetch.mock.calls[0][1].headers;
-      expect(headers["x-campaign-id"]).toBeUndefined();
-      expect(headers["x-brand-id"]).toBeUndefined();
-      expect(headers["x-workflow-slug"]).toBeUndefined();
-      expect(headers["x-feature-slug"]).toBeUndefined();
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.brandIds).toEqual(["brand_1"]);
     });
 
-    it("parses CSV x-brand-id header into brandIds array when body omits brandIds", async () => {
+    it("parses CSV x-brand-id header into brandIds array", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      const { brandIds, ...bodyWithout } = buildBroadcastBody();
       await authedPost("/send")
         .set("x-brand-id", "brand_a,brand_b,brand_c")
-        .send(bodyWithout);
+        .send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.brandIds).toEqual(["brand_a", "brand_b", "brand_c"]);
-    });
-
-    it("body brandIds take precedence over CSV x-brand-id header", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
-      });
-
-      await authedPost("/send")
-        .set("x-brand-id", "hdr_a,hdr_b")
-        .send(buildBroadcastBody({ brandIds: ["body_brand"] }));
-
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toEqual(["body_brand"]);
     });
   });
 

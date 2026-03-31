@@ -34,7 +34,6 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 // --- POST /send ---
 
 const SendBaseSchema = z.object({
-  brandIds: z.array(z.string()).optional().describe("Brand IDs (supports multi-brand campaigns)"),
   campaignId: z.string().optional().describe("Campaign ID"),
   leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
   workflowSlug: z.string().optional().describe("Workflow slug for tracking and grouping"),
@@ -240,7 +239,6 @@ export const StatusItemSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandIds: z.array(z.string()).min(1).describe("Brand IDs — primary scope for dedup (supports multi-brand campaigns)"),
     campaignId: z.string().optional().describe("Campaign ID — if absent, campaign scope is null"),
     items: z.array(StatusItemSchema).min(1).describe("List of lead/email pairs to check"),
   })
@@ -278,6 +276,17 @@ export const IdentityHeadersSchema = z.object({
   "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
 });
 
+/** Headers for endpoints that require x-brand-id (POST /send, POST /status) */
+export const IdentityHeadersWithBrandSchema = z.object({
+  "x-org-id": z.string().describe("Internal organization UUID from client-service"),
+  "x-user-id": z.string().describe("Internal user UUID from client-service"),
+  "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
+  "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
+  "x-brand-id": z.string().describe("Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field."),
+  "x-workflow-slug": z.string().optional().describe("Workflow slug injected by workflow-service (optional, used for tracking)"),
+  "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
+});
+
 // --- Register endpoints ---
 
 const errorContent = {
@@ -303,10 +312,10 @@ registry.registerPath({
   path: "/send",
   tags: ["Email Routing"],
   summary: "Send an email",
-  description: "Send a transactional or broadcast email via the appropriate provider",
+  description: "Send a transactional or broadcast email via the appropriate provider. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs).",
   security: [{ apiKey: [] }],
   request: {
-    headers: IdentityHeadersSchema,
+    headers: IdentityHeadersWithBrandSchema,
     body: {
       content: { "application/json": { schema: SendRequestSchema } },
     },
@@ -368,10 +377,10 @@ registry.registerPath({
   path: "/status",
   tags: ["Status"],
   summary: "Get delivery status for leads/emails",
-  description: "Batch lookup of delivery status scoped by brand(s) (required) and optionally by campaign. Supports multi-brand campaigns via brandIds array. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+  description: "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs). Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
   security: [{ apiKey: [] }],
   request: {
-    headers: IdentityHeadersSchema,
+    headers: IdentityHeadersWithBrandSchema,
     body: {
       content: { "application/json": { schema: StatusRequestSchema } },
     },

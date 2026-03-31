@@ -13,12 +13,19 @@ router.post("/status", async (req: Request, res: Response) => {
     return;
   }
 
-  const { brandIds, campaignId, items } = parsed.data;
-  const payload = { brandIds, campaignId, items };
+  const { campaignId, items } = parsed.data;
   const { orgId, userId, runId, trackingHeaders } = res.locals as {
     orgId: string; userId: string; runId: string; trackingHeaders: TrackingHeaders;
   };
   const identityHeaders = { orgId, userId, runId };
+
+  const { brandIds } = trackingHeaders;
+  if (brandIds.length === 0) {
+    res.status(400).json({ error: "Missing required header: x-brand-id" });
+    return;
+  }
+
+  const payload = { brandIds, campaignId, items };
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
