@@ -105,6 +105,7 @@ export const StatsQuerySchema = z
     workflowSlug: z.string().optional().describe("Filter by workflow slug"),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by (returns only these workflows when used with groupBy=workflowSlug)"),
     featureSlug: z.string().optional().describe("Filter by feature slug"),
+    featureSlugs: z.string().optional().describe("Comma-separated feature slugs to filter by (returns only these features when used with groupBy=featureSlug)"),
     workflowDynastySlug: z.string().optional().describe("Filter by workflow dynasty slug (resolved to all versioned slugs)"),
     featureDynastySlug: z.string().optional().describe("Filter by feature dynasty slug (resolved to all versioned slugs)"),
     groupBy: GroupByDimensionSchema.optional().describe("Group results by dimension"),

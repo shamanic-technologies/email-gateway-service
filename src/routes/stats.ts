@@ -84,10 +84,11 @@ function addStats(a: Stats, b: Stats): Stats {
 function parseStatsInput(req: Request): { success: true; type?: string; filters: Record<string, unknown> } | { success: false; error: unknown } {
   const parsed = StatsQuerySchema.safeParse(req.query);
   if (!parsed.success) return { success: false, error: parsed.error.flatten() };
-  const { type, runIds, workflowSlugs, ...rest } = parsed.data;
+  const { type, runIds, workflowSlugs, featureSlugs, ...rest } = parsed.data;
   const filters: Record<string, unknown> = { ...rest };
   if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());
   if (workflowSlugs) filters.workflowSlugs = workflowSlugs.split(",").map((s) => s.trim());
+  if (featureSlugs) filters.featureSlugs = featureSlugs.split(",").map((s) => s.trim());
   return { success: true, type, filters };
 }
 
