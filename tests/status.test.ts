@@ -33,7 +33,7 @@ function authedPost(path: string) {
 
 function buildStatusBody(overrides = {}) {
   return {
-    brandId: "brand_1",
+    brandIds: ["brand_1"],
     campaignId: "camp_1",
     items: [
       { leadId: "lead_1", email: "john@acme.com" },
@@ -119,7 +119,7 @@ describe("POST /status", () => {
     expect(res.body.error).toContain("x-run-id");
   });
 
-  it("returns 400 for missing brandId", async () => {
+  it("returns 400 for missing brandIds", async () => {
     const res = await authedPost("/status")
       .send({ campaignId: "camp_1", items: [{ leadId: "l1", email: "john@acme.com" }] });
 
@@ -128,21 +128,21 @@ describe("POST /status", () => {
 
   it("returns 400 for empty items array", async () => {
     const res = await authedPost("/status")
-      .send({ brandId: "brand_1", items: [] });
+      .send({ brandIds: ["brand_1"], items: [] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for missing leadId in items", async () => {
     const res = await authedPost("/status")
-      .send({ brandId: "brand_1", items: [{ email: "john@acme.com" }] });
+      .send({ brandIds: ["brand_1"], items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for invalid email in items", async () => {
     const res = await authedPost("/status")
-      .send({ brandId: "brand_1", items: [{ leadId: "l1", email: "not-an-email" }] });
+      .send({ brandIds: ["brand_1"], items: [{ leadId: "l1", email: "not-an-email" }] });
 
     expect(res.status).toBe(400);
   });
@@ -201,7 +201,7 @@ describe("POST /status", () => {
     }
   });
 
-  it("forwards brandId and campaignId to both sub-services", async () => {
+  it("forwards brandIds and campaignId to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
@@ -217,7 +217,7 @@ describe("POST /status", () => {
     }));
 
     for (const call of calls) {
-      expect(call.body.brandId).toBe("brand_1");
+      expect(call.body.brandIds).toEqual(["brand_1"]);
       expect(call.body.campaignId).toBe("camp_1");
       expect(call.body.items).toHaveLength(2);
       expect(call.body.items[0]).toEqual({ leadId: "lead_1", email: "john@acme.com" });
@@ -358,6 +358,22 @@ describe("POST /status", () => {
     expect(broadcast.global.email.unsubscribed).toBe(true);
   });
 
+  it("forwards multiple brandIds to both sub-services", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await authedPost("/status").send(buildStatusBody({ brandIds: ["brand_a", "brand_b", "brand_c"] }));
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    for (const call of mockFetch.mock.calls) {
+      const body = JSON.parse(call[1].body);
+      expect(body.brandIds).toEqual(["brand_a", "brand_b", "brand_c"]);
+    }
+  });
+
   it("accepts large payloads without 413 error", async () => {
     const largeItems = Array.from({ length: 2000 }, (_, i) => ({
       leadId: `lead_${i}`,
@@ -370,7 +386,7 @@ describe("POST /status", () => {
     });
 
     const res = await authedPost("/status")
-      .send({ brandId: "brand_1", campaignId: "camp_1", items: largeItems });
+      .send({ brandIds: ["brand_1"], campaignId: "camp_1", items: largeItems });
 
     expect(res.status).not.toBe(413);
     expect(res.status).toBe(200);

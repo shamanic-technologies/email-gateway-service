@@ -13,8 +13,8 @@ router.post("/status", async (req: Request, res: Response) => {
     return;
   }
 
-  const { brandId, campaignId, items } = parsed.data;
-  const payload = { brandId, campaignId, items };
+  const { brandIds, campaignId, items } = parsed.data;
+  const payload = { brandIds, campaignId, items };
   const { orgId, userId, runId, trackingHeaders } = res.locals as {
     orgId: string; userId: string; runId: string; trackingHeaders: TrackingHeaders;
   };

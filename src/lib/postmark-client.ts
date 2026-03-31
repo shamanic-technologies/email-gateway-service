@@ -77,7 +77,7 @@ export async function sendEmail(body: {
   orgId?: string;
   userId?: string;
   runId?: string;
-  brandId?: string;
+  brandIds?: string[];
   leadId?: string;
   workflowSlug?: string;
   campaignId?: string;
@@ -121,7 +121,7 @@ export async function getStats(filters: {
   runIds?: string[];
   orgId?: string;
   userId?: string;
-  brandId?: string;
+  brandIds?: string;
   campaignId?: string;
   workflowSlug?: string;
   workflowSlugs?: string[];
@@ -148,7 +148,7 @@ export interface StatusResult {
 }
 
 export async function getStatus(body: {
-  brandId: string;
+  brandIds: string[];
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {

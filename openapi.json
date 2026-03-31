@@ -144,9 +144,12 @@
           {
             "type": "object",
             "properties": {
-              "brandId": {
-                "type": "string",
-                "description": "Brand ID"
+              "brandIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Brand IDs (supports multi-brand campaigns)"
               },
               "campaignId": {
                 "type": "string",
@@ -233,9 +236,12 @@
           {
             "type": "object",
             "properties": {
-              "brandId": {
-                "type": "string",
-                "description": "Brand ID"
+              "brandIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Brand IDs (supports multi-brand campaigns)"
               },
               "campaignId": {
                 "type": "string",
@@ -636,9 +642,13 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
-          "brandId": {
-            "type": "string",
-            "description": "Brand ID — primary scope for dedup"
+          "brandIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "description": "Brand IDs — primary scope for dedup (supports multi-brand campaigns)"
           },
           "campaignId": {
             "type": "string",
@@ -669,7 +679,7 @@
           }
         },
         "required": [
-          "brandId",
+          "brandIds",
           "items"
         ]
       }
@@ -754,10 +764,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Brand ID injected by workflow-service (optional, used for tracking)"
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
             },
             "required": false,
-            "description": "Brand ID injected by workflow-service (optional, used for tracking)",
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
             "name": "x-brand-id",
             "in": "header"
           },
@@ -875,11 +885,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by brand ID"
+              "description": "Comma-separated brand IDs to filter by"
             },
             "required": false,
-            "description": "Filter by brand ID",
-            "name": "brandId",
+            "description": "Comma-separated brand IDs to filter by",
+            "name": "brandIds",
             "in": "query"
           },
           {
@@ -1004,10 +1014,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Brand ID injected by workflow-service (optional, used for tracking)"
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
             },
             "required": false,
-            "description": "Brand ID injected by workflow-service (optional, used for tracking)",
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
             "name": "x-brand-id",
             "in": "header"
           },
@@ -1106,11 +1116,11 @@
           {
             "schema": {
               "type": "string",
-              "description": "Filter by brand ID"
+              "description": "Comma-separated brand IDs to filter by"
             },
             "required": false,
-            "description": "Filter by brand ID",
-            "name": "brandId",
+            "description": "Comma-separated brand IDs to filter by",
+            "name": "brandIds",
             "in": "query"
           },
           {
@@ -1233,7 +1243,7 @@
           "Status"
         ],
         "summary": "Get delivery status for leads/emails",
-        "description": "Batch lookup of delivery status scoped by brand (required) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+        "description": "Batch lookup of delivery status scoped by brand(s) (required) and optionally by campaign. Supports multi-brand campaigns via brandIds array. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
         "security": [
           {
             "apiKey": []
@@ -1283,10 +1293,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Brand ID injected by workflow-service (optional, used for tracking)"
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
             },
             "required": false,
-            "description": "Brand ID injected by workflow-service (optional, used for tracking)",
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
             "name": "x-brand-id",
             "in": "header"
           },

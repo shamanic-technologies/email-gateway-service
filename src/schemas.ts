@@ -34,7 +34,7 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 // --- POST /send ---
 
 const SendBaseSchema = z.object({
-  brandId: z.string().optional().describe("Brand ID"),
+  brandIds: z.array(z.string()).optional().describe("Brand IDs (supports multi-brand campaigns)"),
   campaignId: z.string().optional().describe("Campaign ID"),
   leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
   workflowSlug: z.string().optional().describe("Workflow slug for tracking and grouping"),
@@ -101,7 +101,7 @@ export const StatsQuerySchema = z
   .object({
     type: EmailTypeSchema.optional().describe("Filter by email channel type"),
     runIds: z.string().optional().describe("Comma-separated run IDs"),
-    brandId: z.string().optional().describe("Filter by brand ID"),
+    brandIds: z.string().optional().describe("Comma-separated brand IDs to filter by"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
     workflowSlug: z.string().optional().describe("Filter by workflow slug"),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by (returns only these workflows when used with groupBy=workflowSlug)"),
@@ -240,7 +240,7 @@ export const StatusItemSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.string().describe("Brand ID — primary scope for dedup"),
+    brandIds: z.array(z.string()).min(1).describe("Brand IDs — primary scope for dedup (supports multi-brand campaigns)"),
     campaignId: z.string().optional().describe("Campaign ID — if absent, campaign scope is null"),
     items: z.array(StatusItemSchema).min(1).describe("List of lead/email pairs to check"),
   })
@@ -273,7 +273,7 @@ export const IdentityHeadersSchema = z.object({
   "x-user-id": z.string().describe("Internal user UUID from client-service"),
   "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
   "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
-  "x-brand-id": z.string().optional().describe("Brand ID injected by workflow-service (optional, used for tracking)"),
+  "x-brand-id": z.string().optional().describe("Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"),
   "x-workflow-slug": z.string().optional().describe("Workflow slug injected by workflow-service (optional, used for tracking)"),
   "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
 });
@@ -368,7 +368,7 @@ registry.registerPath({
   path: "/status",
   tags: ["Status"],
   summary: "Get delivery status for leads/emails",
-  description: "Batch lookup of delivery status scoped by brand (required) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+  description: "Batch lookup of delivery status scoped by brand(s) (required) and optionally by campaign. Supports multi-brand campaigns via brandIds array. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
   security: [{ apiKey: [] }],
   request: {
     headers: IdentityHeadersSchema,
