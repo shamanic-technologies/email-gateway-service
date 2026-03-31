@@ -504,6 +504,47 @@ describe("GET /stats", () => {
       expect(params.get("workflowSlugs")).toBe("wf1,wf2");
     });
 
+    it("parses comma-separated featureSlugs and forwards to provider", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockGroupedPostmark([{ key: "sales-cold-email" }, { key: "sales-cold-email-v2" }]));
+        if (url.includes("3011")) return Promise.resolve(mockGroupedInstantly([{ key: "sales-cold-email" }, { key: "sales-cold-email-v2" }]));
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await authedGet("/stats?groupBy=featureSlug&featureSlugs=sales-cold-email,sales-cold-email-v2");
+
+      expect(res.status).toBe(200);
+      for (const call of mockFetch.mock.calls) {
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("featureSlugs")).toBe("sales-cold-email,sales-cold-email-v2");
+      }
+    });
+
+    it("trims whitespace in featureSlugs", async () => {
+      mockFetch.mockResolvedValueOnce(mockGroupedPostmark([{ key: "f1" }]));
+
+      await authedGet("/stats?type=transactional&groupBy=featureSlug&featureSlugs= f1 , f2 ");
+
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("featureSlugs")).toBe("f1,f2");
+    });
+
+    it("forwards featureSlugs on /stats/public without identity headers", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await serviceAuthGet("/stats/public?featureSlugs=sales-cold-email,sales-cold-email-v2&groupBy=workflowSlug");
+
+      expect(res.status).toBe(200);
+      for (const call of mockFetch.mock.calls) {
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("featureSlugs")).toBe("sales-cold-email,sales-cold-email-v2");
+      }
+    });
+
     it("parses comma-separated runIds and forwards to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 

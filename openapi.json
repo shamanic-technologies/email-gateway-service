@@ -912,6 +912,16 @@
           {
             "schema": {
               "type": "string",
+              "description": "Comma-separated feature slugs to filter by (returns only these features when used with groupBy=featureSlug)"
+            },
+            "required": false,
+            "description": "Comma-separated feature slugs to filter by (returns only these features when used with groupBy=featureSlug)",
+            "name": "featureSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Filter by workflow dynasty slug (resolved to all versioned slugs)"
             },
             "required": false,
@@ -1138,6 +1148,16 @@
             "required": false,
             "description": "Filter by feature slug",
             "name": "featureSlug",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated feature slugs to filter by (returns only these features when used with groupBy=featureSlug)"
+            },
+            "required": false,
+            "description": "Comma-separated feature slugs to filter by (returns only these features when used with groupBy=featureSlug)",
+            "name": "featureSlugs",
             "in": "query"
           },
           {
