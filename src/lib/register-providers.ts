@@ -52,7 +52,7 @@ export async function registerProviderRequirements(): Promise<void> {
   if (!res.ok) {
     const text = await res.text();
     console.error(
-      `Failed to query provider requirements: ${res.status} ${text}`
+      `[email-gateway] Failed to query provider requirements: ${res.status} ${text}`
     );
     return;
   }
@@ -61,7 +61,7 @@ export async function registerProviderRequirements(): Promise<void> {
   const providers = [...new Set(data.requirements.map((r) => r.provider))];
 
   if (providers.length === 0) {
-    console.warn("No downstream provider requirements found — nothing to register");
+    console.warn("[email-gateway] No downstream provider requirements found — nothing to register");
     return;
   }
 
@@ -89,7 +89,7 @@ export async function registerProviderRequirements(): Promise<void> {
         if (!decryptRes.ok && decryptRes.status !== 404) {
           const text = await decryptRes.text();
           console.warn(
-            `Provider registration warning for ${provider}: ${decryptRes.status} ${text}`
+            `[email-gateway] Provider registration warning for ${provider}: ${decryptRes.status} ${text}`
           );
         }
         return { provider, endpoint, status: decryptRes.status };
@@ -102,6 +102,6 @@ export async function registerProviderRequirements(): Promise<void> {
     .map((r) => (r as PromiseFulfilledResult<{ provider: string }>).value.provider);
 
   console.log(
-    `Registered provider requirements: email-gateway → [${registered.join(", ")}]`
+    `[email-gateway] Registered provider requirements: [${registered.join(", ")}]`
   );
 }
