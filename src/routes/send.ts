@@ -15,7 +15,7 @@ router.post("/send", async (req: Request, res: Response) => {
     const flat = parsed.error.flatten();
     const missingFields = Object.keys(flat.fieldErrors);
     console.error(
-      `[send] Validation failed: missing/invalid fields=[${missingFields.join(", ")}]` +
+      `[email-gateway] Validation failed: missing/invalid fields=[${missingFields.join(", ")}]` +
       ` type=${req.body?.type} to=${req.body?.to ?? "NULL"} leadId=${req.body?.leadId ?? "none"}` +
       ` campaignId=${req.body?.campaignId ?? "none"}`
     );
@@ -29,7 +29,7 @@ router.post("/send", async (req: Request, res: Response) => {
   if (body.idempotencyKey) {
     const cached = idempotencyStore.get(body.idempotencyKey);
     if (cached) {
-      console.log(`[send] idempotency hit key=${body.idempotencyKey} to=${body.to}`);
+      console.log(`[email-gateway] idempotency hit key=${body.idempotencyKey} to=${body.to}`);
       res.status(cached.statusCode).json({ ...cached.response, deduplicated: true });
       return;
     }
@@ -46,7 +46,7 @@ router.post("/send", async (req: Request, res: Response) => {
   const { brandIds } = trackingHeaders;
   const effectiveWorkflowName = body.workflowSlug ?? trackingHeaders.workflowSlug;
 
-  console.log(`[send] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${runId} workflow=${effectiveWorkflowName}`);
+  console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${runId} workflow=${effectiveWorkflowName}`);
 
   try {
     if (body.type === "transactional") {
@@ -70,7 +70,7 @@ router.post("/send", async (req: Request, res: Response) => {
         metadata: body.metadata,
       }, identityHeaders, trackingHeaders);
 
-      console.log(`[send] postmark response: messageId=${result.messageId}`);
+      console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
       if (body.idempotencyKey) {
         idempotencyStore.set(body.idempotencyKey, 200, response);
@@ -97,10 +97,9 @@ router.post("/send", async (req: Request, res: Response) => {
         sequence: body.sequence,
       }, identityHeaders, trackingHeaders);
 
-      console.log(`[send] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
+      console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
 
       if (result.added === 0) {
-        console.log(`[send] lead already in campaign to=${body.to} campaign=${result.campaignId} — returning 200 (idempotent)`);
         const response = {
           success: true,
           provider: "broadcast" as const,
@@ -128,7 +127,7 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[send] Failed: ${message}`);
+    console.error(`[email-gateway] Failed: ${message}`);
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });

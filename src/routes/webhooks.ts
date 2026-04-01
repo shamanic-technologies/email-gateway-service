@@ -10,7 +10,7 @@ router.post("/postmark", async (req: Request, res: Response) => {
     res.json(result);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[webhooks/postmark] Failed: ${message}`);
+    console.error(`[email-gateway] Failed: ${message}`);
     res.status(502).json({ error: message });
   }
 });
@@ -21,7 +21,7 @@ router.post("/instantly", async (req: Request, res: Response) => {
     res.json(result);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[webhooks/instantly] Failed: ${message}`);
+    console.error(`[email-gateway] Failed: ${message}`);
     res.status(502).json({ error: message });
   }
 });

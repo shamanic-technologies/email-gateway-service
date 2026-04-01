@@ -47,7 +47,6 @@ async function fetchJson<T>(url: string, apiKey: string, identityHeaders?: Ident
 export async function resolveWorkflowDynastySlugs(dynastySlug: string, identityHeaders?: IdentityHeaders): Promise<string[]> {
   const { url, apiKey } = config.workflow;
   const endpoint = `${url}/workflows/dynasty/slugs?dynastySlug=${encodeURIComponent(dynastySlug)}`;
-  console.log(`[email-gateway] Resolving workflow dynasty slug: ${dynastySlug}`);
   const result = await fetchJson<DynastySlugResponse>(endpoint, apiKey, identityHeaders);
   return result.slugs;
 }
@@ -55,7 +54,6 @@ export async function resolveWorkflowDynastySlugs(dynastySlug: string, identityH
 export async function resolveFeatureDynastySlugs(dynastySlug: string, identityHeaders?: IdentityHeaders): Promise<string[]> {
   const { url, apiKey } = config.features;
   const endpoint = `${url}/features/dynasty/slugs?dynastySlug=${encodeURIComponent(dynastySlug)}`;
-  console.log(`[email-gateway] Resolving feature dynasty slug: ${dynastySlug}`);
   const result = await fetchJson<DynastySlugResponse>(endpoint, apiKey, identityHeaders);
   return result.slugs;
 }
@@ -63,7 +61,6 @@ export async function resolveFeatureDynastySlugs(dynastySlug: string, identityHe
 export async function fetchWorkflowDynasties(identityHeaders?: IdentityHeaders): Promise<Dynasty[]> {
   const { url, apiKey } = config.workflow;
   const endpoint = `${url}/workflows/dynasties`;
-  console.log(`[email-gateway] Fetching all workflow dynasties`);
   const result = await fetchJson<DynastiesResponse>(endpoint, apiKey, identityHeaders);
   return result.dynasties;
 }
@@ -71,7 +68,6 @@ export async function fetchWorkflowDynasties(identityHeaders?: IdentityHeaders):
 export async function fetchFeatureDynasties(identityHeaders?: IdentityHeaders): Promise<Dynasty[]> {
   const { url, apiKey } = config.features;
   const endpoint = `${url}/features/dynasties`;
-  console.log(`[email-gateway] Fetching all feature dynasties`);
   const result = await fetchJson<DynastiesResponse>(endpoint, apiKey, identityHeaders);
   return result.dynasties;
 }

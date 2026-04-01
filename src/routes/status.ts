@@ -39,7 +39,7 @@ router.post("/status", async (req: Request, res: Response) => {
         broadcastMap.set(r.email, r);
       }
     } else {
-      console.warn(`[status] instantly-service error: ${broadcastResult.reason}`);
+      console.warn(`[email-gateway] instantly-service error: ${broadcastResult.reason}`);
     }
 
     const transactionalMap = new Map<string, postmarkClient.StatusResult>();
@@ -48,7 +48,7 @@ router.post("/status", async (req: Request, res: Response) => {
         transactionalMap.set(r.email, r);
       }
     } else {
-      console.warn(`[status] postmark-service error: ${transactionalResult.reason}`);
+      console.warn(`[email-gateway] postmark-service error: ${transactionalResult.reason}`);
     }
 
     if (broadcastResult.status === "rejected" && transactionalResult.status === "rejected") {
@@ -78,7 +78,7 @@ router.post("/status", async (req: Request, res: Response) => {
     res.json({ results });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    console.error(`[status] Failed: ${message}`);
+    console.error(`[email-gateway] Failed: ${message}`);
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
