@@ -170,19 +170,8 @@ export async function getStats(filters: {
   featureSlugs?: string[];
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  // Instantly-service accepts singular keys (featureSlug, workflowSlug) with
-  // comma-separated values — merge plural arrays into the singular key.
-  const { workflowSlugs, featureSlugs, ...rest } = filters;
-  const merged: Record<string, unknown> = { ...rest };
-  if (workflowSlugs?.length) {
-    merged.workflowSlug = [rest.workflowSlug, ...workflowSlugs].filter(Boolean).join(",");
-  }
-  if (featureSlugs?.length) {
-    merged.featureSlug = [rest.featureSlug, ...featureSlugs].filter(Boolean).join(",");
-  }
-
   const basePath = identityHeaders ? "/stats" : "/stats/public";
-  const path = basePath + buildStatsQuery(merged);
+  const path = basePath + buildStatsQuery(filters);
   return request<ProviderStatsResult>(path, { identityHeaders, trackingHeaders });
 }
 
