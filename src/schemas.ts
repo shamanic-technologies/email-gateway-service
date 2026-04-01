@@ -181,11 +181,14 @@ export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
 // --- POST /status ---
 
+export const ReplyClassificationSchema = z.enum(["positive", "negative", "neutral"]).openapi("ReplyClassification");
+
 const LeadStatusSchema = z
   .object({
     contacted: z.boolean().describe("Whether this lead has been contacted"),
     delivered: z.boolean().describe("Whether an email was delivered to this lead"),
     replied: z.boolean().describe("Whether this lead has replied"),
+    replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive (interested/willing to meet), negative (not interested), neutral (out of office/other), or null if no reply"),
     lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery"),
   })
   .openapi("LeadStatus");
