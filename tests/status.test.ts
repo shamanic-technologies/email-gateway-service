@@ -44,12 +44,12 @@ function buildStatusBody(overrides = {}) {
 }
 
 const emptyScope = {
-  lead: { contacted: false, delivered: false, replied: false, lastDeliveredAt: null },
+  lead: { contacted: false, delivered: false, replied: false, replyClassification: null, lastDeliveredAt: null },
   email: { contacted: false, delivered: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
 };
 
 const deliveredScope = {
-  lead: { contacted: true, delivered: true, replied: false, lastDeliveredAt: "2026-02-20T14:30:00Z" },
+  lead: { contacted: true, delivered: true, replied: false, replyClassification: null, lastDeliveredAt: "2026-02-20T14:30:00Z" },
   email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-02-20T14:30:00Z" },
 };
 
@@ -342,7 +342,7 @@ describe("POST /status", () => {
 
   it("includes brand scope in merged results", async () => {
     const brandDelivered = {
-      lead: { contacted: true, delivered: true, replied: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },
+      lead: { contacted: true, delivered: true, replied: true, replyClassification: "positive" as const, lastDeliveredAt: "2026-02-22T10:00:00Z" },
       email: { contacted: true, delivered: true, bounced: false, unsubscribed: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },
     };
 
@@ -381,6 +381,69 @@ describe("POST /status", () => {
       const body = JSON.parse(call[1].body);
       expect(body.brandIds).toEqual(["brand_a", "brand_b", "brand_c"]);
     }
+  });
+
+  it("passes through replyClassification from broadcast provider", async () => {
+    const repliedScope = {
+      lead: { contacted: true, delivered: true, replied: true, replyClassification: "positive", lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "lead_1", email: "john@acme.com", campaign: repliedScope, brand: repliedScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/status")
+      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.campaign.lead.replyClassification).toBe("positive");
+    expect(broadcast.brand.lead.replyClassification).toBe("positive");
+  });
+
+  it("passes through negative replyClassification", async () => {
+    const negativeScope = {
+      lead: { contacted: true, delivered: true, replied: true, replyClassification: "negative", lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "lead_1", email: "john@acme.com", campaign: negativeScope, brand: negativeScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/status")
+      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign.lead.replyClassification).toBe("negative");
+  });
+
+  it("returns null replyClassification when lead has not replied", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/status")
+      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign.lead.replyClassification).toBeNull();
   });
 
   it("accepts large payloads without 413 error", async () => {

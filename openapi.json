@@ -446,6 +446,16 @@
           }
         }
       },
+      "ReplyClassification": {
+        "type": "string",
+        "nullable": true,
+        "enum": [
+          "positive",
+          "negative",
+          "neutral"
+        ],
+        "description": "Classification of the most recent reply: positive (interested/willing to meet), negative (not interested), neutral (out of office/other), or null if no reply"
+      },
       "LeadStatus": {
         "type": "object",
         "properties": {
@@ -461,6 +471,9 @@
             "type": "boolean",
             "description": "Whether this lead has replied"
           },
+          "replyClassification": {
+            "$ref": "#/components/schemas/ReplyClassification"
+          },
           "lastDeliveredAt": {
             "type": "string",
             "nullable": true,
@@ -471,6 +484,7 @@
           "contacted",
           "delivered",
           "replied",
+          "replyClassification",
           "lastDeliveredAt"
         ],
         "description": "Status aggregated across all emails for this lead"
