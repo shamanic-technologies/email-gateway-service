@@ -87,8 +87,8 @@ function parseStatsInput(req: Request): { success: true; type?: string; filters:
   const { type, runIds, workflowSlugs, featureSlugs, ...rest } = parsed.data;
   const filters: Record<string, unknown> = { ...rest };
   if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());
-  if (workflowSlugs) filters.workflowSlugs = workflowSlugs.split(",").map((s) => s.trim());
-  if (featureSlugs) filters.featureSlugs = featureSlugs.split(",").map((s) => s.trim());
+  if (workflowSlugs) filters.workflowSlugs = workflowSlugs.split(",").map((s) => s.trim()).join(",");
+  if (featureSlugs) filters.featureSlugs = featureSlugs.split(",").map((s) => s.trim()).join(",");
   return { success: true, type, filters };
 }
 
@@ -101,8 +101,7 @@ async function resolveDynastyFilters(filters: Record<string, unknown>, identityH
   if (workflowDynastySlug) {
     const slugs = await dynastyClient.resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
     if (slugs.length === 0) return { __empty: true };
-    resolved.workflowSlugs = slugs;
-    delete resolved.workflowSlug;
+    resolved.workflowSlugs = slugs.join(",");
     delete resolved.workflowDynastySlug;
   }
 
@@ -111,8 +110,7 @@ async function resolveDynastyFilters(filters: Record<string, unknown>, identityH
   if (featureDynastySlug) {
     const slugs = await dynastyClient.resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
     if (slugs.length === 0) return { __empty: true };
-    resolved.featureSlugs = slugs;
-    delete resolved.featureSlug;
+    resolved.featureSlugs = slugs.join(",");
     delete resolved.featureDynastySlug;
   }
 
