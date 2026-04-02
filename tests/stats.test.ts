@@ -461,10 +461,10 @@ describe("GET /stats", () => {
   });
 
   describe("filters", () => {
-    it("passes workflowSlug as workflowSlugs to provider", async () => {
+    it("passes workflowSlugs to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&workflowSlug=welcome-flow");
+      await authedGet("/stats?type=transactional&workflowSlugs=welcome-flow");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("workflowSlugs")).toBe("welcome-flow");
@@ -952,10 +952,10 @@ describe("GET /stats", () => {
       expect(params.get("brandIds")).toBe("brand_1");
     });
 
-    it("passes featureSlug filter as featureSlugs to providers", async () => {
+    it("passes featureSlugs filter directly to providers", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&featureSlug=my-feature");
+      await authedGet("/stats?type=transactional&featureSlugs=my-feature");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("featureSlugs")).toBe("my-feature");

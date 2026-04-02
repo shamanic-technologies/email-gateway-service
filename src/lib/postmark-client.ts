@@ -123,23 +123,12 @@ export async function getStats(filters: {
   userId?: string;
   brandIds?: string;
   campaignId?: string;
-  workflowSlug?: string;
-  workflowSlugs?: string[];
-  featureSlug?: string;
-  featureSlugs?: string[];
+  workflowSlugs?: string;
+  featureSlugs?: string;
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  // Postmark-service expects plural keys (featureSlugs, workflowSlugs) with
-  // comma-separated values — merge singular into plural form.
-  const { workflowSlug, workflowSlugs, featureSlug, featureSlugs, ...rest } = filters;
-  const merged: Record<string, unknown> = { ...rest };
-  const wfParts = [workflowSlug, ...(workflowSlugs ?? [])].filter(Boolean);
-  if (wfParts.length) merged.workflowSlugs = wfParts.join(",");
-  const fsParts = [featureSlug, ...(featureSlugs ?? [])].filter(Boolean);
-  if (fsParts.length) merged.featureSlugs = fsParts.join(",");
-
   const basePath = identityHeaders ? "/stats" : "/stats/public";
-  const path = basePath + buildStatsQuery(merged);
+  const path = basePath + buildStatsQuery(filters);
   return request<ProviderStatsResult>(path, { identityHeaders, trackingHeaders });
 }
 
