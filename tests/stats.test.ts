@@ -461,13 +461,13 @@ describe("GET /stats", () => {
   });
 
   describe("filters", () => {
-    it("passes workflowSlug to provider", async () => {
+    it("passes workflowSlug as workflowSlugs to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
       await authedGet("/stats?type=transactional&workflowSlug=welcome-flow");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("workflowSlug")).toBe("welcome-flow");
+      expect(params.get("workflowSlugs")).toBe("welcome-flow");
     });
 
     it("passes brandIds to provider", async () => {
@@ -491,7 +491,7 @@ describe("GET /stats", () => {
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("workflowSlug")).toBe("wf1,wf2");
+        expect(params.get("workflowSlugs")).toBe("wf1,wf2");
       }
     });
 
@@ -501,7 +501,7 @@ describe("GET /stats", () => {
       await authedGet("/stats?type=transactional&groupBy=workflowSlug&workflowSlugs= wf1 , wf2 ");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("workflowSlug")).toBe("wf1,wf2");
+      expect(params.get("workflowSlugs")).toBe("wf1,wf2");
     });
 
     it("parses comma-separated featureSlugs and forwards to provider", async () => {
@@ -516,7 +516,7 @@ describe("GET /stats", () => {
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("featureSlug")).toBe("sales-cold-email,sales-cold-email-v2");
+        expect(params.get("featureSlugs")).toBe("sales-cold-email,sales-cold-email-v2");
       }
     });
 
@@ -526,7 +526,7 @@ describe("GET /stats", () => {
       await authedGet("/stats?type=transactional&groupBy=featureSlug&featureSlugs= f1 , f2 ");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("featureSlug")).toBe("f1,f2");
+      expect(params.get("featureSlugs")).toBe("f1,f2");
     });
 
     it("forwards featureSlugs on /stats/public without identity headers", async () => {
@@ -541,7 +541,7 @@ describe("GET /stats", () => {
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("featureSlug")).toBe("sales-cold-email,sales-cold-email-v2");
+        expect(params.get("featureSlugs")).toBe("sales-cold-email,sales-cold-email-v2");
       }
     });
 
@@ -848,7 +848,7 @@ describe("GET /stats", () => {
       );
       for (const call of providerCalls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("workflowSlug")).toBe("cold-email,cold-email-v2");
+        expect(params.get("workflowSlugs")).toBe("cold-email,cold-email-v2");
         expect(params.has("workflowDynastySlug")).toBe(false);
       }
     });
@@ -873,7 +873,7 @@ describe("GET /stats", () => {
       );
       for (const call of providerCalls) {
         const params = new URL(call[0]).searchParams;
-        expect(params.get("featureSlug")).toBe("feat-a,feat-a-v2");
+        expect(params.get("featureSlugs")).toBe("feat-a,feat-a-v2");
         expect(params.has("featureDynastySlug")).toBe(false);
       }
     });
@@ -948,17 +948,17 @@ describe("GET /stats", () => {
 
       expect(res.status).toBe(200);
       const params = new URL(mockFetch.mock.calls.find((c) => c[0].includes("3010"))![0]).searchParams;
-      expect(params.get("workflowSlug")).toBe("wf-1,wf-1-v2");
+      expect(params.get("workflowSlugs")).toBe("wf-1,wf-1-v2");
       expect(params.get("brandIds")).toBe("brand_1");
     });
 
-    it("passes featureSlug filter directly to providers", async () => {
+    it("passes featureSlug filter as featureSlugs to providers", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
       await authedGet("/stats?type=transactional&featureSlug=my-feature");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("featureSlug")).toBe("my-feature");
+      expect(params.get("featureSlugs")).toBe("my-feature");
     });
   });
 

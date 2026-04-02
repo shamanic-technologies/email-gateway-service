@@ -170,16 +170,14 @@ export async function getStats(filters: {
   featureSlugs?: string[];
   groupBy?: string;
 }, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  // Instantly-service accepts singular keys (featureSlug, workflowSlug) with
-  // comma-separated values — merge plural arrays into the singular key.
-  const { workflowSlugs, featureSlugs, ...rest } = filters;
+  // Instantly-service expects plural keys (featureSlugs, workflowSlugs) with
+  // comma-separated values — merge singular into plural form.
+  const { workflowSlug, workflowSlugs, featureSlug, featureSlugs, ...rest } = filters;
   const merged: Record<string, unknown> = { ...rest };
-  if (workflowSlugs?.length) {
-    merged.workflowSlug = [rest.workflowSlug, ...workflowSlugs].filter(Boolean).join(",");
-  }
-  if (featureSlugs?.length) {
-    merged.featureSlug = [rest.featureSlug, ...featureSlugs].filter(Boolean).join(",");
-  }
+  const wfParts = [workflowSlug, ...(workflowSlugs ?? [])].filter(Boolean);
+  if (wfParts.length) merged.workflowSlugs = wfParts.join(",");
+  const fsParts = [featureSlug, ...(featureSlugs ?? [])].filter(Boolean);
+  if (fsParts.length) merged.featureSlugs = fsParts.join(",");
 
   const basePath = identityHeaders ? "/stats" : "/stats/public";
   const path = basePath + buildStatsQuery(merged);
