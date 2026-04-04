@@ -133,8 +133,8 @@ export async function getStats(filters: {
 }
 
 export interface StatusScope {
-  lead: { contacted: boolean; delivered: boolean; replied: boolean; lastDeliveredAt: string | null };
-  email: { contacted: boolean; delivered: boolean; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null };
+  lead: { contacted: boolean; delivered: boolean; opened: boolean; replied: boolean; lastDeliveredAt: string | null };
+  email: { contacted: boolean; delivered: boolean; opened: boolean; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null };
 }
 
 export interface StatusResult {
