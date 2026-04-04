@@ -467,6 +467,10 @@
             "type": "boolean",
             "description": "Whether an email was delivered to this lead"
           },
+          "opened": {
+            "type": "boolean",
+            "description": "Whether this lead has opened any email we sent them"
+          },
           "replied": {
             "type": "boolean",
             "description": "Whether this lead has replied"
@@ -483,6 +487,7 @@
         "required": [
           "contacted",
           "delivered",
+          "opened",
           "replied",
           "replyClassification",
           "lastDeliveredAt"
@@ -499,6 +504,10 @@
           "delivered": {
             "type": "boolean",
             "description": "Whether an email was delivered to this address"
+          },
+          "opened": {
+            "type": "boolean",
+            "description": "Whether this email address has opened any email we sent"
           },
           "bounced": {
             "type": "boolean",
@@ -517,6 +526,7 @@
         "required": [
           "contacted",
           "delivered",
+          "opened",
           "bounced",
           "unsubscribed",
           "lastDeliveredAt"

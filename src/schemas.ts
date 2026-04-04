@@ -185,6 +185,7 @@ const LeadStatusSchema = z
   .object({
     contacted: z.boolean().describe("Whether this lead has been contacted"),
     delivered: z.boolean().describe("Whether an email was delivered to this lead"),
+    opened: z.boolean().describe("Whether this lead has opened any email we sent them"),
     replied: z.boolean().describe("Whether this lead has replied"),
     replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive (interested/willing to meet), negative (not interested), neutral (out of office/other), or null if no reply"),
     lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery"),
@@ -195,6 +196,7 @@ const EmailStatusSchema = z
   .object({
     contacted: z.boolean().describe("Whether this email address has been contacted"),
     delivered: z.boolean().describe("Whether an email was delivered to this address"),
+    opened: z.boolean().describe("Whether this email address has opened any email we sent"),
     bounced: z.boolean().describe("Whether an email to this address has bounced"),
     unsubscribed: z.boolean().describe("Whether this email address has unsubscribed"),
     lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery"),

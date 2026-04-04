@@ -44,13 +44,13 @@ function buildStatusBody(overrides = {}) {
 }
 
 const emptyScope = {
-  lead: { contacted: false, delivered: false, replied: false, replyClassification: null, lastDeliveredAt: null },
-  email: { contacted: false, delivered: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
+  lead: { contacted: false, delivered: false, opened: false, replied: false, replyClassification: null, lastDeliveredAt: null },
+  email: { contacted: false, delivered: false, opened: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
 };
 
 const deliveredScope = {
-  lead: { contacted: true, delivered: true, replied: false, replyClassification: null, lastDeliveredAt: "2026-02-20T14:30:00Z" },
-  email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-02-20T14:30:00Z" },
+  lead: { contacted: true, delivered: true, opened: false, replied: false, replyClassification: null, lastDeliveredAt: "2026-02-20T14:30:00Z" },
+  email: { contacted: true, delivered: true, opened: false, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-02-20T14:30:00Z" },
 };
 
 const emptyGlobal = { email: { bounced: false, unsubscribed: false } };
@@ -342,8 +342,8 @@ describe("POST /status", () => {
 
   it("includes brand scope in merged results", async () => {
     const brandDelivered = {
-      lead: { contacted: true, delivered: true, replied: true, replyClassification: "positive" as const, lastDeliveredAt: "2026-02-22T10:00:00Z" },
-      email: { contacted: true, delivered: true, bounced: false, unsubscribed: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },
+      lead: { contacted: true, delivered: true, opened: true, replied: true, replyClassification: "positive" as const, lastDeliveredAt: "2026-02-22T10:00:00Z" },
+      email: { contacted: true, delivered: true, opened: true, bounced: false, unsubscribed: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },
     };
 
     mockFetch.mockImplementation((url: string) => {
@@ -385,8 +385,8 @@ describe("POST /status", () => {
 
   it("passes through replyClassification from broadcast provider", async () => {
     const repliedScope = {
-      lead: { contacted: true, delivered: true, replied: true, replyClassification: "positive", lastDeliveredAt: "2026-03-01T10:00:00Z" },
-      email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      lead: { contacted: true, delivered: true, opened: true, replied: true, replyClassification: "positive", lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      email: { contacted: true, delivered: true, opened: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
     };
 
     mockFetch.mockImplementation((url: string) => {
@@ -409,8 +409,8 @@ describe("POST /status", () => {
 
   it("passes through negative replyClassification", async () => {
     const negativeScope = {
-      lead: { contacted: true, delivered: true, replied: true, replyClassification: "negative", lastDeliveredAt: "2026-03-01T10:00:00Z" },
-      email: { contacted: true, delivered: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      lead: { contacted: true, delivered: true, opened: false, replied: true, replyClassification: "negative", lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      email: { contacted: true, delivered: true, opened: false, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
     };
 
     mockFetch.mockImplementation((url: string) => {
@@ -444,6 +444,32 @@ describe("POST /status", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.results[0].broadcast.campaign.lead.replyClassification).toBeNull();
+  });
+
+  it("passes through opened field from broadcast provider", async () => {
+    const openedScope = {
+      lead: { contacted: true, delivered: true, opened: true, replied: false, replyClassification: null, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      email: { contacted: true, delivered: true, opened: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "lead_1", email: "john@acme.com", campaign: openedScope, brand: openedScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/status")
+      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.campaign.lead.opened).toBe(true);
+    expect(broadcast.campaign.email.opened).toBe(true);
+    expect(broadcast.brand.lead.opened).toBe(true);
+    expect(broadcast.brand.email.opened).toBe(true);
   });
 
   it("accepts large payloads without 413 error", async () => {
