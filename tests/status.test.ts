@@ -239,7 +239,7 @@ describe("POST /orgs/status", () => {
     }
   });
 
-  it("forwards brandIds (from header) and campaignId to both sub-services", async () => {
+  it("forwards campaignId and items (not brandIds) in body to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
@@ -255,7 +255,7 @@ describe("POST /orgs/status", () => {
     }));
 
     for (const call of calls) {
-      expect(call.body.brandIds).toEqual(["brand_1"]);
+      expect(call.body.brandIds).toBeUndefined();
       expect(call.body.campaignId).toBe("camp_1");
       expect(call.body.items).toHaveLength(2);
       expect(call.body.items[0]).toEqual({ leadId: "lead_1", email: "john@acme.com" });
@@ -397,7 +397,7 @@ describe("POST /orgs/status", () => {
     expect(broadcast.global.email.unsubscribed).toBe(true);
   });
 
-  it("forwards multiple brandIds from CSV header to both sub-services", async () => {
+  it("forwards x-brand-id header (not body) to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
@@ -410,8 +410,10 @@ describe("POST /orgs/status", () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     for (const call of mockFetch.mock.calls) {
+      const headers = call[1].headers;
+      expect(headers["x-brand-id"]).toBe("brand_a,brand_b,brand_c");
       const body = JSON.parse(call[1].body);
-      expect(body.brandIds).toEqual(["brand_a", "brand_b", "brand_c"]);
+      expect(body.brandIds).toBeUndefined();
     }
   });
 

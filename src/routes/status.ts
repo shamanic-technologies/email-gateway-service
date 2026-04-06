@@ -16,13 +16,8 @@ router.post("/status", async (req: Request, res: Response) => {
   const { campaignId, items } = parsed.data;
   const ctx = res.locals.orgContext as OrgContext;
 
-  const { brandIds } = ctx;
-
-  const payload = {
-    ...(brandIds.length > 0 ? { brandIds } : {}),
-    campaignId,
-    items,
-  };
+  // brandIds are forwarded via x-brand-id header by buildServiceHeaders — no need in body
+  const payload = { campaignId, items };
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
