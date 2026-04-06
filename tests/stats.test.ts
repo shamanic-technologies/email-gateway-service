@@ -276,7 +276,7 @@ describe("GET /orgs/stats", () => {
 
       const [fetchUrl] = mockFetch.mock.calls[0];
       const params = new URL(fetchUrl).searchParams;
-      expect(fetchUrl).toContain("http://localhost:3011/stats?");
+      expect(fetchUrl).toContain("http://localhost:3011/orgs/stats?");
       expect(params.get("orgId")).toBe("org_1");
       expect(params.get("userId")).toBe("user_1");
       expect(params.has("type")).toBe(false);
@@ -1146,7 +1146,7 @@ describe("GET /public/stats", () => {
     await serviceAuthGet("/public/stats?type=broadcast");
 
     const [fetchUrl, options] = mockFetch.mock.calls[0];
-    expect(fetchUrl).toContain("http://localhost:3011/stats/public");
+    expect(fetchUrl).toContain("http://localhost:3011/public/stats");
     const headers = options.headers;
     expect(headers["x-org-id"]).toBeUndefined();
     expect(headers["x-user-id"]).toBeUndefined();
@@ -1193,8 +1193,8 @@ describe("GET /public/stats", () => {
       .set("x-run-id", "run_pub");
 
     const [fetchUrl, options] = mockFetch.mock.calls[0];
-    expect(fetchUrl).toContain("http://localhost:3011/stats?");
-    expect(fetchUrl).not.toContain("/stats/public");
+    expect(fetchUrl).toContain("http://localhost:3011/orgs/stats?");
+    expect(fetchUrl).not.toContain("/public/stats");
     expect(options.headers["x-org-id"]).toBe("org_pub");
     expect(options.headers["x-user-id"]).toBe("user_pub");
     expect(options.headers["x-run-id"]).toBe("run_pub");

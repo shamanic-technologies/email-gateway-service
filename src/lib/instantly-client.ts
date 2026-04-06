@@ -58,13 +58,7 @@ export interface AtomicSendResponse {
 }
 
 export async function atomicSend(body: {
-  orgId?: string;
-  userId?: string;
-  brandIds?: string[];
   leadId?: string;
-  runId?: string;
-  workflowSlug?: string;
-  campaignId?: string;
   to: string;
   firstName?: string;
   lastName?: string;
@@ -78,7 +72,7 @@ export async function atomicSend(body: {
     daysSinceLastStep: number;
   }>;
 }, ctx?: OrgContext) {
-  return request<AtomicSendResponse>("/send", { method: "POST", body, ctx });
+  return request<AtomicSendResponse>("/orgs/send", { method: "POST", body, ctx });
 }
 
 export interface ProviderStatsPayload {
@@ -145,7 +139,7 @@ export async function getStats(filters: {
   featureSlugs?: string;
   groupBy?: string;
 }, ctx?: OrgContext) {
-  const basePath = ctx?.orgId ? "/stats" : "/stats/public";
+  const basePath = ctx?.orgId ? "/orgs/stats" : "/public/stats";
   const path = basePath + buildStatsQuery(filters);
   return request<ProviderStatsResult>(path, { ctx });
 }
@@ -167,7 +161,7 @@ export async function getStatus(body: {
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
 }, ctx?: OrgContext) {
-  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, ctx });
+  return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx });
 }
 
 export async function forwardWebhook(body: unknown) {
