@@ -213,7 +213,7 @@ const ProviderStatusSchema = z
 
 const StatusResultSchema = z
   .object({
-    leadIds: z.array(z.string()).describe("All lead IDs found in the database for this email"),
+    leadId: z.string().nullable().describe("Lead ID found in the database for this email, or null if none"),
     email: z.string().describe("Recipient email address"),
     broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly)"),
     transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark)"),

@@ -140,7 +140,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["l1"], email: "john@acme.com", campaign: null, brand: null, global: emptyGlobal },
+          { leadId: "l1", email: "john@acme.com", campaign: null, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -215,13 +215,13 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
-          { leadIds: ["lead_2"], email: "jane@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { leadId: "lead_2", email: "jane@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       return Promise.reject(new Error("unexpected url"));
@@ -233,7 +233,7 @@ describe("POST /orgs/status", () => {
     expect(res.body.results).toHaveLength(2);
 
     const first = res.body.results[0];
-    expect(first.leadIds).toEqual(["lead_1"]);
+    expect(first.leadId).toBe("lead_1");
     expect(first.email).toBe("john@acme.com");
     expect(first.broadcast).toBeDefined();
     expect(first.broadcast.campaign.delivered).toBe(true);
@@ -242,21 +242,21 @@ describe("POST /orgs/status", () => {
     expect(first.transactional).toBeDefined();
 
     const second = res.body.results[1];
-    expect(second.leadIds).toEqual(["lead_2"]);
+    expect(second.leadId).toBe("lead_2");
     expect(second.broadcast).toBeDefined();
     expect(second.transactional).toBeUndefined();
   });
 
-  it("merges leadIds from both providers (deduplicated)", async () => {
+  it("picks broadcast leadId when both providers return one", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1", "lead_2"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadId: "lead_broadcast", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_2", "lead_3"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadId: "lead_transactional", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       return Promise.reject(new Error("unexpected url"));
@@ -266,7 +266,29 @@ describe("POST /orgs/status", () => {
       .send(buildStatusBody({ items: [{ email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
-    expect(res.body.results[0].leadIds).toEqual(["lead_1", "lead_2", "lead_3"]);
+    expect(res.body.results[0].leadId).toBe("lead_broadcast");
+  });
+
+  it("falls back to transactional leadId when broadcast has null", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: null, email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+        ]));
+      }
+      if (url.includes("3010")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "lead_transactional", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.reject(new Error("unexpected url"));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send(buildStatusBody({ items: [{ email: "john@acme.com" }] }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].leadId).toBe("lead_transactional");
   });
 
   it("forwards identity headers to both sub-services when present", async () => {
@@ -321,7 +343,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: null, brand: deliveredScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: null, brand: deliveredScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -339,7 +361,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockServiceError());
@@ -357,7 +379,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockServiceError());
@@ -438,7 +460,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: brandDelivered, global: { email: { bounced: false, unsubscribed: true } } },
+          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: brandDelivered, global: { email: { bounced: false, unsubscribed: true } } },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -489,7 +511,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: repliedScope, brand: repliedScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: repliedScope, brand: repliedScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -519,7 +541,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: negativeScope, brand: negativeScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: negativeScope, brand: negativeScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -536,7 +558,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -564,7 +586,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadIds: ["lead_1"], email: "john@acme.com", campaign: openedScope, brand: openedScope, global: emptyGlobal },
+          { leadId: "lead_1", email: "john@acme.com", campaign: openedScope, brand: openedScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -596,7 +618,7 @@ describe("POST /orgs/status", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns empty leadIds when no provider has data for an email", async () => {
+  it("returns null leadId when no provider has data for an email", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
@@ -606,7 +628,7 @@ describe("POST /orgs/status", () => {
       .send({ items: [{ email: "nobody@acme.com" }] });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[0].leadIds).toEqual([]);
+    expect(res.body.results[0].leadId).toBeNull();
     expect(res.body.results[0].email).toBe("nobody@acme.com");
     expect(res.body.results[0].broadcast).toBeUndefined();
     expect(res.body.results[0].transactional).toBeUndefined();
