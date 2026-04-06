@@ -225,7 +225,7 @@ describe("GET /orgs/stats", () => {
 
       const [fetchUrl] = mockFetch.mock.calls[0];
       const params = new URL(fetchUrl).searchParams;
-      expect(fetchUrl).toContain("http://localhost:3010/stats?");
+      expect(fetchUrl).toContain("http://localhost:3010/orgs/stats?");
       expect(params.get("orgId")).toBe("org_1");
       expect(params.get("userId")).toBe("user_1");
       expect(params.get("campaignId")).toBe("camp_1");
@@ -1159,7 +1159,7 @@ describe("GET /public/stats", () => {
     await serviceAuthGet("/public/stats?type=transactional&brandIds=brand_1");
 
     const [fetchUrl] = mockFetch.mock.calls[0];
-    expect(fetchUrl).toContain("http://localhost:3010/stats/public");
+    expect(fetchUrl).toContain("http://localhost:3010/internal/stats");
     const params = new URL(fetchUrl).searchParams;
     expect(params.has("orgId")).toBe(false);
     expect(params.has("userId")).toBe(false);

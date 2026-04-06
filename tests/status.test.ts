@@ -263,7 +263,7 @@ describe("POST /orgs/status", () => {
 
     const urls = calls.map((c) => c.url);
     expect(urls).toContain("http://localhost:3011/status");
-    expect(urls).toContain("http://localhost:3010/status");
+    expect(urls).toContain("http://localhost:3010/orgs/status");
   });
 
   it("works without campaignId (optional)", async () => {
