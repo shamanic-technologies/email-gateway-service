@@ -589,7 +589,7 @@
                 "$ref": "#/components/schemas/StatusScope"
               },
               {
-                "description": "Status scoped to the given brand"
+                "description": "Status scoped to the given brand (null if no x-brand-id header provided)"
               }
             ]
           },

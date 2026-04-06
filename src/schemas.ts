@@ -222,7 +222,7 @@ const GlobalStatusSchema = z
 const ProviderStatusSchema = z
   .object({
     campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (null if no campaignId provided)"),
-    brand: StatusScopeSchema.describe("Status scoped to the given brand"),
+    brand: StatusScopeSchema.nullable().describe("Status scoped to the given brand (null if no x-brand-id header provided)"),
     global: GlobalStatusSchema.describe("Global signals across all brands and campaigns"),
   })
   .openapi("ProviderStatus");

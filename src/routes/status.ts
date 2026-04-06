@@ -17,12 +17,12 @@ router.post("/status", async (req: Request, res: Response) => {
   const ctx = res.locals.orgContext as OrgContext;
 
   const { brandIds } = ctx;
-  if (brandIds.length === 0) {
-    res.status(400).json({ error: "Missing required header: x-brand-id" });
-    return;
-  }
 
-  const payload = { brandIds, campaignId, items };
+  const payload = {
+    ...(brandIds.length > 0 ? { brandIds } : {}),
+    campaignId,
+    items,
+  };
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([

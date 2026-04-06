@@ -124,15 +124,41 @@ describe("POST /orgs/status", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns 400 for missing x-brand-id header", async () => {
+  it("works without x-brand-id header (optional, brand scope is null)", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadId: "l1", email: "john@acme.com", campaign: null, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
     const res = await request(app)
       .post("/orgs/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
       .send({ items: [{ leadId: "l1", email: "john@acme.com" }] });
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain("x-brand-id");
+    expect(res.status).toBe(200);
+  });
+
+  it("does not send brandIds to sub-services when x-brand-id is absent", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await request(app)
+      .post("/orgs/status")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1")
+      .send({ items: [{ leadId: "l1", email: "john@acme.com" }] });
+
+    for (const call of mockFetch.mock.calls) {
+      const body = JSON.parse(call[1].body);
+      expect(body.brandIds).toBeUndefined();
+    }
   });
 
   it("returns 400 for empty items array", async () => {
