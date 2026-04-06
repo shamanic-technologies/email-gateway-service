@@ -1,42 +1,19 @@
 import { config } from "../config";
+import { buildServiceHeaders } from "./service-headers";
+import type { OrgContext } from "../middleware/requireOrgId";
 
 const { url, apiKey } = config.instantly;
 
 const TIMEOUT_MS = 10_000;
 const RETRY_DELAY_MS = 500;
 
-interface IdentityHeaders {
-  orgId: string;
-  userId: string;
-  runId: string;
-}
-
-interface TrackingHeaders {
-  campaignId?: string;
-  brandId?: string;
-  workflowSlug?: string;
-  featureSlug?: string;
-}
-
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; identityHeaders?: IdentityHeaders; trackingHeaders?: TrackingHeaders } = {}
+  options: { method?: string; body?: unknown; ctx?: OrgContext } = {}
 ): Promise<T> {
-  const { method = "GET", body, identityHeaders, trackingHeaders } = options;
+  const { method = "GET", body, ctx } = options;
   const fullUrl = `${url}${path}`;
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "X-API-Key": apiKey,
-    ...(identityHeaders && {
-      "x-org-id": identityHeaders.orgId,
-      "x-user-id": identityHeaders.userId,
-      "x-run-id": identityHeaders.runId,
-    }),
-    ...(trackingHeaders?.campaignId && { "x-campaign-id": trackingHeaders.campaignId }),
-    ...(trackingHeaders?.brandId && { "x-brand-id": trackingHeaders.brandId }),
-    ...(trackingHeaders?.workflowSlug && { "x-workflow-slug": trackingHeaders.workflowSlug }),
-    ...(trackingHeaders?.featureSlug && { "x-feature-slug": trackingHeaders.featureSlug }),
-  };
+  const headers = buildServiceHeaders(apiKey, ctx);
   const jsonBody = body ? JSON.stringify(body) : undefined;
 
   let lastError: Error | undefined;
@@ -100,8 +77,8 @@ export async function atomicSend(body: {
     bodyText?: string;
     daysSinceLastStep: number;
   }>;
-}, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  return request<AtomicSendResponse>("/send", { method: "POST", body, identityHeaders, trackingHeaders });
+}, ctx?: OrgContext) {
+  return request<AtomicSendResponse>("/send", { method: "POST", body, ctx });
 }
 
 export interface ProviderStatsPayload {
@@ -167,10 +144,10 @@ export async function getStats(filters: {
   workflowSlugs?: string;
   featureSlugs?: string;
   groupBy?: string;
-}, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  const basePath = identityHeaders ? "/stats" : "/stats/public";
+}, ctx?: OrgContext) {
+  const basePath = ctx?.orgId ? "/stats" : "/stats/public";
   const path = basePath + buildStatsQuery(filters);
-  return request<ProviderStatsResult>(path, { identityHeaders, trackingHeaders });
+  return request<ProviderStatsResult>(path, { ctx });
 }
 
 export interface StatusScope {
@@ -190,8 +167,8 @@ export async function getStatus(body: {
   brandIds: string[];
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
-}, identityHeaders?: IdentityHeaders, trackingHeaders?: TrackingHeaders) {
-  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, identityHeaders, trackingHeaders });
+}, ctx?: OrgContext) {
+  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, ctx });
 }
 
 export async function forwardWebhook(body: unknown) {

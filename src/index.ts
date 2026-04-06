@@ -1,8 +1,8 @@
 import express from "express";
 import cors from "cors";
 import { config } from "./config";
-import { serviceAuth } from "./middleware/serviceAuth";
-import { requireIdentityHeaders } from "./middleware/identityHeaders";
+import { apiKeyAuth } from "./middleware/apiKeyAuth";
+import { requireOrgId } from "./middleware/requireOrgId";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
@@ -19,18 +19,18 @@ app.use(express.json({ limit: "10mb" }));
 app.use(healthRoutes);
 app.use("/webhooks", webhooksRoutes);
 
-// Service-auth only (no identity headers required)
-app.use(serviceAuth, publicStatsRouter);
+// Public routes with apiKeyAuth only (no identity headers required)
+app.use("/public", apiKeyAuth, publicStatsRouter);
 
-// Protected routes (require X-API-Key + identity headers)
-app.use(serviceAuth, requireIdentityHeaders, sendRoutes);
-app.use(serviceAuth, requireIdentityHeaders, statusRoutes);
-app.use(serviceAuth, requireIdentityHeaders, statsRoutes);
+// Org-scoped routes (apiKeyAuth + requireOrgId)
+app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
+app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes);
+app.use("/orgs", apiKeyAuth, requireOrgId, statsRoutes);
 
 app.listen(config.port, () => {
-  console.log(`email-gateway running on port ${config.port}`);
+  console.log(`[email-gateway] running on port ${config.port}`);
   registerProviderRequirements().catch((err) => {
-    console.error("Provider registration failed:", err.message);
+    console.error("[email-gateway] Provider registration failed:", err.message);
     process.exit(1);
   });
 });
