@@ -454,34 +454,43 @@
           "negative",
           "neutral"
         ],
-        "description": "Classification of the most recent reply: positive (interested/willing to meet), negative (not interested), neutral (out of office/other), or null if no reply"
+        "description": "Classification of the most recent reply: positive, negative, neutral, or null if no reply"
       },
-      "LeadStatus": {
+      "StatusScope": {
         "type": "object",
+        "nullable": true,
         "properties": {
           "contacted": {
             "type": "boolean",
-            "description": "Whether this lead has been contacted"
+            "description": "Whether this email has been contacted in this scope"
           },
           "delivered": {
             "type": "boolean",
-            "description": "Whether an email was delivered to this lead"
+            "description": "Whether an email was delivered in this scope"
           },
           "opened": {
             "type": "boolean",
-            "description": "Whether this lead has opened any email we sent them"
+            "description": "Whether the recipient opened any email in this scope"
           },
           "replied": {
             "type": "boolean",
-            "description": "Whether this lead has replied"
+            "description": "Whether the recipient replied in this scope"
           },
           "replyClassification": {
             "$ref": "#/components/schemas/ReplyClassification"
           },
+          "bounced": {
+            "type": "boolean",
+            "description": "Whether an email bounced in this scope"
+          },
+          "unsubscribed": {
+            "type": "boolean",
+            "description": "Whether the recipient unsubscribed in this scope"
+          },
           "lastDeliveredAt": {
             "type": "string",
             "nullable": true,
-            "description": "ISO timestamp of last delivery"
+            "description": "ISO timestamp of last delivery in this scope"
           }
         },
         "required": [
@@ -490,63 +499,9 @@
           "opened",
           "replied",
           "replyClassification",
-          "lastDeliveredAt"
-        ],
-        "description": "Status aggregated across all emails for this lead"
-      },
-      "EmailStatus": {
-        "type": "object",
-        "properties": {
-          "contacted": {
-            "type": "boolean",
-            "description": "Whether this email address has been contacted"
-          },
-          "delivered": {
-            "type": "boolean",
-            "description": "Whether an email was delivered to this address"
-          },
-          "opened": {
-            "type": "boolean",
-            "description": "Whether this email address has opened any email we sent"
-          },
-          "bounced": {
-            "type": "boolean",
-            "description": "Whether an email to this address has bounced"
-          },
-          "unsubscribed": {
-            "type": "boolean",
-            "description": "Whether this email address has unsubscribed"
-          },
-          "lastDeliveredAt": {
-            "type": "string",
-            "nullable": true,
-            "description": "ISO timestamp of last delivery"
-          }
-        },
-        "required": [
-          "contacted",
-          "delivered",
-          "opened",
           "bounced",
           "unsubscribed",
           "lastDeliveredAt"
-        ],
-        "description": "Status for this specific email address"
-      },
-      "StatusScope": {
-        "type": "object",
-        "nullable": true,
-        "properties": {
-          "lead": {
-            "$ref": "#/components/schemas/LeadStatus"
-          },
-          "email": {
-            "$ref": "#/components/schemas/EmailStatus"
-          }
-        },
-        "required": [
-          "lead",
-          "email"
         ],
         "description": "Status scoped to the given campaign (null if no campaignId provided)"
       },
@@ -607,9 +562,12 @@
       "StatusResult": {
         "type": "object",
         "properties": {
-          "leadId": {
-            "type": "string",
-            "description": "Lead ID from lead-service"
+          "leadIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "All lead IDs found in the database for this email"
           },
           "email": {
             "type": "string",
@@ -630,7 +588,7 @@
           }
         },
         "required": [
-          "leadId",
+          "leadIds",
           "email"
         ]
       },
@@ -663,7 +621,7 @@
               "properties": {
                 "leadId": {
                   "type": "string",
-                  "description": "Lead ID from lead-service"
+                  "description": "Lead ID from lead-service (optional — email is the primary lookup key)"
                 },
                 "email": {
                   "type": "string",
@@ -672,7 +630,6 @@
                 }
               },
               "required": [
-                "leadId",
                 "email"
               ]
             },
