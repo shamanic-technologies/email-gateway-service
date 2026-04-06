@@ -142,51 +142,52 @@ function mockGroupedInstantly(groups: Array<{ key: string; overrides?: Record<st
   };
 }
 
-describe("GET /stats", () => {
+describe("GET /orgs/stats", () => {
   beforeEach(() => {
     mockFetch.mockReset();
   });
 
   it("returns 401 without API key", async () => {
-    const res = await request(app).get("/stats");
+    const res = await request(app).get("/orgs/stats");
     expect(res.status).toBe(401);
   });
 
   it("returns 400 when x-org-id header is missing", async () => {
     const res = await request(app)
-      .get("/stats")
-      .set("X-API-Key", API_KEY)
-      .set("x-user-id", "user_1")
-      .set("x-run-id", "run_1");
+      .get("/orgs/stats")
+      .set("X-API-Key", API_KEY);
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("x-org-id");
   });
 
-  it("returns 400 when x-user-id header is missing", async () => {
-    const res = await request(app)
-      .get("/stats")
-      .set("X-API-Key", API_KEY)
-      .set("x-org-id", "org_1")
-      .set("x-run-id", "run_1");
+  it("works without x-user-id header (optional)", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain("x-user-id");
+    const res = await request(app)
+      .get("/orgs/stats")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1");
+
+    expect(res.status).toBe(200);
   });
 
-  it("returns 400 when x-run-id header is missing", async () => {
+  it("works without x-run-id header (optional)", async () => {
+    mockFetch.mockResolvedValueOnce(mockPostmarkStats());
+    mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
     const res = await request(app)
-      .get("/stats")
+      .get("/orgs/stats")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
       .set("x-user-id", "user_1");
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain("x-run-id");
+    expect(res.status).toBe(200);
   });
 
   it("returns 400 for invalid type query param", async () => {
-    const res = await authedGet("/stats?type=invalid");
+    const res = await authedGet("/orgs/stats?type=invalid");
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid request");
@@ -196,7 +197,7 @@ describe("GET /stats", () => {
     it("returns normalized transactional stats from Postmark", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      const res = await authedGet("/stats?type=transactional");
+      const res = await authedGet("/orgs/stats?type=transactional");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional).toEqual({
@@ -220,7 +221,7 @@ describe("GET /stats", () => {
     it("passes filters to Postmark (orgId/userId from headers)", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&campaignId=camp_1");
+      await authedGet("/orgs/stats?type=transactional&campaignId=camp_1");
 
       const [fetchUrl] = mockFetch.mock.calls[0];
       const params = new URL(fetchUrl).searchParams;
@@ -234,7 +235,7 @@ describe("GET /stats", () => {
     it("forwards identity headers to postmark-service", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional");
+      await authedGet("/orgs/stats?type=transactional");
 
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-org-id"]).toBe("org_1");
@@ -247,7 +248,7 @@ describe("GET /stats", () => {
     it("returns normalized broadcast stats from Instantly", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast).toEqual({
@@ -271,7 +272,7 @@ describe("GET /stats", () => {
     it("passes filters to Instantly (orgId/userId from headers)", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      await authedGet("/stats?type=broadcast");
+      await authedGet("/orgs/stats?type=broadcast");
 
       const [fetchUrl] = mockFetch.mock.calls[0];
       const params = new URL(fetchUrl).searchParams;
@@ -284,7 +285,7 @@ describe("GET /stats", () => {
     it("forwards identity headers to instantly-service", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      await authedGet("/stats?type=broadcast");
+      await authedGet("/orgs/stats?type=broadcast");
 
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-org-id"]).toBe("org_1");
@@ -301,7 +302,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats");
+      const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -320,7 +321,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats");
+      const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -339,7 +340,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats");
+      const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.error).toBeDefined();
@@ -363,7 +364,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats");
+      const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.error).toBeDefined();
@@ -375,7 +376,7 @@ describe("GET /stats", () => {
     it("uses recipients field when available (Instantly)", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.body.broadcast.recipients).toBe(75);
     });
@@ -397,7 +398,7 @@ describe("GET /stats", () => {
           }),
       });
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.emailsContacted).toBe(0);
@@ -407,7 +408,7 @@ describe("GET /stats", () => {
     it("falls back to emailsSent for recipients when field is missing (Postmark)", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      const res = await authedGet("/stats?type=transactional");
+      const res = await authedGet("/orgs/stats?type=transactional");
 
       expect(res.body.transactional.recipients).toBe(100);
     });
@@ -415,7 +416,7 @@ describe("GET /stats", () => {
     it("defaults missing reply subtypes to 0", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.body.broadcast.repliesWillingToMeet).toBe(0);
       expect(res.body.broadcast.repliesInterested).toBe(0);
@@ -432,7 +433,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      await authedGet("/stats")
+      await authedGet("/orgs/stats")
         .set("x-campaign-id", "camp_hdr")
         .set("x-brand-id", "brand_hdr")
         .set("x-workflow-slug", "wf_hdr")
@@ -450,7 +451,7 @@ describe("GET /stats", () => {
     it("works without tracking headers (no breakage)", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional");
+      await authedGet("/orgs/stats?type=transactional");
 
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-campaign-id"]).toBeUndefined();
@@ -464,7 +465,7 @@ describe("GET /stats", () => {
     it("passes workflowSlugs to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&workflowSlugs=welcome-flow");
+      await authedGet("/orgs/stats?type=transactional&workflowSlugs=welcome-flow");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("workflowSlugs")).toBe("welcome-flow");
@@ -473,7 +474,7 @@ describe("GET /stats", () => {
     it("passes brandIds to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&brandIds=brand_1");
+      await authedGet("/orgs/stats?type=transactional&brandIds=brand_1");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("brandIds")).toBe("brand_1");
@@ -486,7 +487,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?groupBy=workflowSlug&workflowSlugs=wf1,wf2");
+      const res = await authedGet("/orgs/stats?groupBy=workflowSlug&workflowSlugs=wf1,wf2");
 
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
@@ -498,7 +499,7 @@ describe("GET /stats", () => {
     it("trims whitespace in workflowSlugs", async () => {
       mockFetch.mockResolvedValueOnce(mockGroupedPostmark([{ key: "wf1" }]));
 
-      await authedGet("/stats?type=transactional&groupBy=workflowSlug&workflowSlugs= wf1 , wf2 ");
+      await authedGet("/orgs/stats?type=transactional&groupBy=workflowSlug&workflowSlugs= wf1 , wf2 ");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("workflowSlugs")).toBe("wf1,wf2");
@@ -511,7 +512,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?groupBy=featureSlug&featureSlugs=sales-cold-email,sales-cold-email-v2");
+      const res = await authedGet("/orgs/stats?groupBy=featureSlug&featureSlugs=sales-cold-email,sales-cold-email-v2");
 
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
@@ -523,20 +524,20 @@ describe("GET /stats", () => {
     it("trims whitespace in featureSlugs", async () => {
       mockFetch.mockResolvedValueOnce(mockGroupedPostmark([{ key: "f1" }]));
 
-      await authedGet("/stats?type=transactional&groupBy=featureSlug&featureSlugs= f1 , f2 ");
+      await authedGet("/orgs/stats?type=transactional&groupBy=featureSlug&featureSlugs= f1 , f2 ");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("featureSlugs")).toBe("f1,f2");
     });
 
-    it("forwards featureSlugs on /stats/public without identity headers", async () => {
+    it("forwards featureSlugs on /public/stats without identity headers", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
         if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await serviceAuthGet("/stats/public?featureSlugs=sales-cold-email,sales-cold-email-v2&groupBy=workflowSlug");
+      const res = await serviceAuthGet("/public/stats?featureSlugs=sales-cold-email,sales-cold-email-v2&groupBy=workflowSlug");
 
       expect(res.status).toBe(200);
       for (const call of mockFetch.mock.calls) {
@@ -548,7 +549,7 @@ describe("GET /stats", () => {
     it("parses comma-separated runIds and forwards to provider", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&runIds=run_a,run_b,run_c");
+      await authedGet("/orgs/stats?type=transactional&runIds=run_a,run_b,run_c");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("runIds")).toBe("run_a,run_b,run_c");
@@ -564,7 +565,7 @@ describe("GET /stats", () => {
         ])
       );
 
-      const res = await authedGet("/stats?type=broadcast&groupBy=brandId");
+      const res = await authedGet("/orgs/stats?type=broadcast&groupBy=brandId");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
@@ -583,7 +584,7 @@ describe("GET /stats", () => {
         ])
       );
 
-      const res = await authedGet("/stats?type=transactional&groupBy=campaignId");
+      const res = await authedGet("/orgs/stats?type=transactional&groupBy=campaignId");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
@@ -611,7 +612,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?groupBy=brandId");
+      const res = await authedGet("/orgs/stats?groupBy=brandId");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(3);
@@ -640,7 +641,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      await authedGet("/stats?groupBy=workflowSlug");
+      await authedGet("/orgs/stats?groupBy=workflowSlug");
 
       for (const call of mockFetch.mock.calls) {
         const params = new URL(call[0]).searchParams;
@@ -663,7 +664,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?groupBy=brandId");
+      const res = await authedGet("/orgs/stats?groupBy=brandId");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
@@ -677,7 +678,7 @@ describe("GET /stats", () => {
         mockGroupedInstantly([{ key: "lead@example.com", recipients: 1 }])
       );
 
-      const res = await authedGet("/stats?type=broadcast&groupBy=leadEmail");
+      const res = await authedGet("/orgs/stats?type=broadcast&groupBy=leadEmail");
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];
@@ -703,7 +704,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?groupBy=brandId");
+      const res = await authedGet("/orgs/stats?groupBy=brandId");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toEqual([]);
@@ -722,7 +723,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.emailsSent).toBe(80);
@@ -732,7 +733,7 @@ describe("GET /stats", () => {
     it("includes URL in error after retries exhausted", async () => {
       mockFetch.mockRejectedValue(new Error("fetch failed"));
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(502);
       expect(res.body.details).toContain("fetch failed");
@@ -752,7 +753,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(502);
       expect(callCount).toBe(1);
@@ -771,7 +772,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats");
+      const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -788,7 +789,7 @@ describe("GET /stats", () => {
       ];
       mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, steps));
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.stepStats).toEqual(steps);
@@ -798,7 +799,7 @@ describe("GET /stats", () => {
     it("omits stepStats when not present in provider response", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-      const res = await authedGet("/stats?type=broadcast");
+      const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.stepStats).toBeUndefined();
@@ -815,7 +816,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error("Unexpected URL"));
       });
 
-      const res = await authedGet("/stats");
+      const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.stepStats).toBeUndefined();
@@ -836,7 +837,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?workflowDynastySlug=cold-email");
+      const res = await authedGet("/orgs/stats?workflowDynastySlug=cold-email");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(100);
@@ -865,7 +866,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?featureDynastySlug=feat-a");
+      const res = await authedGet("/orgs/stats?featureDynastySlug=feat-a");
 
       expect(res.status).toBe(200);
       const providerCalls = mockFetch.mock.calls.filter(
@@ -888,7 +889,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?workflowDynastySlug=nonexistent");
+      const res = await authedGet("/orgs/stats?workflowDynastySlug=nonexistent");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(0);
@@ -910,7 +911,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?type=transactional&featureDynastySlug=empty");
+      const res = await authedGet("/orgs/stats?type=transactional&featureDynastySlug=empty");
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailsSent).toBe(0);
@@ -927,7 +928,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?groupBy=brandId&workflowDynastySlug=nonexistent");
+      const res = await authedGet("/orgs/stats?groupBy=brandId&workflowDynastySlug=nonexistent");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toEqual([]);
@@ -944,7 +945,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?type=transactional&workflowDynastySlug=wf-1&brandIds=brand_1");
+      const res = await authedGet("/orgs/stats?type=transactional&workflowDynastySlug=wf-1&brandIds=brand_1");
 
       expect(res.status).toBe(200);
       const params = new URL(mockFetch.mock.calls.find((c) => c[0].includes("3010"))![0]).searchParams;
@@ -955,7 +956,7 @@ describe("GET /stats", () => {
     it("passes featureSlugs filter directly to providers", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-      await authedGet("/stats?type=transactional&featureSlugs=my-feature");
+      await authedGet("/orgs/stats?type=transactional&featureSlugs=my-feature");
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("featureSlugs")).toBe("my-feature");
@@ -985,7 +986,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?type=transactional&groupBy=workflowDynastySlug");
+      const res = await authedGet("/orgs/stats?type=transactional&groupBy=workflowDynastySlug");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
@@ -1016,7 +1017,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?type=broadcast&groupBy=featureDynastySlug");
+      const res = await authedGet("/orgs/stats?type=broadcast&groupBy=featureDynastySlug");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
@@ -1037,7 +1038,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      await authedGet("/stats?type=transactional&groupBy=workflowDynastySlug");
+      await authedGet("/orgs/stats?type=transactional&groupBy=workflowDynastySlug");
 
       const postmarkCall = mockFetch.mock.calls.find((c) => c[0].includes("3010"));
       const params = new URL(postmarkCall![0]).searchParams;
@@ -1066,7 +1067,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?type=transactional&groupBy=workflowDynastySlug");
+      const res = await authedGet("/orgs/stats?type=transactional&groupBy=workflowDynastySlug");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
@@ -1104,7 +1105,7 @@ describe("GET /stats", () => {
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
 
-      const res = await authedGet("/stats?groupBy=workflowDynastySlug");
+      const res = await authedGet("/orgs/stats?groupBy=workflowDynastySlug");
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
@@ -1120,29 +1121,29 @@ describe("GET /stats", () => {
   });
 });
 
-describe("GET /stats/public", () => {
+describe("GET /public/stats", () => {
   beforeEach(() => {
     mockFetch.mockReset();
   });
 
   it("returns 401 without API key", async () => {
-    const res = await request(app).get("/stats/public");
+    const res = await request(app).get("/public/stats");
     expect(res.status).toBe(401);
   });
 
   it("succeeds without identity headers", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-    const res = await serviceAuthGet("/stats/public?type=broadcast");
+    const res = await serviceAuthGet("/public/stats?type=broadcast");
 
     expect(res.status).toBe(200);
     expect(res.body.broadcast.emailsSent).toBe(80);
   });
 
-  it("calls downstream /stats/public when no identity headers provided", async () => {
+  it("calls downstream /stats/public (no ctx) when no identity headers provided", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-    await serviceAuthGet("/stats/public?type=broadcast");
+    await serviceAuthGet("/public/stats?type=broadcast");
 
     const [fetchUrl, options] = mockFetch.mock.calls[0];
     expect(fetchUrl).toContain("http://localhost:3011/stats/public");
@@ -1152,10 +1153,10 @@ describe("GET /stats/public", () => {
     expect(headers["x-run-id"]).toBeUndefined();
   });
 
-  it("calls downstream /stats/public for postmark when no identity headers", async () => {
+  it("calls downstream /stats/public (no ctx) for postmark when no identity headers", async () => {
     mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
-    await serviceAuthGet("/stats/public?type=transactional&brandIds=brand_1");
+    await serviceAuthGet("/public/stats?type=transactional&brandIds=brand_1");
 
     const [fetchUrl] = mockFetch.mock.calls[0];
     expect(fetchUrl).toContain("http://localhost:3010/stats/public");
@@ -1173,7 +1174,7 @@ describe("GET /stats/public", () => {
       ])
     );
 
-    const res = await serviceAuthGet("/stats/public?type=broadcast&groupBy=brandId");
+    const res = await serviceAuthGet("/public/stats?type=broadcast&groupBy=brandId");
 
     expect(res.status).toBe(200);
     expect(res.body.groups).toHaveLength(2);
@@ -1181,11 +1182,11 @@ describe("GET /stats/public", () => {
     expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
   });
 
-  it("calls downstream /stats (not /stats/public) and forwards headers when caller provides them", async () => {
+  it("calls downstream /stats (not /stats/public) and forwards headers when caller provides identity headers", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
     await request(app)
-      .get("/stats/public?type=broadcast")
+      .get("/public/stats?type=broadcast")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_pub")
       .set("x-user-id", "user_pub")
@@ -1203,7 +1204,7 @@ describe("GET /stats/public", () => {
     mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
     await request(app)
-      .get("/stats/public?type=transactional")
+      .get("/public/stats?type=transactional")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_pub")
       .set("x-user-id", "user_pub")
@@ -1215,16 +1216,16 @@ describe("GET /stats/public", () => {
   });
 
   it("returns 400 for invalid type", async () => {
-    const res = await serviceAuthGet("/stats/public?type=invalid");
+    const res = await serviceAuthGet("/public/stats?type=invalid");
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("Invalid request");
   });
 
-  it("forwards tracking headers from /stats/public route", async () => {
+  it("forwards tracking headers from /public/stats route", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
-    await serviceAuthGet("/stats/public?type=broadcast")
+    await serviceAuthGet("/public/stats?type=broadcast")
       .set("x-campaign-id", "camp_pub")
       .set("x-brand-id", "brand_pub")
       .set("x-workflow-slug", "wf_pub")

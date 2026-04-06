@@ -27,8 +27,6 @@ function authedPost(path: string) {
     .post(path)
     .set("X-API-Key", API_KEY)
     .set("x-org-id", "org_1")
-    .set("x-user-id", "user_1")
-    .set("x-run-id", "run_1")
     .set("x-brand-id", "brand_1");
 }
 
@@ -70,14 +68,14 @@ function mockServiceError() {
   };
 }
 
-describe("POST /status", () => {
+describe("POST /orgs/status", () => {
   beforeEach(() => {
     mockFetch.mockReset();
   });
 
   it("returns 401 without API key", async () => {
     const res = await request(app)
-      .post("/status")
+      .post("/orgs/status")
       .send(buildStatusBody());
 
     expect(res.status).toBe(401);
@@ -85,47 +83,52 @@ describe("POST /status", () => {
 
   it("returns 400 when x-org-id header is missing", async () => {
     const res = await request(app)
-      .post("/status")
+      .post("/orgs/status")
       .set("X-API-Key", API_KEY)
-      .set("x-user-id", "user_1")
-      .set("x-run-id", "run_1")
       .send(buildStatusBody());
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("x-org-id");
   });
 
-  it("returns 400 when x-user-id header is missing", async () => {
+  it("works without x-user-id header (optional)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
     const res = await request(app)
-      .post("/status")
+      .post("/orgs/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
-      .set("x-run-id", "run_1")
+      .set("x-brand-id", "brand_1")
       .send(buildStatusBody());
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain("x-user-id");
+    expect(res.status).toBe(200);
   });
 
-  it("returns 400 when x-run-id header is missing", async () => {
+  it("works without x-run-id header (optional)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
     const res = await request(app)
-      .post("/status")
+      .post("/orgs/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
       .set("x-user-id", "user_1")
+      .set("x-brand-id", "brand_1")
       .send(buildStatusBody());
 
-    expect(res.status).toBe(400);
-    expect(res.body.error).toContain("x-run-id");
+    expect(res.status).toBe(200);
   });
 
   it("returns 400 for missing x-brand-id header", async () => {
     const res = await request(app)
-      .post("/status")
+      .post("/orgs/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
-      .set("x-user-id", "user_1")
-      .set("x-run-id", "run_1")
       .send({ items: [{ leadId: "l1", email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
@@ -133,21 +136,21 @@ describe("POST /status", () => {
   });
 
   it("returns 400 for empty items array", async () => {
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send({ items: [] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for missing leadId in items", async () => {
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send({ items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
   });
 
   it("returns 400 for invalid email in items", async () => {
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send({ items: [{ leadId: "l1", email: "not-an-email" }] });
 
     expect(res.status).toBe(400);
@@ -169,7 +172,7 @@ describe("POST /status", () => {
       return Promise.reject(new Error("unexpected url"));
     });
 
-    const res = await authedPost("/status").send(buildStatusBody());
+    const res = await authedPost("/orgs/status").send(buildStatusBody());
 
     expect(res.status).toBe(200);
     expect(res.body.results).toHaveLength(2);
@@ -189,13 +192,16 @@ describe("POST /status", () => {
     expect(second.transactional).toBeUndefined();
   });
 
-  it("forwards identity headers to both sub-services", async () => {
+  it("forwards identity headers to both sub-services when present", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await authedPost("/status").send(buildStatusBody());
+    await authedPost("/orgs/status")
+      .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
+      .send(buildStatusBody());
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
@@ -213,7 +219,7 @@ describe("POST /status", () => {
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await authedPost("/status").send(buildStatusBody());
+    await authedPost("/orgs/status").send(buildStatusBody());
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
@@ -244,7 +250,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ campaignId: undefined, items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -262,7 +268,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockServiceError());
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -280,7 +286,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockServiceError());
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -291,7 +297,7 @@ describe("POST /status", () => {
   it("returns 502 when both sub-services fail", async () => {
     mockFetch.mockResolvedValue(mockServiceError());
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(502);
@@ -304,7 +310,7 @@ describe("POST /status", () => {
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await authedPost("/status")
+    await authedPost("/orgs/status")
       .set("x-campaign-id", "camp_hdr")
       .set("x-brand-id", "brand_hdr")
       .set("x-workflow-slug", "wf_hdr")
@@ -328,12 +334,12 @@ describe("POST /status", () => {
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await authedPost("/status").send(buildStatusBody());
+    await authedPost("/orgs/status").send(buildStatusBody());
 
     for (const call of mockFetch.mock.calls) {
       const headers = call[1].headers;
       expect(headers["x-campaign-id"]).toBeUndefined();
-      // x-brand-id IS present (required, set by authedPost)
+      // x-brand-id IS present (set by authedPost)
       expect(headers["x-brand-id"]).toBe("brand_1");
       expect(headers["x-workflow-slug"]).toBeUndefined();
       expect(headers["x-feature-slug"]).toBeUndefined();
@@ -355,7 +361,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -371,7 +377,7 @@ describe("POST /status", () => {
       json: () => Promise.resolve({ results: [] }),
     });
 
-    await authedPost("/status")
+    await authedPost("/orgs/status")
       .set("x-brand-id", "brand_a,brand_b,brand_c")
       .send(buildStatusBody());
 
@@ -398,7 +404,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -422,7 +428,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -439,7 +445,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -461,7 +467,7 @@ describe("POST /status", () => {
       return Promise.resolve(mockProviderResponse([]));
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
@@ -483,7 +489,7 @@ describe("POST /status", () => {
       json: () => Promise.resolve({ results: [] }),
     });
 
-    const res = await authedPost("/status")
+    const res = await authedPost("/orgs/status")
       .send({ campaignId: "camp_1", items: largeItems });
 
     expect(res.status).not.toBe(413);

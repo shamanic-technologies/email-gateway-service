@@ -709,13 +709,13 @@
         }
       }
     },
-    "/send": {
+    "/orgs/send": {
       "post": {
         "tags": [
           "Email Routing"
         ],
         "summary": "Send an email",
-        "description": "Send a transactional or broadcast email via the appropriate provider. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs).",
+        "description": "Send a transactional or broadcast email via the appropriate provider.",
         "security": [
           {
             "apiKey": []
@@ -737,7 +737,7 @@
               "type": "string",
               "description": "Internal user UUID from client-service"
             },
-            "required": true,
+            "required": false,
             "description": "Internal user UUID from client-service",
             "name": "x-user-id",
             "in": "header"
@@ -747,7 +747,7 @@
               "type": "string",
               "description": "Caller's run ID (used as parentRunId when creating own run)"
             },
-            "required": true,
+            "required": false,
             "description": "Caller's run ID (used as parentRunId when creating own run)",
             "name": "x-run-id",
             "in": "header"
@@ -765,10 +765,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field."
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
             },
-            "required": true,
-            "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field.",
+            "required": false,
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
             "name": "x-brand-id",
             "in": "header"
           },
@@ -846,7 +846,7 @@
         }
       }
     },
-    "/stats": {
+    "/orgs/stats": {
       "get": {
         "tags": [
           "Stats"
@@ -977,7 +977,7 @@
               "type": "string",
               "description": "Internal user UUID from client-service"
             },
-            "required": true,
+            "required": false,
             "description": "Internal user UUID from client-service",
             "name": "x-user-id",
             "in": "header"
@@ -987,7 +987,7 @@
               "type": "string",
               "description": "Caller's run ID (used as parentRunId when creating own run)"
             },
-            "required": true,
+            "required": false,
             "description": "Caller's run ID (used as parentRunId when creating own run)",
             "name": "x-run-id",
             "in": "header"
@@ -1067,13 +1067,13 @@
         }
       }
     },
-    "/stats/public": {
+    "/public/stats": {
       "get": {
         "tags": [
           "Stats"
         ],
-        "summary": "Get aggregated email stats (no identity headers required)",
-        "description": "Same as GET /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+        "summary": "Get aggregated email stats (public, no identity headers required)",
+        "description": "Same as GET /orgs/stats but does not require x-org-id or any identity headers. Intended for internal services like the leaderboard that don't have user context.",
         "security": [
           {
             "apiKey": []
@@ -1218,13 +1218,13 @@
         }
       }
     },
-    "/status": {
+    "/orgs/status": {
       "post": {
         "tags": [
           "Status"
         ],
         "summary": "Get delivery status for leads/emails",
-        "description": "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs). Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+        "description": "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
         "security": [
           {
             "apiKey": []
@@ -1246,7 +1246,7 @@
               "type": "string",
               "description": "Internal user UUID from client-service"
             },
-            "required": true,
+            "required": false,
             "description": "Internal user UUID from client-service",
             "name": "x-user-id",
             "in": "header"
@@ -1256,7 +1256,7 @@
               "type": "string",
               "description": "Caller's run ID (used as parentRunId when creating own run)"
             },
-            "required": true,
+            "required": false,
             "description": "Caller's run ID (used as parentRunId when creating own run)",
             "name": "x-run-id",
             "in": "header"
@@ -1274,10 +1274,10 @@
           {
             "schema": {
               "type": "string",
-              "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field."
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
             },
-            "required": true,
-            "description": "Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field.",
+            "required": false,
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
             "name": "x-brand-id",
             "in": "header"
           },

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { SendRequestSchema } from "../schemas";
-import { TrackingHeaders } from "../middleware/identityHeaders";
+import type { OrgContext } from "../middleware/requireOrgId";
 
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
@@ -35,27 +35,23 @@ router.post("/send", async (req: Request, res: Response) => {
     }
   }
 
-  const { orgId, userId, runId, trackingHeaders: th } = res.locals as {
-    orgId: string; userId: string; runId: string; trackingHeaders: TrackingHeaders;
-  };
-  const identityHeaders = { orgId, userId, runId };
-  const trackingHeaders: TrackingHeaders = th ?? {};
+  const ctx = res.locals.orgContext as OrgContext;
 
-  // Use tracking headers as fallbacks for body fields the LLM may have omitted
-  const effectiveCampaignId = body.campaignId ?? trackingHeaders.campaignId;
-  const { brandIds } = trackingHeaders;
-  const effectiveWorkflowName = body.workflowSlug ?? trackingHeaders.workflowSlug;
+  // Use context headers as fallbacks for body fields the LLM may have omitted
+  const effectiveCampaignId = body.campaignId ?? ctx.campaignId;
+  const { brandIds } = ctx;
+  const effectiveWorkflowName = body.workflowSlug ?? ctx.workflowSlug;
 
-  console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${runId} workflow=${effectiveWorkflowName}`);
+  console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${ctx.runId} workflow=${effectiveWorkflowName}`);
 
   try {
     if (body.type === "transactional") {
       const htmlWithSignature = appendSignature(body.htmlBody, body.type);
 
       const result = await postmarkClient.sendEmail({
-        orgId,
-        userId,
-        runId,
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        runId: ctx.runId,
         brandIds,
         leadId: body.leadId,
         workflowSlug: effectiveWorkflowName,
@@ -68,7 +64,7 @@ router.post("/send", async (req: Request, res: Response) => {
         replyTo: body.replyTo,
         tag: body.tag,
         metadata: body.metadata,
-      }, identityHeaders, trackingHeaders);
+      }, ctx);
 
       console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
@@ -81,9 +77,9 @@ router.post("/send", async (req: Request, res: Response) => {
 
     if (body.type === "broadcast") {
       const result = await instantlyClient.atomicSend({
-        orgId,
-        userId,
-        runId,
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        runId: ctx.runId,
         brandIds,
         leadId: body.leadId,
         workflowSlug: effectiveWorkflowName,
@@ -95,7 +91,7 @@ router.post("/send", async (req: Request, res: Response) => {
         variables: body.metadata,
         subject: body.subject,
         sequence: body.sequence,
-      }, identityHeaders, trackingHeaders);
+      }, ctx);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
 

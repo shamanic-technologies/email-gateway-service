@@ -1,9 +1,15 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
+const apiKey = process.env.EMAIL_GATEWAY_SERVICE_API_KEY;
+if (!apiKey) {
+  console.error("[email-gateway] FATAL: EMAIL_GATEWAY_SERVICE_API_KEY env var is missing");
+  process.exit(1);
+}
+
 export const config = {
   port: Number(process.env.PORT) || 3009,
-  apiKey: process.env.EMAIL_GATEWAY_SERVICE_API_KEY || "",
+  apiKey,
 
   postmark: {
     url: process.env.POSTMARK_SERVICE_URL || "http://localhost:3010",

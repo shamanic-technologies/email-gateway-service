@@ -31,7 +31,7 @@ export const ErrorResponseSchema = z
 export const EmailTypeSchema = z.enum(["transactional", "broadcast"]);
 export type EmailType = z.infer<typeof EmailTypeSchema>;
 
-// --- POST /send ---
+// --- POST /orgs/send ---
 
 const SendBaseSchema = z.object({
   campaignId: z.string().optional().describe("Campaign ID"),
@@ -177,7 +177,7 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
-// --- POST /status ---
+// --- POST /orgs/status ---
 
 export const ReplyClassificationSchema = z.enum(["positive", "negative", "neutral"]).openapi("ReplyClassification");
 
@@ -270,26 +270,17 @@ export const HealthResponseSchema = z
 
 // --- Identity headers ---
 
-export const IdentityHeadersSchema = z.object({
+/** Headers for org-scoped routes: only x-org-id is required */
+export const OrgScopedHeadersSchema = z.object({
   "x-org-id": z.string().describe("Internal organization UUID from client-service"),
-  "x-user-id": z.string().describe("Internal user UUID from client-service"),
-  "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
+  "x-user-id": z.string().optional().describe("Internal user UUID from client-service"),
+  "x-run-id": z.string().optional().describe("Caller's run ID (used as parentRunId when creating own run)"),
   "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
   "x-brand-id": z.string().optional().describe("Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"),
   "x-workflow-slug": z.string().optional().describe("Workflow slug injected by workflow-service (optional, used for tracking)"),
   "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
 });
 
-/** Headers for endpoints that require x-brand-id (POST /send, POST /status) */
-export const IdentityHeadersWithBrandSchema = z.object({
-  "x-org-id": z.string().describe("Internal organization UUID from client-service"),
-  "x-user-id": z.string().describe("Internal user UUID from client-service"),
-  "x-run-id": z.string().describe("Caller's run ID (used as parentRunId when creating own run)"),
-  "x-campaign-id": z.string().optional().describe("Campaign ID injected by workflow-service (optional, used for tracking)"),
-  "x-brand-id": z.string().describe("Required. Comma-separated brand IDs (e.g. \"uuid1\" or \"uuid1,uuid2,uuid3\"). Used as the primary brand scope — replaces the former brandId/brandIds body field."),
-  "x-workflow-slug": z.string().optional().describe("Workflow slug injected by workflow-service (optional, used for tracking)"),
-  "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
-});
 
 // --- Register endpoints ---
 
@@ -313,13 +304,13 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/send",
+  path: "/orgs/send",
   tags: ["Email Routing"],
   summary: "Send an email",
-  description: "Send a transactional or broadcast email via the appropriate provider. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs).",
+  description: "Send a transactional or broadcast email via the appropriate provider.",
   security: [{ apiKey: [] }],
   request: {
-    headers: IdentityHeadersWithBrandSchema,
+    headers: OrgScopedHeadersSchema,
     body: {
       content: { "application/json": { schema: SendRequestSchema } },
     },
@@ -337,13 +328,13 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/stats",
+  path: "/orgs/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats",
   description: "Get aggregated email stats via query params. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
   security: [{ apiKey: [] }],
   request: {
-    headers: IdentityHeadersSchema,
+    headers: OrgScopedHeadersSchema,
     query: StatsQuerySchema,
   },
   responses: {
@@ -358,10 +349,10 @@ registry.registerPath({
 
 registry.registerPath({
   method: "get",
-  path: "/stats/public",
+  path: "/public/stats",
   tags: ["Stats"],
-  summary: "Get aggregated email stats (no identity headers required)",
-  description: "Same as GET /stats but does not require x-org-id, x-user-id, or x-run-id headers. Intended for internal services like the leaderboard that don't have user context.",
+  summary: "Get aggregated email stats (public, no identity headers required)",
+  description: "Same as GET /orgs/stats but does not require x-org-id or any identity headers. Intended for internal services like the leaderboard that don't have user context.",
   security: [{ apiKey: [] }],
   request: {
     query: StatsQuerySchema,
@@ -378,13 +369,13 @@ registry.registerPath({
 
 registry.registerPath({
   method: "post",
-  path: "/status",
+  path: "/orgs/status",
   tags: ["Status"],
   summary: "Get delivery status for leads/emails",
-  description: "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Brand scope is read from the x-brand-id header (required, comma-separated UUIDs). Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+  description: "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
   security: [{ apiKey: [] }],
   request: {
-    headers: IdentityHeadersWithBrandSchema,
+    headers: OrgScopedHeadersSchema,
     body: {
       content: { "application/json": { schema: StatusRequestSchema } },
     },

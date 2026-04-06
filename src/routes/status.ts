@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { StatusRequestSchema } from "../schemas";
-import { TrackingHeaders } from "../middleware/identityHeaders";
+import type { OrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 
@@ -14,12 +14,9 @@ router.post("/status", async (req: Request, res: Response) => {
   }
 
   const { campaignId, items } = parsed.data;
-  const { orgId, userId, runId, trackingHeaders } = res.locals as {
-    orgId: string; userId: string; runId: string; trackingHeaders: TrackingHeaders;
-  };
-  const identityHeaders = { orgId, userId, runId };
+  const ctx = res.locals.orgContext as OrgContext;
 
-  const { brandIds } = trackingHeaders;
+  const { brandIds } = ctx;
   if (brandIds.length === 0) {
     res.status(400).json({ error: "Missing required header: x-brand-id" });
     return;
@@ -29,8 +26,8 @@ router.post("/status", async (req: Request, res: Response) => {
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
-      instantlyClient.getStatus(payload, identityHeaders, trackingHeaders),
-      postmarkClient.getStatus(payload, identityHeaders, trackingHeaders),
+      instantlyClient.getStatus(payload, ctx),
+      postmarkClient.getStatus(payload, ctx),
     ]);
 
     const broadcastMap = new Map<string, instantlyClient.StatusResult>();

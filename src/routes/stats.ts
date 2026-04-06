@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { StatsQuerySchema, Stats, BroadcastStats } from "../schemas";
-import { extractTrackingHeaders, TrackingHeaders } from "../middleware/identityHeaders";
+import type { OrgContext } from "../middleware/requireOrgId";
+import { extractOrgContext, parseBrandIds } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import * as dynastyClient from "../lib/dynasty-client";
@@ -13,7 +14,7 @@ import type {
 } from "../lib/instantly-client";
 
 const router = Router();
-const publicRouter = Router();
+const internalRouter = Router();
 
 function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats {
   return {
@@ -93,12 +94,13 @@ function parseStatsInput(req: Request): { success: true; type?: string; filters:
 }
 
 /** Resolve dynasty slugs into versioned slug arrays and rewrite filters for downstream providers */
-async function resolveDynastyFilters(filters: Record<string, unknown>, identityHeaders?: { orgId: string; userId: string; runId: string }): Promise<Record<string, unknown>> {
+async function resolveDynastyFilters(filters: Record<string, unknown>, ctx?: OrgContext): Promise<Record<string, unknown>> {
   const resolved = { ...filters };
 
   // workflowDynastySlug → resolve to workflowSlugs
   const workflowDynastySlug = resolved.workflowDynastySlug as string | undefined;
   if (workflowDynastySlug) {
+    const identityHeaders = ctx?.userId && ctx?.runId ? { orgId: ctx.orgId, userId: ctx.userId, runId: ctx.runId } : undefined;
     const slugs = await dynastyClient.resolveWorkflowDynastySlugs(workflowDynastySlug, identityHeaders);
     if (slugs.length === 0) return { __empty: true };
     resolved.workflowSlugs = slugs.join(",");
@@ -108,6 +110,7 @@ async function resolveDynastyFilters(filters: Record<string, unknown>, identityH
   // featureDynastySlug → resolve to featureSlugs
   const featureDynastySlug = resolved.featureDynastySlug as string | undefined;
   if (featureDynastySlug) {
+    const identityHeaders = ctx?.userId && ctx?.runId ? { orgId: ctx.orgId, userId: ctx.userId, runId: ctx.runId } : undefined;
     const slugs = await dynastyClient.resolveFeatureDynastySlugs(featureDynastySlug, identityHeaders);
     if (slugs.length === 0) return { __empty: true };
     resolved.featureSlugs = slugs.join(",");
@@ -142,6 +145,32 @@ function regroupByDynasty(
   return Array.from(dynastyGroups.entries()).map(([key, stats]) => ({ key, stats }));
 }
 
+/** Extract a partial OrgContext for public routes where x-org-id may be absent */
+function extractPartialContext(req: Request): OrgContext | undefined {
+  // Check if any identity/tracking headers are present
+  const orgId = typeof req.headers["x-org-id"] === "string" ? req.headers["x-org-id"] : undefined;
+  const userId = typeof req.headers["x-user-id"] === "string" ? req.headers["x-user-id"] : undefined;
+  const runId = typeof req.headers["x-run-id"] === "string" ? req.headers["x-run-id"] : undefined;
+  const campaignId = typeof req.headers["x-campaign-id"] === "string" ? req.headers["x-campaign-id"] : undefined;
+  const brandId = typeof req.headers["x-brand-id"] === "string" ? req.headers["x-brand-id"] : undefined;
+  const workflowSlug = typeof req.headers["x-workflow-slug"] === "string" ? req.headers["x-workflow-slug"] : undefined;
+  const featureSlug = typeof req.headers["x-feature-slug"] === "string" ? req.headers["x-feature-slug"] : undefined;
+
+  const hasAny = orgId || userId || runId || campaignId || brandId || workflowSlug || featureSlug;
+  if (!hasAny) return undefined;
+
+  return {
+    orgId: orgId ?? "",
+    userId,
+    runId,
+    campaignId,
+    brandId,
+    brandIds: parseBrandIds(brandId),
+    workflowSlug,
+    featureSlug,
+  };
+}
+
 async function statsHandler(req: Request, res: Response) {
   const input = parseStatsInput(req);
   if (!input.success) {
@@ -149,16 +178,13 @@ async function statsHandler(req: Request, res: Response) {
     return;
   }
 
-  const orgId = (res.locals.orgId ?? req.headers["x-org-id"]) as string | undefined;
-  const userId = (res.locals.userId ?? req.headers["x-user-id"]) as string | undefined;
-  const runId = (res.locals.runId ?? req.headers["x-run-id"]) as string | undefined;
-  const identityHeaders = orgId && userId && runId ? { orgId, userId, runId } : undefined;
-  const trackingHeaders: TrackingHeaders = res.locals.trackingHeaders ?? extractTrackingHeaders(req);
+  // For org-scoped routes, ctx comes from middleware. For public routes, try to extract from headers.
+  const ctx: OrgContext | undefined = res.locals.orgContext ?? extractOrgContext(req) ?? extractPartialContext(req);
   const { type } = input;
 
   try {
     // Resolve dynasty filters
-    const resolvedFilters = await resolveDynastyFilters(input.filters, identityHeaders);
+    const resolvedFilters = await resolveDynastyFilters(input.filters, ctx);
 
     // If dynasty slug resolved to empty → return zero stats immediately
     if (resolvedFilters.__empty) {
@@ -173,16 +199,16 @@ async function statsHandler(req: Request, res: Response) {
       return;
     }
 
-    const filters: Record<string, unknown> = { ...resolvedFilters, ...(orgId && { orgId }), ...(userId && { userId }) };
+    const filters: Record<string, unknown> = { ...resolvedFilters, ...(ctx?.orgId && { orgId: ctx.orgId }), ...(ctx?.userId && { userId: ctx.userId }) };
 
     if (filters.groupBy) {
       if (isDynastyGroupBy(input.filters.groupBy)) {
-        return await handleDynastyGrouped(res, type, filters, input.filters.groupBy as "workflowDynastySlug" | "featureDynastySlug", identityHeaders, trackingHeaders);
+        return await handleDynastyGrouped(res, type, filters, input.filters.groupBy as "workflowDynastySlug" | "featureDynastySlug", ctx);
       }
-      return await handleGrouped(res, type, filters, identityHeaders, trackingHeaders);
+      return await handleGrouped(res, type, filters, ctx);
     }
 
-    return await handleFlat(res, type, filters, identityHeaders, trackingHeaders);
+    return await handleFlat(res, type, filters, ctx);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Stats failed: ${message}`);
@@ -191,23 +217,22 @@ async function statsHandler(req: Request, res: Response) {
 }
 
 router.get("/stats", statsHandler);
-publicRouter.get("/stats/public", statsHandler);
+internalRouter.get("/stats", statsHandler);
 
 async function handleFlat(
   res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
-  identityHeaders?: { orgId: string; userId: string; runId: string },
-  trackingHeaders?: TrackingHeaders,
+  ctx?: OrgContext,
 ) {
   if (type === "transactional") {
-    const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders, trackingHeaders);
+    const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], ctx);
     res.json({ transactional: normalizeFlatResult(raw) });
     return;
   }
 
   if (type === "broadcast") {
-    const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], identityHeaders, trackingHeaders);
+    const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx);
     const flat = raw as ProviderStatsFlat;
     res.json({ broadcast: normalizeBroadcastFlat(flat) });
     return;
@@ -215,8 +240,8 @@ async function handleFlat(
 
   // No type specified: aggregate both
   const [postmarkResult, instantlyResult] = await Promise.allSettled([
-    postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], identityHeaders, trackingHeaders),
-    instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], identityHeaders, trackingHeaders),
+    postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], ctx),
+    instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx),
   ]);
 
   const response: Record<string, unknown> = {};
@@ -243,13 +268,12 @@ async function handleGrouped(
   res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
-  identityHeaders?: { orgId: string; userId: string; runId: string },
-  trackingHeaders?: TrackingHeaders,
+  ctx?: OrgContext,
 ) {
   const castFilters = filters as Parameters<typeof postmarkClient.getStats>[0];
 
   if (type === "transactional") {
-    const raw = await postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders);
+    const raw = await postmarkClient.getStats(castFilters, ctx);
     if (!isGrouped(raw)) {
       res.json({ groups: [] });
       return;
@@ -263,7 +287,7 @@ async function handleGrouped(
   }
 
   if (type === "broadcast") {
-    const raw = await instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders);
+    const raw = await instantlyClient.getStats(castFilters, ctx);
     if (!isGrouped(raw)) {
       res.json({ groups: [] });
       return;
@@ -278,8 +302,8 @@ async function handleGrouped(
 
   // No type: merge groups from both providers by key
   const [postmarkResult, instantlyResult] = await Promise.allSettled([
-    postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders),
-    instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders),
+    postmarkClient.getStats(castFilters, ctx),
+    instantlyClient.getStats(castFilters, ctx),
   ]);
 
   const merged = new Map<string, { transactional?: Stats; broadcast?: Stats }>();
@@ -315,8 +339,7 @@ async function handleDynastyGrouped(
   type: string | undefined,
   filters: Record<string, unknown>,
   dynastyGroupBy: "workflowDynastySlug" | "featureDynastySlug",
-  identityHeaders?: { orgId: string; userId: string; runId: string },
-  trackingHeaders?: TrackingHeaders,
+  ctx?: OrgContext,
 ) {
   // Rewrite groupBy for downstream providers
   const providerGroupBy = rewriteGroupByForProvider(dynastyGroupBy);
@@ -328,9 +351,11 @@ async function handleDynastyGrouped(
     ? dynastyClient.fetchWorkflowDynasties
     : dynastyClient.fetchFeatureDynasties;
 
+  const identityHeaders = ctx?.userId && ctx?.runId ? { orgId: ctx.orgId, userId: ctx.userId, runId: ctx.runId } : undefined;
+
   if (type === "transactional") {
     const [raw, dynasties] = await Promise.all([
-      postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders),
+      postmarkClient.getStats(castFilters, ctx),
       fetchDynasties(identityHeaders),
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
@@ -345,7 +370,7 @@ async function handleDynastyGrouped(
 
   if (type === "broadcast") {
     const [raw, dynasties] = await Promise.all([
-      instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders),
+      instantlyClient.getStats(castFilters, ctx),
       fetchDynasties(identityHeaders),
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
@@ -360,8 +385,8 @@ async function handleDynastyGrouped(
 
   // No type: merge both providers
   const [postmarkResult, instantlyResult, dynasties] = await Promise.all([
-    postmarkClient.getStats(castFilters, identityHeaders, trackingHeaders).catch((e: Error) => e),
-    instantlyClient.getStats(castFilters, identityHeaders, trackingHeaders).catch((e: Error) => e),
+    postmarkClient.getStats(castFilters, ctx).catch((e: Error) => e),
+    instantlyClient.getStats(castFilters, ctx).catch((e: Error) => e),
     fetchDynasties(identityHeaders),
   ]);
 
@@ -397,4 +422,4 @@ async function handleDynastyGrouped(
 }
 
 export default router;
-export { publicRouter as publicStatsRouter };
+export { internalRouter as publicStatsRouter };
