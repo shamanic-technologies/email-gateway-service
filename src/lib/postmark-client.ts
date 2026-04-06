@@ -123,7 +123,6 @@ export interface StatusResult {
 }
 
 export async function getStatus(body: {
-  brandIds: string[];
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
 }, ctx?: OrgContext) {
