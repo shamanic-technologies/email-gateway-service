@@ -74,7 +74,7 @@ export async function sendEmail(body: {
     sendingId?: string;
     errorCode?: number;
     message?: string;
-  }>("/send", { method: "POST", body, ctx });
+  }>("/orgs/send", { method: "POST", body, ctx });
 }
 
 // Re-export shared provider types from instantly-client
@@ -104,7 +104,7 @@ export async function getStats(filters: {
   featureSlugs?: string;
   groupBy?: string;
 }, ctx?: OrgContext) {
-  const basePath = ctx?.orgId ? "/stats" : "/stats/public";
+  const basePath = ctx?.orgId ? "/orgs/stats" : "/internal/stats";
   const path = basePath + buildStatsQuery(filters);
   return request<ProviderStatsResult>(path, { ctx });
 }
@@ -126,7 +126,7 @@ export async function getStatus(body: {
   campaignId?: string;
   items: Array<{ leadId: string; email: string }>;
 }, ctx?: OrgContext) {
-  return request<{ results: StatusResult[] }>("/status", { method: "POST", body, ctx });
+  return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx });
 }
 
 export async function forwardWebhook(body: unknown) {
