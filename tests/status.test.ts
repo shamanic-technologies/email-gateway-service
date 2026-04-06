@@ -42,13 +42,25 @@ function buildStatusBody(overrides = {}) {
 }
 
 const emptyScope = {
-  lead: { contacted: false, delivered: false, opened: false, replied: false, replyClassification: null, lastDeliveredAt: null },
-  email: { contacted: false, delivered: false, opened: false, bounced: false, unsubscribed: false, lastDeliveredAt: null },
+  contacted: false,
+  delivered: false,
+  opened: false,
+  replied: false,
+  replyClassification: null,
+  bounced: false,
+  unsubscribed: false,
+  lastDeliveredAt: null,
 };
 
 const deliveredScope = {
-  lead: { contacted: true, delivered: true, opened: false, replied: false, replyClassification: null, lastDeliveredAt: "2026-02-20T14:30:00Z" },
-  email: { contacted: true, delivered: true, opened: false, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-02-20T14:30:00Z" },
+  contacted: true,
+  delivered: true,
+  opened: false,
+  replied: false,
+  replyClassification: null,
+  bounced: false,
+  unsubscribed: false,
+  lastDeliveredAt: "2026-02-20T14:30:00Z",
 };
 
 const emptyGlobal = { email: { bounced: false, unsubscribed: false } };
@@ -128,7 +140,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "l1", email: "john@acme.com", campaign: null, brand: null, global: emptyGlobal },
+          { leadIds: ["l1"], email: "john@acme.com", campaign: null, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -138,7 +150,7 @@ describe("POST /orgs/status", () => {
       .post("/orgs/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
-      .send({ items: [{ leadId: "l1", email: "john@acme.com" }] });
+      .send({ items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(200);
   });
@@ -153,7 +165,7 @@ describe("POST /orgs/status", () => {
       .post("/orgs/status")
       .set("X-API-Key", API_KEY)
       .set("x-org-id", "org_1")
-      .send({ items: [{ leadId: "l1", email: "john@acme.com" }] });
+      .send({ items: [{ email: "john@acme.com" }] });
 
     for (const call of mockFetch.mock.calls) {
       const body = JSON.parse(call[1].body);
@@ -168,11 +180,28 @@ describe("POST /orgs/status", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns 400 for missing leadId in items", async () => {
+  it("accepts items without leadId (optional)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
     const res = await authedPost("/orgs/status")
       .send({ items: [{ email: "john@acme.com" }] });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+  });
+
+  it("accepts items with leadId (still supported)", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ items: [{ leadId: "lead_1", email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
   });
 
   it("returns 400 for invalid email in items", async () => {
@@ -186,13 +215,13 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
-          { leadId: "lead_2", email: "jane@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { leadIds: ["lead_2"], email: "jane@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       return Promise.reject(new Error("unexpected url"));
@@ -204,18 +233,40 @@ describe("POST /orgs/status", () => {
     expect(res.body.results).toHaveLength(2);
 
     const first = res.body.results[0];
-    expect(first.leadId).toBe("lead_1");
+    expect(first.leadIds).toEqual(["lead_1"]);
     expect(first.email).toBe("john@acme.com");
     expect(first.broadcast).toBeDefined();
-    expect(first.broadcast.campaign.lead.delivered).toBe(true);
-    expect(first.broadcast.brand.lead.delivered).toBe(true);
+    expect(first.broadcast.campaign.delivered).toBe(true);
+    expect(first.broadcast.brand.delivered).toBe(true);
     expect(first.broadcast.global.email.bounced).toBe(false);
     expect(first.transactional).toBeDefined();
 
     const second = res.body.results[1];
-    expect(second.leadId).toBe("lead_2");
+    expect(second.leadIds).toEqual(["lead_2"]);
     expect(second.broadcast).toBeDefined();
     expect(second.transactional).toBeUndefined();
+  });
+
+  it("merges leadIds from both providers (deduplicated)", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadIds: ["lead_1", "lead_2"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+        ]));
+      }
+      if (url.includes("3010")) {
+        return Promise.resolve(mockProviderResponse([
+          { leadIds: ["lead_2", "lead_3"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+        ]));
+      }
+      return Promise.reject(new Error("unexpected url"));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send(buildStatusBody({ items: [{ email: "john@acme.com" }] }));
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].leadIds).toEqual(["lead_1", "lead_2", "lead_3"]);
   });
 
   it("forwards identity headers to both sub-services when present", async () => {
@@ -270,7 +321,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: null, brand: deliveredScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: null, brand: deliveredScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -281,14 +332,14 @@ describe("POST /orgs/status", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.results[0].broadcast.campaign).toBeNull();
-    expect(res.body.results[0].broadcast.brand.lead.delivered).toBe(true);
+    expect(res.body.results[0].broadcast.brand.delivered).toBe(true);
   });
 
   it("returns results when only broadcast succeeds", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockServiceError());
@@ -306,7 +357,7 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockServiceError());
@@ -374,14 +425,20 @@ describe("POST /orgs/status", () => {
 
   it("includes brand scope in merged results", async () => {
     const brandDelivered = {
-      lead: { contacted: true, delivered: true, opened: true, replied: true, replyClassification: "positive" as const, lastDeliveredAt: "2026-02-22T10:00:00Z" },
-      email: { contacted: true, delivered: true, opened: true, bounced: false, unsubscribed: true, lastDeliveredAt: "2026-02-22T10:00:00Z" },
+      contacted: true,
+      delivered: true,
+      opened: true,
+      replied: true,
+      replyClassification: "positive" as const,
+      bounced: false,
+      unsubscribed: true,
+      lastDeliveredAt: "2026-02-22T10:00:00Z",
     };
 
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: brandDelivered, global: { email: { bounced: false, unsubscribed: true } } },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: deliveredScope, brand: brandDelivered, global: { email: { bounced: false, unsubscribed: true } } },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -392,8 +449,8 @@ describe("POST /orgs/status", () => {
 
     expect(res.status).toBe(200);
     const broadcast = res.body.results[0].broadcast;
-    expect(broadcast.brand.lead.replied).toBe(true);
-    expect(broadcast.brand.email.unsubscribed).toBe(true);
+    expect(broadcast.brand.replied).toBe(true);
+    expect(broadcast.brand.unsubscribed).toBe(true);
     expect(broadcast.global.email.unsubscribed).toBe(true);
   });
 
@@ -419,14 +476,20 @@ describe("POST /orgs/status", () => {
 
   it("passes through replyClassification from broadcast provider", async () => {
     const repliedScope = {
-      lead: { contacted: true, delivered: true, opened: true, replied: true, replyClassification: "positive", lastDeliveredAt: "2026-03-01T10:00:00Z" },
-      email: { contacted: true, delivered: true, opened: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      contacted: true,
+      delivered: true,
+      opened: true,
+      replied: true,
+      replyClassification: "positive",
+      bounced: false,
+      unsubscribed: false,
+      lastDeliveredAt: "2026-03-01T10:00:00Z",
     };
 
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: repliedScope, brand: repliedScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: repliedScope, brand: repliedScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -437,20 +500,26 @@ describe("POST /orgs/status", () => {
 
     expect(res.status).toBe(200);
     const broadcast = res.body.results[0].broadcast;
-    expect(broadcast.campaign.lead.replyClassification).toBe("positive");
-    expect(broadcast.brand.lead.replyClassification).toBe("positive");
+    expect(broadcast.campaign.replyClassification).toBe("positive");
+    expect(broadcast.brand.replyClassification).toBe("positive");
   });
 
   it("passes through negative replyClassification", async () => {
     const negativeScope = {
-      lead: { contacted: true, delivered: true, opened: false, replied: true, replyClassification: "negative", lastDeliveredAt: "2026-03-01T10:00:00Z" },
-      email: { contacted: true, delivered: true, opened: false, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      contacted: true,
+      delivered: true,
+      opened: false,
+      replied: true,
+      replyClassification: "negative",
+      bounced: false,
+      unsubscribed: false,
+      lastDeliveredAt: "2026-03-01T10:00:00Z",
     };
 
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: negativeScope, brand: negativeScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: negativeScope, brand: negativeScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -460,14 +529,14 @@ describe("POST /orgs/status", () => {
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
-    expect(res.body.results[0].broadcast.campaign.lead.replyClassification).toBe("negative");
+    expect(res.body.results[0].broadcast.campaign.replyClassification).toBe("negative");
   });
 
   it("returns null replyClassification when lead has not replied", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -477,19 +546,25 @@ describe("POST /orgs/status", () => {
       .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
 
     expect(res.status).toBe(200);
-    expect(res.body.results[0].broadcast.campaign.lead.replyClassification).toBeNull();
+    expect(res.body.results[0].broadcast.campaign.replyClassification).toBeNull();
   });
 
   it("passes through opened field from broadcast provider", async () => {
     const openedScope = {
-      lead: { contacted: true, delivered: true, opened: true, replied: false, replyClassification: null, lastDeliveredAt: "2026-03-01T10:00:00Z" },
-      email: { contacted: true, delivered: true, opened: true, bounced: false, unsubscribed: false, lastDeliveredAt: "2026-03-01T10:00:00Z" },
+      contacted: true,
+      delivered: true,
+      opened: true,
+      replied: false,
+      replyClassification: null,
+      bounced: false,
+      unsubscribed: false,
+      lastDeliveredAt: "2026-03-01T10:00:00Z",
     };
 
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: openedScope, brand: openedScope, global: emptyGlobal },
+          { leadIds: ["lead_1"], email: "john@acme.com", campaign: openedScope, brand: openedScope, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
@@ -500,15 +575,12 @@ describe("POST /orgs/status", () => {
 
     expect(res.status).toBe(200);
     const broadcast = res.body.results[0].broadcast;
-    expect(broadcast.campaign.lead.opened).toBe(true);
-    expect(broadcast.campaign.email.opened).toBe(true);
-    expect(broadcast.brand.lead.opened).toBe(true);
-    expect(broadcast.brand.email.opened).toBe(true);
+    expect(broadcast.campaign.opened).toBe(true);
+    expect(broadcast.brand.opened).toBe(true);
   });
 
   it("accepts large payloads without 413 error", async () => {
     const largeItems = Array.from({ length: 2000 }, (_, i) => ({
-      leadId: `lead_${i}`,
       email: `user${i}@example.com`,
     }));
 
@@ -522,5 +594,21 @@ describe("POST /orgs/status", () => {
 
     expect(res.status).not.toBe(413);
     expect(res.status).toBe(200);
+  });
+
+  it("returns empty leadIds when no provider has data for an email", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ items: [{ email: "nobody@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].leadIds).toEqual([]);
+    expect(res.body.results[0].email).toBe("nobody@acme.com");
+    expect(res.body.results[0].broadcast).toBeUndefined();
+    expect(res.body.results[0].transactional).toBeUndefined();
   });
 });

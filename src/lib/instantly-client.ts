@@ -145,21 +145,27 @@ export async function getStats(filters: {
 }
 
 export interface StatusScope {
-  lead: { contacted: boolean; delivered: boolean; opened: boolean; replied: boolean; replyClassification: "positive" | "negative" | "neutral" | null; lastDeliveredAt: string | null };
-  email: { contacted: boolean; delivered: boolean; opened: boolean; bounced: boolean; unsubscribed: boolean; lastDeliveredAt: string | null };
+  contacted: boolean;
+  delivered: boolean;
+  opened: boolean;
+  replied: boolean;
+  replyClassification: "positive" | "negative" | "neutral" | null;
+  bounced: boolean;
+  unsubscribed: boolean;
+  lastDeliveredAt: string | null;
 }
 
 export interface StatusResult {
-  leadId: string;
+  leadIds: string[];
   email: string;
   campaign: StatusScope | null;
-  brand: StatusScope;
+  brand: StatusScope | null;
   global: { email: { bounced: boolean; unsubscribed: boolean } };
 }
 
 export async function getStatus(body: {
   campaignId?: string;
-  items: Array<{ leadId: string; email: string }>;
+  items: Array<{ leadId?: string; email: string }>;
 }, ctx?: OrgContext) {
   return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx });
 }

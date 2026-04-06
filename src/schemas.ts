@@ -181,32 +181,16 @@ export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
 export const ReplyClassificationSchema = z.enum(["positive", "negative", "neutral"]).openapi("ReplyClassification");
 
-const LeadStatusSchema = z
-  .object({
-    contacted: z.boolean().describe("Whether this lead has been contacted"),
-    delivered: z.boolean().describe("Whether an email was delivered to this lead"),
-    opened: z.boolean().describe("Whether this lead has opened any email we sent them"),
-    replied: z.boolean().describe("Whether this lead has replied"),
-    replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive (interested/willing to meet), negative (not interested), neutral (out of office/other), or null if no reply"),
-    lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery"),
-  })
-  .openapi("LeadStatus");
-
-const EmailStatusSchema = z
-  .object({
-    contacted: z.boolean().describe("Whether this email address has been contacted"),
-    delivered: z.boolean().describe("Whether an email was delivered to this address"),
-    opened: z.boolean().describe("Whether this email address has opened any email we sent"),
-    bounced: z.boolean().describe("Whether an email to this address has bounced"),
-    unsubscribed: z.boolean().describe("Whether this email address has unsubscribed"),
-    lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery"),
-  })
-  .openapi("EmailStatus");
-
 const StatusScopeSchema = z
   .object({
-    lead: LeadStatusSchema.describe("Status aggregated across all emails for this lead"),
-    email: EmailStatusSchema.describe("Status for this specific email address"),
+    contacted: z.boolean().describe("Whether this email has been contacted in this scope"),
+    delivered: z.boolean().describe("Whether an email was delivered in this scope"),
+    opened: z.boolean().describe("Whether the recipient opened any email in this scope"),
+    replied: z.boolean().describe("Whether the recipient replied in this scope"),
+    replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive, negative, neutral, or null if no reply"),
+    bounced: z.boolean().describe("Whether an email bounced in this scope"),
+    unsubscribed: z.boolean().describe("Whether the recipient unsubscribed in this scope"),
+    lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery in this scope"),
   })
   .openapi("StatusScope");
 
@@ -229,7 +213,7 @@ const ProviderStatusSchema = z
 
 const StatusResultSchema = z
   .object({
-    leadId: z.string().describe("Lead ID from lead-service"),
+    leadIds: z.array(z.string()).describe("All lead IDs found in the database for this email"),
     email: z.string().describe("Recipient email address"),
     broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly)"),
     transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark)"),
@@ -237,7 +221,7 @@ const StatusResultSchema = z
   .openapi("StatusResult");
 
 export const StatusItemSchema = z.object({
-  leadId: z.string().describe("Lead ID from lead-service"),
+  leadId: z.string().optional().describe("Lead ID from lead-service (optional — email is the primary lookup key)"),
   email: z.string().email().describe("Recipient email address"),
 });
 
