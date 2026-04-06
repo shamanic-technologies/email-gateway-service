@@ -52,13 +52,11 @@ router.post("/status", async (req: Request, res: Response) => {
       const broadcast = broadcastMap.get(item.email);
       const transactional = transactionalMap.get(item.email);
 
-      // Merge leadIds from both providers (union, deduplicated)
-      const leadIdSet = new Set<string>();
-      if (broadcast) for (const id of broadcast.leadIds) leadIdSet.add(id);
-      if (transactional) for (const id of transactional.leadIds) leadIdSet.add(id);
+      // Pick first non-null leadId from either provider
+      const leadId = broadcast?.leadId ?? transactional?.leadId ?? null;
 
       const entry: Record<string, unknown> = {
-        leadIds: [...leadIdSet],
+        leadId,
         email: item.email,
       };
 

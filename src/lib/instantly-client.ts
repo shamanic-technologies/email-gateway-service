@@ -156,7 +156,7 @@ export interface StatusScope {
 }
 
 export interface StatusResult {
-  leadIds: string[];
+  leadId: string | null;
   email: string;
   campaign: StatusScope | null;
   brand: StatusScope | null;

@@ -562,12 +562,10 @@
       "StatusResult": {
         "type": "object",
         "properties": {
-          "leadIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "All lead IDs found in the database for this email"
+          "leadId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Lead ID found in the database for this email, or null if none"
           },
           "email": {
             "type": "string",
@@ -588,7 +586,7 @@
           }
         },
         "required": [
-          "leadIds",
+          "leadId",
           "email"
         ]
       },
