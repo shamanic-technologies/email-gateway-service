@@ -77,13 +77,7 @@ router.post("/send", async (req: Request, res: Response) => {
 
     if (body.type === "broadcast") {
       const result = await instantlyClient.atomicSend({
-        orgId: ctx.orgId,
-        userId: ctx.userId,
-        runId: ctx.runId,
-        brandIds,
         leadId: body.leadId,
-        workflowSlug: effectiveWorkflowName,
-        campaignId: effectiveCampaignId,
         to: body.to,
         firstName: body.recipientFirstName,
         lastName: body.recipientLastName,

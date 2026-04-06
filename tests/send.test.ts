@@ -188,7 +188,7 @@ describe("POST /orgs/send", () => {
 
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url, options] = mockFetch.mock.calls[0];
-      expect(url).toBe("http://localhost:3011/send");
+      expect(url).toBe("http://localhost:3011/orgs/send");
       expect(options.method).toBe("POST");
 
       const body = JSON.parse(options.body);
@@ -204,8 +204,11 @@ describe("POST /orgs/send", () => {
       ]);
       expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
-      expect(body.orgId).toBe("org_1");
-      expect(body.campaignId).toBe("campaign_1");
+      // orgId, campaignId, brandIds, workflowSlug now go via headers, not body
+      expect(body.orgId).toBeUndefined();
+      expect(body.campaignId).toBeUndefined();
+      expect(body.brandIds).toBeUndefined();
+      expect(body.workflowSlug).toBeUndefined();
       expect(body.appId).toBeUndefined();
       expect(body.parentRunId).toBeUndefined();
     });
@@ -488,17 +491,21 @@ describe("POST /orgs/send", () => {
   });
 
   describe("workflowSlug forwarding", () => {
-    it("forwards workflowSlug to instantly-service for broadcast", async () => {
+    it("does not forward workflowSlug in body to instantly-service for broadcast (uses headers)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      await authedPost("/orgs/send").send(buildBroadcastBody({ workflowSlug: "outreach-v2" }));
+      await authedPost("/orgs/send")
+        .set("x-workflow-slug", "outreach-v2")
+        .send(buildBroadcastBody({ workflowSlug: "outreach-v2" }));
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.workflowSlug).toBe("outreach-v2");
+      expect(body.workflowSlug).toBeUndefined();
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-workflow-slug"]).toBe("outreach-v2");
     });
 
     it("forwards workflowSlug to postmark-service for transactional", async () => {
@@ -686,21 +693,25 @@ describe("POST /orgs/send", () => {
       expect(postmarkHeaders["x-feature-slug"]).toBe("hdr_feature");
     });
 
-    it("uses header values as fallback when body fields are missing (broadcast)", async () => {
+    it("does not include brandIds/campaignId/workflowSlug in body for broadcast (headers only)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      // Send without campaignId, workflowSlug in body — brandIds comes from header
       const { campaignId, workflowSlug, ...bodyWithout } = buildBroadcastBody();
       await authedPostWithTracking("/orgs/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toEqual(["hdr_brand"]);
-      expect(body.campaignId).toBe("hdr_campaign");
-      expect(body.workflowSlug).toBe("hdr_workflow");
+      expect(body.brandIds).toBeUndefined();
+      expect(body.campaignId).toBeUndefined();
+      expect(body.workflowSlug).toBeUndefined();
+      // These are forwarded via headers instead
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-campaign-id"]).toBe("hdr_campaign");
+      expect(headers["x-brand-id"]).toBe("hdr_brand");
+      expect(headers["x-workflow-slug"]).toBe("hdr_workflow");
     });
 
     it("uses header values as fallback when body fields are missing (transactional)", async () => {
@@ -718,7 +729,7 @@ describe("POST /orgs/send", () => {
       expect(body.workflowSlug).toBe("hdr_workflow");
     });
 
-    it("body fields take precedence over tracking headers (campaignId, workflowSlug)", async () => {
+    it("does not pass campaignId/workflowSlug in body even when provided (broadcast)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -730,11 +741,11 @@ describe("POST /orgs/send", () => {
       );
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.campaignId).toBe("body_campaign");
-      expect(body.workflowSlug).toBe("body_workflow");
+      expect(body.campaignId).toBeUndefined();
+      expect(body.workflowSlug).toBeUndefined();
     });
 
-    it("reads brandIds from x-brand-id header (not body)", async () => {
+    it("does not pass brandIds in body to instantly (forwarded via x-brand-id header)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -744,10 +755,12 @@ describe("POST /orgs/send", () => {
       await authedPost("/orgs/send").send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toEqual(["brand_1"]);
+      expect(body.brandIds).toBeUndefined();
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-brand-id"]).toBe("brand_1");
     });
 
-    it("parses CSV x-brand-id header into brandIds array", async () => {
+    it("forwards CSV x-brand-id header to instantly (not in body)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -759,7 +772,9 @@ describe("POST /orgs/send", () => {
         .send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toEqual(["brand_a", "brand_b", "brand_c"]);
+      expect(body.brandIds).toBeUndefined();
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-brand-id"]).toBe("brand_a,brand_b,brand_c");
     });
   });
 

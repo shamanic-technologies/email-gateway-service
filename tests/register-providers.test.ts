@@ -50,7 +50,7 @@ describe("registerProviderRequirements", () => {
     expect(reqInit.method).toBe("POST");
     expect(JSON.parse(reqInit.body)).toEqual({
       endpoints: [
-        { service: "instantly", method: "POST", path: "/send" },
+        { service: "instantly", method: "POST", path: "/orgs/send" },
         { service: "postmark", method: "POST", path: "/send" },
       ],
     });

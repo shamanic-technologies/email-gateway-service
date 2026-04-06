@@ -262,7 +262,7 @@ describe("POST /orgs/status", () => {
     }
 
     const urls = calls.map((c) => c.url);
-    expect(urls).toContain("http://localhost:3011/status");
+    expect(urls).toContain("http://localhost:3011/orgs/status");
     expect(urls).toContain("http://localhost:3010/orgs/status");
   });
 

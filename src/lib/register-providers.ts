@@ -14,7 +14,7 @@ interface ProviderRequirementsResponse {
 
 // Downstream endpoints that email-gateway proxies to
 const DOWNSTREAM_ENDPOINTS = [
-  { service: "instantly", method: "POST", path: "/send" },
+  { service: "instantly", method: "POST", path: "/orgs/send" },
   { service: "postmark", method: "POST", path: "/send" },
 ];
 
