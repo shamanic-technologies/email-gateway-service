@@ -161,19 +161,64 @@ export type StatsResponse = z.infer<typeof StatsResponseSchema>;
 
 export const StatsGroupSchema = z
   .object({
-    key: z.string().describe("Value of the groupBy dimension for this group"),
-    transactional: StatsSchema.optional().describe("Transactional stats for this group"),
-    broadcast: StatsSchema.optional().describe("Broadcast stats for this group"),
+    key: z.string().describe("The value of the groupBy dimension for this bucket. When groupBy=brandId this is the brand UUID; when groupBy=campaignId it is the campaign UUID; when groupBy=workflowSlug it is the workflow slug string; etc."),
+    transactional: StatsSchema.optional().describe("Transactional (Postmark) stats for this group. Omitted when type=broadcast or when no transactional data exists for this key."),
+    broadcast: StatsSchema.optional().describe("Broadcast (Instantly) stats for this group. Omitted when type=transactional or when no broadcast data exists for this key."),
   })
-  .openapi("StatsGroup");
+  .openapi("StatsGroup", {
+    example: {
+      key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
+      broadcast: {
+        emailsContacted: 150,
+        emailsSent: 120,
+        emailsDelivered: 115,
+        emailsOpened: 45,
+        emailsClicked: 12,
+        emailsReplied: 8,
+        emailsBounced: 5,
+        repliesWillingToMeet: 3,
+        repliesInterested: 2,
+        repliesNotInterested: 1,
+        repliesOutOfOffice: 1,
+        repliesUnsubscribe: 1,
+        recipients: 150,
+      },
+    },
+  });
 
 export type StatsGroup = z.infer<typeof StatsGroupSchema>;
 
 export const GroupedStatsResponseSchema = z
   .object({
-    groups: z.array(StatsGroupSchema).describe("Stats grouped by the requested dimension"),
+    groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension. Each entry contains the key and the stats for that bucket."),
   })
-  .openapi("GroupedStatsResponse");
+  .openapi("GroupedStatsResponse", {
+    description: "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or leadEmail).",
+    example: {
+      groups: [
+        {
+          key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
+          broadcast: {
+            emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
+            emailsOpened: 45, emailsClicked: 12, emailsReplied: 8,
+            emailsBounced: 5, repliesWillingToMeet: 3, repliesInterested: 2,
+            repliesNotInterested: 1, repliesOutOfOffice: 1, repliesUnsubscribe: 1,
+            recipients: 150,
+          },
+        },
+        {
+          key: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
+          broadcast: {
+            emailsContacted: 80, emailsSent: 70, emailsDelivered: 65,
+            emailsOpened: 20, emailsClicked: 5, emailsReplied: 3,
+            emailsBounced: 2, repliesWillingToMeet: 1, repliesInterested: 1,
+            repliesNotInterested: 0, repliesOutOfOffice: 1, repliesUnsubscribe: 0,
+            recipients: 80,
+          },
+        },
+      ],
+    },
+  });
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
@@ -315,7 +360,7 @@ registry.registerPath({
   path: "/orgs/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats",
-  description: "Get aggregated email stats via query params. Without groupBy: returns flat { transactional?, broadcast? }. With groupBy: returns { groups: [{ key, transactional?, broadcast? }] }.",
+  description: "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
   security: [{ apiKey: [] }],
   request: {
     headers: OrgScopedHeadersSchema,
@@ -323,8 +368,12 @@ registry.registerPath({
   },
   responses: {
     200: {
-      description: "Aggregated stats",
-      content: { "application/json": { schema: StatsResponseSchema } },
+      description: "Aggregated stats. Shape depends on whether `groupBy` is set — see `StatsResponse` (flat) vs `GroupedStatsResponse` (grouped).",
+      content: {
+        "application/json": {
+          schema: z.union([StatsResponseSchema, GroupedStatsResponseSchema]),
+        },
+      },
     },
     401: { description: "Unauthorized", content: errorContent },
     502: { description: "Upstream service error", content: errorContent },
@@ -336,15 +385,19 @@ registry.registerPath({
   path: "/public/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats (public, no identity headers required)",
-  description: "Same as GET /orgs/stats but does not require x-org-id or any identity headers. Intended for internal services like the leaderboard that don't have user context.",
+  description: "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`).",
   security: [{ apiKey: [] }],
   request: {
     query: StatsQuerySchema,
   },
   responses: {
     200: {
-      description: "Aggregated stats",
-      content: { "application/json": { schema: StatsResponseSchema } },
+      description: "Aggregated stats. Shape depends on whether `groupBy` is set — see `StatsResponse` (flat) vs `GroupedStatsResponse` (grouped).",
+      content: {
+        "application/json": {
+          schema: z.union([StatsResponseSchema, GroupedStatsResponseSchema]),
+        },
+      },
     },
     401: { description: "Unauthorized", content: errorContent },
     502: { description: "Upstream service error", content: errorContent },
