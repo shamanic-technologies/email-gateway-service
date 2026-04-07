@@ -23,7 +23,7 @@ export async function extractFields(
   identityHeaders?: IdentityHeaders,
   trackingHeaders?: TrackingHeaders,
 ): Promise<ExtractedField[]> {
-  const res = await fetch(`${config.brand.url}/brands/extract-fields`, {
+  const res = await fetch(`${config.brand.url}/orgs/brands/extract-fields`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -43,7 +43,7 @@ export async function extractFields(
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`brand-service POST /brands/extract-fields: ${res.status} - ${text}`);
+    throw new Error(`brand-service POST /orgs/brands/extract-fields: ${res.status} - ${text}`);
   }
 
   const data = (await res.json()) as { fields: ExtractedField[] };
