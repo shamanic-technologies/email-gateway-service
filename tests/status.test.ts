@@ -30,17 +30,6 @@ function authedPost(path: string) {
     .set("x-brand-id", "brand_1");
 }
 
-function buildStatusBody(overrides = {}) {
-  return {
-    campaignId: "camp_1",
-    items: [
-      { leadId: "lead_1", email: "john@acme.com" },
-      { leadId: "lead_2", email: "jane@acme.com" },
-    ],
-    ...overrides,
-  };
-}
-
 const emptyScope = {
   contacted: false,
   delivered: false,
@@ -85,10 +74,12 @@ describe("POST /orgs/status", () => {
     mockFetch.mockReset();
   });
 
+  // --- Auth & validation ---
+
   it("returns 401 without API key", async () => {
     const res = await request(app)
       .post("/orgs/status")
-      .send(buildStatusBody());
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(401);
   });
@@ -97,278 +88,206 @@ describe("POST /orgs/status", () => {
     const res = await request(app)
       .post("/orgs/status")
       .set("X-API-Key", API_KEY)
-      .send(buildStatusBody());
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toContain("x-org-id");
   });
 
-  it("works without x-user-id header (optional)", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    const res = await request(app)
-      .post("/orgs/status")
-      .set("X-API-Key", API_KEY)
-      .set("x-org-id", "org_1")
-      .set("x-brand-id", "brand_1")
-      .send(buildStatusBody());
-
-    expect(res.status).toBe(200);
-  });
-
-  it("works without x-run-id header (optional)", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    const res = await request(app)
-      .post("/orgs/status")
-      .set("X-API-Key", API_KEY)
-      .set("x-org-id", "org_1")
-      .set("x-user-id", "user_1")
-      .set("x-brand-id", "brand_1")
-      .send(buildStatusBody());
-
-    expect(res.status).toBe(200);
-  });
-
-  it("works without x-brand-id header (optional, brand scope is null)", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "l1", email: "john@acme.com", campaign: null, brand: null, global: emptyGlobal },
-        ]));
-      }
-      return Promise.resolve(mockProviderResponse([]));
-    });
-
-    const res = await request(app)
-      .post("/orgs/status")
-      .set("X-API-Key", API_KEY)
-      .set("x-org-id", "org_1")
+  it("returns 400 when neither brandId nor campaignId is provided", async () => {
+    const res = await authedPost("/orgs/status")
       .send({ items: [{ email: "john@acme.com" }] });
 
-    expect(res.status).toBe(200);
-  });
-
-  it("does not send brandIds to sub-services when x-brand-id is absent", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    await request(app)
-      .post("/orgs/status")
-      .set("X-API-Key", API_KEY)
-      .set("x-org-id", "org_1")
-      .send({ items: [{ email: "john@acme.com" }] });
-
-    for (const call of mockFetch.mock.calls) {
-      const body = JSON.parse(call[1].body);
-      expect(body.brandIds).toBeUndefined();
-    }
+    expect(res.status).toBe(400);
   });
 
   it("returns 400 for empty items array", async () => {
     const res = await authedPost("/orgs/status")
-      .send({ items: [] });
+      .send({ campaignId: "camp_1", items: [] });
 
     expect(res.status).toBe(400);
-  });
-
-  it("accepts items without leadId (optional)", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send({ items: [{ email: "john@acme.com" }] });
-
-    expect(res.status).toBe(200);
-  });
-
-  it("accepts items with leadId (still supported)", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send({ items: [{ leadId: "lead_1", email: "john@acme.com" }] });
-
-    expect(res.status).toBe(200);
   });
 
   it("returns 400 for invalid email in items", async () => {
     const res = await authedPost("/orgs/status")
-      .send({ items: [{ leadId: "l1", email: "not-an-email" }] });
+      .send({ campaignId: "camp_1", items: [{ email: "not-an-email" }] });
 
     expect(res.status).toBe(400);
   });
 
-  it("calls both sub-services in parallel and merges results", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
-          { leadId: "lead_2", email: "jane@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      if (url.includes("3010")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      return Promise.reject(new Error("unexpected url"));
-    });
+  // --- Campaign mode ---
 
-    const res = await authedPost("/orgs/status").send(buildStatusBody());
-
-    expect(res.status).toBe(200);
-    expect(res.body.results).toHaveLength(2);
-
-    const first = res.body.results[0];
-    expect(first.leadId).toBe("lead_1");
-    expect(first.email).toBe("john@acme.com");
-    expect(first.broadcast).toBeDefined();
-    expect(first.broadcast.campaign.delivered).toBe(true);
-    expect(first.broadcast.brand.delivered).toBe(true);
-    expect(first.broadcast.global.email.bounced).toBe(false);
-    expect(first.transactional).toBeDefined();
-
-    const second = res.body.results[1];
-    expect(second.leadId).toBe("lead_2");
-    expect(second.broadcast).toBeDefined();
-    expect(second.transactional).toBeUndefined();
-  });
-
-  it("picks broadcast leadId when both providers return one", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_broadcast", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      if (url.includes("3010")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_transactional", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      return Promise.reject(new Error("unexpected url"));
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ email: "john@acme.com" }] }));
-
-    expect(res.status).toBe(200);
-    expect(res.body.results[0].leadId).toBe("lead_broadcast");
-  });
-
-  it("falls back to transactional leadId when broadcast has null", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: null, email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      if (url.includes("3010")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_transactional", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      return Promise.reject(new Error("unexpected url"));
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ email: "john@acme.com" }] }));
-
-    expect(res.status).toBe(200);
-    expect(res.body.results[0].leadId).toBe("lead_transactional");
-  });
-
-  it("forwards identity headers to both sub-services when present", async () => {
+  it("campaign mode: sends campaignId in body to both providers", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
     });
 
     await authedPost("/orgs/status")
-      .set("x-user-id", "user_1")
-      .set("x-run-id", "run_1")
-      .send(buildStatusBody());
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     for (const call of mockFetch.mock.calls) {
-      const headers = call[1].headers;
-      expect(headers["x-org-id"]).toBe("org_1");
-      expect(headers["x-user-id"]).toBe("user_1");
-      expect(headers["x-run-id"]).toBe("run_1");
+      const body = JSON.parse(call[1].body);
+      expect(body.campaignId).toBe("camp_1");
+      expect(body.items).toEqual([{ email: "john@acme.com" }]);
     }
   });
 
-  it("forwards campaignId and items (not brandIds) in body to both sub-services", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    await authedPost("/orgs/status").send(buildStatusBody());
-
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-
-    const calls = mockFetch.mock.calls.map(([url, opts]: [string, { body: string }]) => ({
-      url,
-      body: JSON.parse(opts.body),
-    }));
-
-    for (const call of calls) {
-      expect(call.body.brandIds).toBeUndefined();
-      expect(call.body.campaignId).toBe("camp_1");
-      expect(call.body.items).toHaveLength(2);
-      expect(call.body.items[0]).toEqual({ leadId: "lead_1", email: "john@acme.com" });
-    }
-
-    const urls = calls.map((c) => c.url);
-    expect(urls).toContain("http://localhost:3011/orgs/status");
-    expect(urls).toContain("http://localhost:3010/orgs/status");
-  });
-
-  it("works without campaignId (optional)", async () => {
+  it("campaign mode: returns campaign + global, byCampaign and brand are null", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: null, brand: deliveredScope, global: emptyGlobal },
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
     });
 
     const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ campaignId: undefined, items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[0].broadcast.campaign).toBeNull();
-    expect(res.body.results[0].broadcast.brand.delivered).toBe(true);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.campaign.delivered).toBe(true);
+    expect(broadcast.byCampaign).toBeNull();
+    expect(broadcast.brand).toBeNull();
+    expect(broadcast.global.email.bounced).toBe(false);
   });
+
+  it("campaign mode: brandId is ignored when campaignId is present", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ brandId: "brand_1", campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+
+    for (const call of mockFetch.mock.calls) {
+      const body = JSON.parse(call[1].body);
+      expect(body.campaignId).toBe("camp_1");
+      expect(body.brandId).toBe("brand_1");
+    }
+  });
+
+  // --- Brand mode ---
+
+  it("brand mode: sends brandId in body to both providers", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await authedPost("/orgs/status")
+      .send({ brandId: "brand_1", items: [{ email: "john@acme.com" }] });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    for (const call of mockFetch.mock.calls) {
+      const body = JSON.parse(call[1].body);
+      expect(body.brandId).toBe("brand_1");
+      expect(body.campaignId).toBeUndefined();
+    }
+  });
+
+  it("brand mode: returns byCampaign + brand + global, campaign is null", async () => {
+    const byCampaign = {
+      "camp-uuid-1": { ...deliveredScope },
+      "camp-uuid-2": { ...emptyScope },
+    };
+    const brandAgg = { ...deliveredScope };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign, campaign: null, brand: brandAgg, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ brandId: "brand_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.byCampaign["camp-uuid-1"].delivered).toBe(true);
+    expect(broadcast.byCampaign["camp-uuid-2"].delivered).toBe(false);
+    expect(broadcast.brand.delivered).toBe(true);
+    expect(broadcast.campaign).toBeNull();
+    expect(broadcast.global.email.bounced).toBe(false);
+  });
+
+  // --- Merging providers ---
+
+  it("merges broadcast and transactional results per email", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
+          { email: "jane@acme.com", byCampaign: null, campaign: emptyScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      if (url.includes("3010")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: emptyScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.reject(new Error("unexpected url"));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }, { email: "jane@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results).toHaveLength(2);
+
+    const first = res.body.results[0];
+    expect(first.email).toBe("john@acme.com");
+    expect(first.broadcast).toBeDefined();
+    expect(first.broadcast.campaign.delivered).toBe(true);
+    expect(first.transactional).toBeDefined();
+
+    const second = res.body.results[1];
+    expect(second.broadcast).toBeDefined();
+    expect(second.transactional).toBeUndefined();
+  });
+
+  it("no leadId in response", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0]).not.toHaveProperty("leadId");
+  });
+
+  // --- Partial failures ---
 
   it("returns results when only broadcast succeeds", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockServiceError());
     });
 
     const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(200);
     expect(res.body.results[0].broadcast).toBeDefined();
@@ -379,14 +298,14 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: deliveredScope, global: emptyGlobal },
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockServiceError());
     });
 
     const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(200);
     expect(res.body.results[0].transactional).toBeDefined();
@@ -397,106 +316,83 @@ describe("POST /orgs/status", () => {
     mockFetch.mockResolvedValue(mockServiceError());
 
     const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBe("Both upstream services failed");
   });
 
-  it("forwards tracking headers to both sub-services", async () => {
+  // --- Header forwarding (tracing only) ---
+
+  it("forwards all identity headers to both sub-services", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
     });
 
     await authedPost("/orgs/status")
+      .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
       .set("x-campaign-id", "camp_hdr")
-      .set("x-brand-id", "brand_hdr")
       .set("x-workflow-slug", "wf_hdr")
       .set("x-feature-slug", "feat_hdr")
-      .send(buildStatusBody());
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(mockFetch).toHaveBeenCalledTimes(2);
 
     for (const call of mockFetch.mock.calls) {
       const headers = call[1].headers;
+      expect(headers["x-org-id"]).toBe("org_1");
+      expect(headers["x-user-id"]).toBe("user_1");
+      expect(headers["x-run-id"]).toBe("run_1");
       expect(headers["x-campaign-id"]).toBe("camp_hdr");
-      expect(headers["x-brand-id"]).toBe("brand_hdr");
+      expect(headers["x-brand-id"]).toBe("brand_1");
       expect(headers["x-workflow-slug"]).toBe("wf_hdr");
       expect(headers["x-feature-slug"]).toBe("feat_hdr");
     }
   });
 
-  it("works without optional tracking headers (x-campaign-id, x-workflow-slug, x-feature-slug)", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    await authedPost("/orgs/status").send(buildStatusBody());
-
-    for (const call of mockFetch.mock.calls) {
-      const headers = call[1].headers;
-      expect(headers["x-campaign-id"]).toBeUndefined();
-      // x-brand-id IS present (set by authedPost)
-      expect(headers["x-brand-id"]).toBe("brand_1");
-      expect(headers["x-workflow-slug"]).toBeUndefined();
-      expect(headers["x-feature-slug"]).toBeUndefined();
-    }
-  });
-
-  it("includes brand scope in merged results", async () => {
-    const brandDelivered = {
-      contacted: true,
-      delivered: true,
-      opened: true,
-      replied: true,
-      replyClassification: "positive" as const,
-      bounced: false,
-      unsubscribed: true,
-      lastDeliveredAt: "2026-02-22T10:00:00Z",
-    };
-
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: deliveredScope, brand: brandDelivered, global: { email: { bounced: false, unsubscribed: true } } },
-        ]));
-      }
-      return Promise.resolve(mockProviderResponse([]));
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
-
-    expect(res.status).toBe(200);
-    const broadcast = res.body.results[0].broadcast;
-    expect(broadcast.brand.replied).toBe(true);
-    expect(broadcast.brand.unsubscribed).toBe(true);
-    expect(broadcast.global.email.unsubscribed).toBe(true);
-  });
-
-  it("forwards x-brand-id header (not body) to both sub-services", async () => {
+  it("headers are for tracing only — brandId filter is in body, not derived from x-brand-id header", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
     });
 
     await authedPost("/orgs/status")
-      .set("x-brand-id", "brand_a,brand_b,brand_c")
-      .send(buildStatusBody());
-
-    expect(mockFetch).toHaveBeenCalledTimes(2);
+      .set("x-brand-id", "header_brand")
+      .send({ brandId: "body_brand", items: [{ email: "john@acme.com" }] });
 
     for (const call of mockFetch.mock.calls) {
       const headers = call[1].headers;
-      expect(headers["x-brand-id"]).toBe("brand_a,brand_b,brand_c");
+      expect(headers["x-brand-id"]).toBe("header_brand");
       const body = JSON.parse(call[1].body);
-      expect(body.brandIds).toBeUndefined();
+      expect(body.brandId).toBe("body_brand");
     }
   });
 
-  it("passes through replyClassification from broadcast provider", async () => {
+  it("works without optional tracking headers", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await request(app)
+      .post("/orgs/status")
+      .set("X-API-Key", API_KEY)
+      .set("x-org-id", "org_1")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    for (const call of mockFetch.mock.calls) {
+      const headers = call[1].headers;
+      expect(headers["x-org-id"]).toBe("org_1");
+      expect(headers["x-campaign-id"]).toBeUndefined();
+      expect(headers["x-brand-id"]).toBeUndefined();
+    }
+  });
+
+  // --- replyClassification passthrough ---
+
+  it("passes through replyClassification from providers", async () => {
     const repliedScope = {
       contacted: true,
       delivered: true,
@@ -511,95 +407,37 @@ describe("POST /orgs/status", () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: repliedScope, brand: repliedScope, global: emptyGlobal },
+          { email: "john@acme.com", byCampaign: null, campaign: repliedScope, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
     });
 
     const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(200);
-    const broadcast = res.body.results[0].broadcast;
-    expect(broadcast.campaign.replyClassification).toBe("positive");
-    expect(broadcast.brand.replyClassification).toBe("positive");
+    expect(res.body.results[0].broadcast.campaign.replyClassification).toBe("positive");
   });
 
-  it("passes through negative replyClassification", async () => {
-    const negativeScope = {
-      contacted: true,
-      delivered: true,
-      opened: false,
-      replied: true,
-      replyClassification: "negative",
-      bounced: false,
-      unsubscribed: false,
-      lastDeliveredAt: "2026-03-01T10:00:00Z",
-    };
-
+  it("returns null replyClassification when no reply", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
         return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: negativeScope, brand: negativeScope, global: emptyGlobal },
+          { email: "john@acme.com", byCampaign: null, campaign: emptyScope, brand: null, global: emptyGlobal },
         ]));
       }
       return Promise.resolve(mockProviderResponse([]));
     });
 
     const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
-
-    expect(res.status).toBe(200);
-    expect(res.body.results[0].broadcast.campaign.replyClassification).toBe("negative");
-  });
-
-  it("returns null replyClassification when lead has not replied", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: emptyScope, brand: emptyScope, global: emptyGlobal },
-        ]));
-      }
-      return Promise.resolve(mockProviderResponse([]));
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(200);
     expect(res.body.results[0].broadcast.campaign.replyClassification).toBeNull();
   });
 
-  it("passes through opened field from broadcast provider", async () => {
-    const openedScope = {
-      contacted: true,
-      delivered: true,
-      opened: true,
-      replied: false,
-      replyClassification: null,
-      bounced: false,
-      unsubscribed: false,
-      lastDeliveredAt: "2026-03-01T10:00:00Z",
-    };
-
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { leadId: "lead_1", email: "john@acme.com", campaign: openedScope, brand: openedScope, global: emptyGlobal },
-        ]));
-      }
-      return Promise.resolve(mockProviderResponse([]));
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send(buildStatusBody({ items: [{ leadId: "lead_1", email: "john@acme.com" }] }));
-
-    expect(res.status).toBe(200);
-    const broadcast = res.body.results[0].broadcast;
-    expect(broadcast.campaign.opened).toBe(true);
-    expect(broadcast.brand.opened).toBe(true);
-  });
+  // --- Large payloads ---
 
   it("accepts large payloads without 413 error", async () => {
     const largeItems = Array.from({ length: 2000 }, (_, i) => ({
@@ -618,19 +456,21 @@ describe("POST /orgs/status", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns null leadId when no provider has data for an email", async () => {
+  // --- No data for email ---
+
+  it("returns email with no provider data when not found", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ results: [] }),
     });
 
     const res = await authedPost("/orgs/status")
-      .send({ items: [{ email: "nobody@acme.com" }] });
+      .send({ campaignId: "camp_1", items: [{ email: "nobody@acme.com" }] });
 
     expect(res.status).toBe(200);
-    expect(res.body.results[0].leadId).toBeNull();
     expect(res.body.results[0].email).toBe("nobody@acme.com");
     expect(res.body.results[0].broadcast).toBeUndefined();
     expect(res.body.results[0].transactional).toBeUndefined();
+    expect(res.body.results[0]).not.toHaveProperty("leadId");
   });
 });
