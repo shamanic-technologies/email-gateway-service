@@ -564,7 +564,6 @@
       },
       "StatusScope": {
         "type": "object",
-        "nullable": true,
         "properties": {
           "contacted": {
             "type": "boolean",
@@ -608,8 +607,7 @@
           "bounced",
           "unsubscribed",
           "lastDeliveredAt"
-        ],
-        "description": "Status scoped to the given campaign (null if no campaignId provided)"
+        ]
       },
       "GlobalStatus": {
         "type": "object",
@@ -641,8 +639,24 @@
       "ProviderStatus": {
         "type": "object",
         "properties": {
+          "byCampaign": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StatusScope"
+            },
+            "description": "Per-campaign breakdown (present in brand mode, null in campaign mode)"
+          },
           "campaign": {
-            "$ref": "#/components/schemas/StatusScope"
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StatusScope"
+              },
+              {
+                "nullable": true,
+                "description": "Status scoped to the given campaign (present in campaign mode, null in brand mode)"
+              }
+            ]
           },
           "brand": {
             "allOf": [
@@ -650,7 +664,8 @@
                 "$ref": "#/components/schemas/StatusScope"
               },
               {
-                "description": "Status scoped to the given brand (null if no x-brand-id header provided)"
+                "nullable": true,
+                "description": "Aggregated status across all campaigns for this brand (present in brand mode, null in campaign mode)"
               }
             ]
           },
@@ -659,6 +674,7 @@
           }
         },
         "required": [
+          "byCampaign",
           "campaign",
           "brand",
           "global"
@@ -668,11 +684,6 @@
       "StatusResult": {
         "type": "object",
         "properties": {
-          "leadId": {
-            "type": "string",
-            "nullable": true,
-            "description": "Lead ID found in the database for this email, or null if none"
-          },
           "email": {
             "type": "string",
             "description": "Recipient email address"
@@ -692,7 +703,6 @@
           }
         },
         "required": [
-          "leadId",
           "email"
         ]
       },
@@ -714,19 +724,19 @@
       "StatusRequest": {
         "type": "object",
         "properties": {
+          "brandId": {
+            "type": "string",
+            "description": "Brand ID — if present without campaignId, returns per-campaign breakdown + aggregated brand status"
+          },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID — if absent, campaign scope is null"
+            "description": "Campaign ID — if present, returns status for this specific campaign (brandId ignored)"
           },
           "items": {
             "type": "array",
             "items": {
               "type": "object",
               "properties": {
-                "leadId": {
-                  "type": "string",
-                  "description": "Lead ID from lead-service (optional — email is the primary lookup key)"
-                },
                 "email": {
                   "type": "string",
                   "format": "email",
@@ -738,7 +748,7 @@
               ]
             },
             "minItems": 1,
-            "description": "List of lead/email pairs to check"
+            "description": "List of emails to check status for"
           }
         },
         "required": [
@@ -1298,8 +1308,8 @@
         "tags": [
           "Status"
         ],
-        "summary": "Get delivery status for leads/emails",
-        "description": "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+        "summary": "Get delivery status for emails",
+        "description": "Batch lookup of delivery status. Requires at least one of brandId or campaignId in the body.\n\n**Campaign mode** (campaignId present): returns status for that specific campaign.\n\n**Brand mode** (brandId without campaignId): returns per-campaign breakdown (byCampaign) + aggregated brand status.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers.",
         "security": [
           {
             "apiKey": []

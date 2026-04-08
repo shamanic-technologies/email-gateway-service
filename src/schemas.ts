@@ -250,15 +250,15 @@ const GlobalStatusSchema = z
 
 const ProviderStatusSchema = z
   .object({
-    campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (null if no campaignId provided)"),
-    brand: StatusScopeSchema.nullable().describe("Status scoped to the given brand (null if no x-brand-id header provided)"),
+    byCampaign: z.record(z.string(), StatusScopeSchema).nullable().describe("Per-campaign breakdown (present in brand mode, null in campaign mode)"),
+    campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (present in campaign mode, null in brand mode)"),
+    brand: StatusScopeSchema.nullable().describe("Aggregated status across all campaigns for this brand (present in brand mode, null in campaign mode)"),
     global: GlobalStatusSchema.describe("Global signals across all brands and campaigns"),
   })
   .openapi("ProviderStatus");
 
 const StatusResultSchema = z
   .object({
-    leadId: z.string().nullable().describe("Lead ID found in the database for this email, or null if none"),
     email: z.string().describe("Recipient email address"),
     broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly)"),
     transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark)"),
@@ -266,15 +266,19 @@ const StatusResultSchema = z
   .openapi("StatusResult");
 
 export const StatusItemSchema = z.object({
-  leadId: z.string().optional().describe("Lead ID from lead-service (optional — email is the primary lookup key)"),
   email: z.string().email().describe("Recipient email address"),
 });
 
 export const StatusRequestSchema = z
   .object({
-    campaignId: z.string().optional().describe("Campaign ID — if absent, campaign scope is null"),
-    items: z.array(StatusItemSchema).min(1).describe("List of lead/email pairs to check"),
+    brandId: z.string().optional().describe("Brand ID — if present without campaignId, returns per-campaign breakdown + aggregated brand status"),
+    campaignId: z.string().optional().describe("Campaign ID — if present, returns status for this specific campaign (brandId ignored)"),
+    items: z.array(StatusItemSchema).min(1).describe("List of emails to check status for"),
   })
+  .refine(
+    (data) => data.brandId !== undefined || data.campaignId !== undefined,
+    { message: "At least one of brandId or campaignId is required" }
+  )
   .openapi("StatusRequest");
 
 export type StatusRequest = z.infer<typeof StatusRequestSchema>;
@@ -408,8 +412,8 @@ registry.registerPath({
   method: "post",
   path: "/orgs/status",
   tags: ["Status"],
-  summary: "Get delivery status for leads/emails",
-  description: "Batch lookup of delivery status scoped by brand(s) and optionally by campaign. Returns status from both broadcast (Instantly) and transactional (Postmark) providers, each with campaign, brand, and global views.",
+  summary: "Get delivery status for emails",
+  description: "Batch lookup of delivery status. Requires at least one of brandId or campaignId in the body.\n\n**Campaign mode** (campaignId present): returns status for that specific campaign.\n\n**Brand mode** (brandId without campaignId): returns per-campaign breakdown (byCampaign) + aggregated brand status.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers.",
   security: [{ apiKey: [] }],
   request: {
     headers: OrgScopedHeadersSchema,

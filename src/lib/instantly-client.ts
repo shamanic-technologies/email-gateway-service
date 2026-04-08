@@ -156,16 +156,17 @@ export interface StatusScope {
 }
 
 export interface StatusResult {
-  leadId: string | null;
   email: string;
+  byCampaign: Record<string, StatusScope> | null;
   campaign: StatusScope | null;
   brand: StatusScope | null;
   global: { email: { bounced: boolean; unsubscribed: boolean } };
 }
 
 export async function getStatus(body: {
+  brandId?: string;
   campaignId?: string;
-  items: Array<{ leadId?: string; email: string }>;
+  items: Array<{ email: string }>;
 }, ctx?: OrgContext) {
   return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx });
 }

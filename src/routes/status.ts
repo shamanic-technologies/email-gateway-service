@@ -13,11 +13,10 @@ router.post("/status", async (req: Request, res: Response) => {
     return;
   }
 
-  const { campaignId, items } = parsed.data;
+  const { brandId, campaignId, items } = parsed.data;
   const ctx = res.locals.orgContext as OrgContext;
 
-  // brandIds are forwarded via x-brand-id header by buildServiceHeaders — no need in body
-  const payload = { campaignId, items };
+  const payload = { brandId, campaignId, items };
 
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
@@ -52,20 +51,26 @@ router.post("/status", async (req: Request, res: Response) => {
       const broadcast = broadcastMap.get(item.email);
       const transactional = transactionalMap.get(item.email);
 
-      // Pick first non-null leadId from either provider
-      const leadId = broadcast?.leadId ?? transactional?.leadId ?? null;
-
       const entry: Record<string, unknown> = {
-        leadId,
         email: item.email,
       };
 
       if (broadcast) {
-        entry.broadcast = { campaign: broadcast.campaign, brand: broadcast.brand, global: broadcast.global };
+        entry.broadcast = {
+          byCampaign: broadcast.byCampaign,
+          campaign: broadcast.campaign,
+          brand: broadcast.brand,
+          global: broadcast.global,
+        };
       }
 
       if (transactional) {
-        entry.transactional = { campaign: transactional.campaign, brand: transactional.brand, global: transactional.global };
+        entry.transactional = {
+          byCampaign: transactional.byCampaign,
+          campaign: transactional.campaign,
+          brand: transactional.brand,
+          global: transactional.global,
+        };
       }
 
       return entry;
