@@ -237,7 +237,18 @@ const StatusScopeSchema = z
     unsubscribed: z.boolean().describe("Whether the recipient unsubscribed in this scope"),
     lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery in this scope"),
   })
-  .openapi("StatusScope");
+  .openapi("StatusScope", {
+    example: {
+      contacted: true,
+      delivered: true,
+      opened: true,
+      replied: true,
+      replyClassification: "positive",
+      bounced: false,
+      unsubscribed: false,
+      lastDeliveredAt: "2026-03-02T12:00:00.000Z",
+    },
+  });
 
 const GlobalStatusSchema = z
   .object({
@@ -246,7 +257,9 @@ const GlobalStatusSchema = z
       unsubscribed: z.boolean().describe("Whether this email has unsubscribed anywhere"),
     }).describe("Global email signals (technical/legal)"),
   })
-  .openapi("GlobalStatus");
+  .openapi("GlobalStatus", {
+    example: { email: { bounced: false, unsubscribed: false } },
+  });
 
 const ProviderStatusSchema = z
   .object({
@@ -260,8 +273,8 @@ const ProviderStatusSchema = z
 const StatusResultSchema = z
   .object({
     email: z.string().describe("Recipient email address"),
-    broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly)"),
-    transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark)"),
+    broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly). Omitted if no broadcast data exists for this email."),
+    transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark). Omitted if no transactional data exists for this email."),
   })
   .openapi("StatusResult");
 
@@ -271,8 +284,8 @@ export const StatusItemSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.string().optional().describe("Brand ID — if present without campaignId, returns per-campaign breakdown + aggregated brand status"),
-    campaignId: z.string().optional().describe("Campaign ID — if present, returns status for this specific campaign (brandId ignored)"),
+    brandId: z.string().optional().describe("Brand ID — if present without campaignId, activates brand mode: returns per-campaign breakdown (byCampaign) + aggregated brand status. If both brandId and campaignId are provided, campaign mode takes precedence and brandId is ignored."),
+    campaignId: z.string().optional().describe("Campaign ID — if present, activates campaign mode: returns status scoped to this specific campaign. Takes precedence over brandId."),
     items: z.array(StatusItemSchema).min(1).describe("List of emails to check status for"),
   })
   .refine(
@@ -413,22 +426,121 @@ registry.registerPath({
   path: "/orgs/status",
   tags: ["Status"],
   summary: "Get delivery status for emails",
-  description: "Batch lookup of delivery status. Requires at least one of brandId or campaignId in the body.\n\n**Campaign mode** (campaignId present): returns status for that specific campaign.\n\n**Brand mode** (brandId without campaignId): returns per-campaign breakdown (byCampaign) + aggregated brand status.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers.",
+  description: [
+    "Batch lookup of delivery status for a list of emails. Requires at least one of `brandId` or `campaignId` in the body.",
+    "",
+    "**Two modes:**",
+    "",
+    "| `brandId` | `campaignId` | Mode | Active fields |",
+    "|-----------|-------------|------|---------------|",
+    "| present | absent | Brand | `byCampaign` + `brand` + `global` |",
+    "| absent | present | Campaign | `campaign` + `global` |",
+    "| present | present | Campaign | `campaign` + `global` (brandId ignored) |",
+    "| absent | absent | — | 400 error |",
+    "",
+    "**Brand mode** (`brandId` without `campaignId`): returns a `byCampaign` object mapping each campaignId to its `StatusScope`, plus an aggregated `brand` scope (BOOL_OR across campaigns, `replyClassification` from most recent, `lastDeliveredAt` = MAX).",
+    "",
+    "**Campaign mode** (`campaignId` present): returns a single `campaign` scope for that campaign.",
+    "",
+    "Non-applicable fields are always present but set to `null`.",
+    "",
+    "Returns status from both broadcast (Instantly) and transactional (Postmark) providers. If one provider fails, the other's results are still returned. If both fail, returns 502.",
+    "",
+    "**Headers** (`x-brand-id`, `x-campaign-id`, etc.) are tracing/logging only — they are forwarded to downstream services but do NOT influence filtering logic. Filtering is driven exclusively by body fields.",
+  ].join("\n"),
   security: [{ apiKey: [] }],
   request: {
     headers: OrgScopedHeadersSchema,
     body: {
-      content: { "application/json": { schema: StatusRequestSchema } },
+      content: {
+        "application/json": {
+          schema: StatusRequestSchema,
+          examples: {
+            campaignMode: {
+              summary: "Campaign mode — status for a specific campaign",
+              value: {
+                campaignId: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
+                items: [
+                  { email: "alice@media.com" },
+                  { email: "bob@press.org" },
+                ],
+              },
+            },
+            brandMode: {
+              summary: "Brand mode — per-campaign breakdown for a brand",
+              value: {
+                brandId: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
+                items: [
+                  { email: "alice@media.com" },
+                ],
+              },
+            },
+          },
+        },
+      },
     },
   },
   responses: {
     200: {
-      description: "Status results",
-      content: { "application/json": { schema: StatusResponseSchema } },
+      description: "Status results per email, split by provider (broadcast / transactional).",
+      content: {
+        "application/json": {
+          schema: StatusResponseSchema,
+          examples: {
+            campaignMode: {
+              summary: "Campaign mode response",
+              value: {
+                results: [{
+                  email: "alice@media.com",
+                  broadcast: {
+                    byCampaign: null,
+                    campaign: {
+                      contacted: true, delivered: true, opened: false, replied: false,
+                      replyClassification: null, bounced: false, unsubscribed: false,
+                      lastDeliveredAt: "2026-02-20T14:30:00.000Z",
+                    },
+                    brand: null,
+                    global: { email: { bounced: false, unsubscribed: false } },
+                  },
+                }],
+              },
+            },
+            brandMode: {
+              summary: "Brand mode response — byCampaign breakdown + aggregated brand",
+              value: {
+                results: [{
+                  email: "alice@media.com",
+                  broadcast: {
+                    byCampaign: {
+                      "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
+                        contacted: true, delivered: true, opened: false, replied: false,
+                        replyClassification: null, bounced: false, unsubscribed: false,
+                        lastDeliveredAt: "2026-03-01T10:00:00.000Z",
+                      },
+                      "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
+                        contacted: true, delivered: true, opened: true, replied: true,
+                        replyClassification: "positive", bounced: false, unsubscribed: false,
+                        lastDeliveredAt: "2026-03-02T12:00:00.000Z",
+                      },
+                    },
+                    campaign: null,
+                    brand: {
+                      contacted: true, delivered: true, opened: true, replied: true,
+                      replyClassification: "positive", bounced: false, unsubscribed: false,
+                      lastDeliveredAt: "2026-03-02T12:00:00.000Z",
+                    },
+                    global: { email: { bounced: false, unsubscribed: false } },
+                  },
+                }],
+              },
+            },
+          },
+        },
+      },
     },
-    400: { description: "Invalid request", content: errorContent },
-    401: { description: "Unauthorized", content: errorContent },
-    502: { description: "Upstream service error", content: errorContent },
+    400: { description: "Invalid request — missing brandId and campaignId, empty items, or invalid email", content: errorContent },
+    401: { description: "Unauthorized — missing or invalid X-API-Key", content: errorContent },
+    502: { description: "Upstream service error — both providers failed", content: errorContent },
   },
 });
 

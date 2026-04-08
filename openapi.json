@@ -607,7 +607,17 @@
           "bounced",
           "unsubscribed",
           "lastDeliveredAt"
-        ]
+        ],
+        "example": {
+          "contacted": true,
+          "delivered": true,
+          "opened": true,
+          "replied": true,
+          "replyClassification": "positive",
+          "bounced": false,
+          "unsubscribed": false,
+          "lastDeliveredAt": "2026-03-02T12:00:00.000Z"
+        }
       },
       "GlobalStatus": {
         "type": "object",
@@ -634,7 +644,13 @@
         "required": [
           "email"
         ],
-        "description": "Global signals across all brands and campaigns"
+        "description": "Global signals across all brands and campaigns",
+        "example": {
+          "email": {
+            "bounced": false,
+            "unsubscribed": false
+          }
+        }
       },
       "ProviderStatus": {
         "type": "object",
@@ -679,7 +695,7 @@
           "brand",
           "global"
         ],
-        "description": "Status from broadcast provider (Instantly)"
+        "description": "Status from broadcast provider (Instantly). Omitted if no broadcast data exists for this email."
       },
       "StatusResult": {
         "type": "object",
@@ -697,7 +713,7 @@
                 "$ref": "#/components/schemas/ProviderStatus"
               },
               {
-                "description": "Status from transactional provider (Postmark)"
+                "description": "Status from transactional provider (Postmark). Omitted if no transactional data exists for this email."
               }
             ]
           }
@@ -726,11 +742,11 @@
         "properties": {
           "brandId": {
             "type": "string",
-            "description": "Brand ID — if present without campaignId, returns per-campaign breakdown + aggregated brand status"
+            "description": "Brand ID — if present without campaignId, activates brand mode: returns per-campaign breakdown (byCampaign) + aggregated brand status. If both brandId and campaignId are provided, campaign mode takes precedence and brandId is ignored."
           },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID — if present, returns status for this specific campaign (brandId ignored)"
+            "description": "Campaign ID — if present, activates campaign mode: returns status scoped to this specific campaign. Takes precedence over brandId."
           },
           "items": {
             "type": "array",
@@ -1309,7 +1325,7 @@
           "Status"
         ],
         "summary": "Get delivery status for emails",
-        "description": "Batch lookup of delivery status. Requires at least one of brandId or campaignId in the body.\n\n**Campaign mode** (campaignId present): returns status for that specific campaign.\n\n**Brand mode** (brandId without campaignId): returns per-campaign breakdown (byCampaign) + aggregated brand status.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers.",
+        "description": "Batch lookup of delivery status for a list of emails. Requires at least one of `brandId` or `campaignId` in the body.\n\n**Two modes:**\n\n| `brandId` | `campaignId` | Mode | Active fields |\n|-----------|-------------|------|---------------|\n| present | absent | Brand | `byCampaign` + `brand` + `global` |\n| absent | present | Campaign | `campaign` + `global` |\n| present | present | Campaign | `campaign` + `global` (brandId ignored) |\n| absent | absent | — | 400 error |\n\n**Brand mode** (`brandId` without `campaignId`): returns a `byCampaign` object mapping each campaignId to its `StatusScope`, plus an aggregated `brand` scope (BOOL_OR across campaigns, `replyClassification` from most recent, `lastDeliveredAt` = MAX).\n\n**Campaign mode** (`campaignId` present): returns a single `campaign` scope for that campaign.\n\nNon-applicable fields are always present but set to `null`.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers. If one provider fails, the other's results are still returned. If both fail, returns 502.\n\n**Headers** (`x-brand-id`, `x-campaign-id`, etc.) are tracing/logging only — they are forwarded to downstream services but do NOT influence filtering logic. Filtering is driven exclusively by body fields.",
         "security": [
           {
             "apiKey": []
@@ -1392,23 +1408,133 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/StatusRequest"
+              },
+              "examples": {
+                "campaignMode": {
+                  "summary": "Campaign mode — status for a specific campaign",
+                  "value": {
+                    "campaignId": "b47ac10b-58cc-4372-a567-0e02b2c3d479",
+                    "items": [
+                      {
+                        "email": "alice@media.com"
+                      },
+                      {
+                        "email": "bob@press.org"
+                      }
+                    ]
+                  }
+                },
+                "brandMode": {
+                  "summary": "Brand mode — per-campaign breakdown for a brand",
+                  "value": {
+                    "brandId": "c58bd21c-69dd-4483-b678-1f13c3d4e590",
+                    "items": [
+                      {
+                        "email": "alice@media.com"
+                      }
+                    ]
+                  }
+                }
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Status results",
+            "description": "Status results per email, split by provider (broadcast / transactional).",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/StatusResponse"
+                },
+                "examples": {
+                  "campaignMode": {
+                    "summary": "Campaign mode response",
+                    "value": {
+                      "results": [
+                        {
+                          "email": "alice@media.com",
+                          "broadcast": {
+                            "byCampaign": null,
+                            "campaign": {
+                              "contacted": true,
+                              "delivered": true,
+                              "opened": false,
+                              "replied": false,
+                              "replyClassification": null,
+                              "bounced": false,
+                              "unsubscribed": false,
+                              "lastDeliveredAt": "2026-02-20T14:30:00.000Z"
+                            },
+                            "brand": null,
+                            "global": {
+                              "email": {
+                                "bounced": false,
+                                "unsubscribed": false
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "brandMode": {
+                    "summary": "Brand mode response — byCampaign breakdown + aggregated brand",
+                    "value": {
+                      "results": [
+                        {
+                          "email": "alice@media.com",
+                          "broadcast": {
+                            "byCampaign": {
+                              "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
+                                "contacted": true,
+                                "delivered": true,
+                                "opened": false,
+                                "replied": false,
+                                "replyClassification": null,
+                                "bounced": false,
+                                "unsubscribed": false,
+                                "lastDeliveredAt": "2026-03-01T10:00:00.000Z"
+                              },
+                              "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
+                                "contacted": true,
+                                "delivered": true,
+                                "opened": true,
+                                "replied": true,
+                                "replyClassification": "positive",
+                                "bounced": false,
+                                "unsubscribed": false,
+                                "lastDeliveredAt": "2026-03-02T12:00:00.000Z"
+                              }
+                            },
+                            "campaign": null,
+                            "brand": {
+                              "contacted": true,
+                              "delivered": true,
+                              "opened": true,
+                              "replied": true,
+                              "replyClassification": "positive",
+                              "bounced": false,
+                              "unsubscribed": false,
+                              "lastDeliveredAt": "2026-03-02T12:00:00.000Z"
+                            },
+                            "global": {
+                              "email": {
+                                "bounced": false,
+                                "unsubscribed": false
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request — missing brandId and campaignId, empty items, or invalid email",
             "content": {
               "application/json": {
                 "schema": {
@@ -1418,7 +1544,7 @@
             }
           },
           "401": {
-            "description": "Unauthorized",
+            "description": "Unauthorized — missing or invalid X-API-Key",
             "content": {
               "application/json": {
                 "schema": {
@@ -1428,7 +1554,7 @@
             }
           },
           "502": {
-            "description": "Upstream service error",
+            "description": "Upstream service error — both providers failed",
             "content": {
               "application/json": {
                 "schema": {
