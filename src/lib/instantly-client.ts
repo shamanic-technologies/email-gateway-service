@@ -83,10 +83,12 @@ export interface ProviderStatsPayload {
   emailsClicked: number;
   emailsReplied: number;
   emailsBounced: number;
-  repliesAutoReply?: number;
-  repliesWillingToMeet?: number;
   repliesInterested?: number;
+  repliesMeetingBooked?: number;
+  repliesClosed?: number;
   repliesNotInterested?: number;
+  repliesNeutral?: number;
+  repliesAutoReply?: number;
   repliesOutOfOffice?: number;
   repliesUnsubscribe?: number;
 }
@@ -96,6 +98,9 @@ export interface ProviderStepStats {
   emailsSent: number;
   emailsOpened: number;
   emailsReplied: number;
+  repliesInterested?: number;
+  repliesNeutral?: number;
+  repliesNotInterested?: number;
   emailsBounced: number;
 }
 

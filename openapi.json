@@ -335,23 +335,31 @@
           },
           "emailsReplied": {
             "type": "number",
-            "description": "Total replies received"
+            "description": "All human replies (excludes auto-replies)"
           },
           "emailsBounced": {
             "type": "number",
             "description": "Total bounced emails"
           },
-          "repliesWillingToMeet": {
-            "type": "number",
-            "description": "Replies willing to meet"
-          },
           "repliesInterested": {
             "type": "number",
-            "description": "Replies interested"
+            "description": "Replies classified as interested"
+          },
+          "repliesMeetingBooked": {
+            "type": "number",
+            "description": "Replies where a meeting was booked"
+          },
+          "repliesClosed": {
+            "type": "number",
+            "description": "Replies classified as closed/won"
           },
           "repliesNotInterested": {
             "type": "number",
             "description": "Replies not interested"
+          },
+          "repliesNeutral": {
+            "type": "number",
+            "description": "Replies classified as neutral"
           },
           "repliesOutOfOffice": {
             "type": "number",
@@ -374,9 +382,11 @@
           "emailsClicked",
           "emailsReplied",
           "emailsBounced",
-          "repliesWillingToMeet",
           "repliesInterested",
+          "repliesMeetingBooked",
+          "repliesClosed",
           "repliesNotInterested",
+          "repliesNeutral",
           "repliesOutOfOffice",
           "repliesUnsubscribe",
           "recipients"
@@ -400,7 +410,19 @@
           },
           "emailsReplied": {
             "type": "number",
-            "description": "Replies for this step"
+            "description": "All human replies for this step"
+          },
+          "repliesInterested": {
+            "type": "number",
+            "description": "Interested replies for this step"
+          },
+          "repliesNeutral": {
+            "type": "number",
+            "description": "Neutral replies for this step"
+          },
+          "repliesNotInterested": {
+            "type": "number",
+            "description": "Not interested replies for this step"
           },
           "emailsBounced": {
             "type": "number",
@@ -412,6 +434,9 @@
           "emailsSent",
           "emailsOpened",
           "emailsReplied",
+          "repliesInterested",
+          "repliesNeutral",
+          "repliesNotInterested",
           "emailsBounced"
         ]
       },
@@ -487,9 +512,11 @@
             "emailsClicked": 12,
             "emailsReplied": 8,
             "emailsBounced": 5,
-            "repliesWillingToMeet": 3,
             "repliesInterested": 2,
+            "repliesMeetingBooked": 1,
+            "repliesClosed": 0,
             "repliesNotInterested": 1,
+            "repliesNeutral": 0,
             "repliesOutOfOffice": 1,
             "repliesUnsubscribe": 1,
             "recipients": 150
@@ -523,9 +550,11 @@
                 "emailsClicked": 12,
                 "emailsReplied": 8,
                 "emailsBounced": 5,
-                "repliesWillingToMeet": 3,
                 "repliesInterested": 2,
+                "repliesMeetingBooked": 1,
+                "repliesClosed": 0,
                 "repliesNotInterested": 1,
+                "repliesNeutral": 0,
                 "repliesOutOfOffice": 1,
                 "repliesUnsubscribe": 1,
                 "recipients": 150
@@ -541,9 +570,11 @@
                 "emailsClicked": 5,
                 "emailsReplied": 3,
                 "emailsBounced": 2,
-                "repliesWillingToMeet": 1,
                 "repliesInterested": 1,
+                "repliesMeetingBooked": 0,
+                "repliesClosed": 0,
                 "repliesNotInterested": 0,
+                "repliesNeutral": 0,
                 "repliesOutOfOffice": 1,
                 "repliesUnsubscribe": 0,
                 "recipients": 80
