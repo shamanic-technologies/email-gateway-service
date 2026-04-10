@@ -39,7 +39,7 @@ function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats
 
 function normalizeStepStats(steps: ProviderStepStats[]): Array<{
   step: number; emailsSent: number; emailsOpened: number; emailsReplied: number;
-  repliesPositive: number; repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
+  repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
   emailsBounced: number;
 }> {
   return steps.map((s) => ({
@@ -47,7 +47,6 @@ function normalizeStepStats(steps: ProviderStepStats[]): Array<{
     emailsSent: s.emailsSent,
     emailsOpened: s.emailsOpened,
     emailsReplied: s.emailsReplied,
-    repliesPositive: s.repliesInterested ?? 0,
     repliesInterested: s.repliesInterested ?? 0,
     repliesNeutral: s.repliesNeutral ?? 0,
     repliesNotInterested: s.repliesNotInterested ?? 0,

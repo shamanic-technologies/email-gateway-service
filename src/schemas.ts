@@ -141,7 +141,6 @@ export const StepStatsSchema = z
     emailsSent: z.number().describe("Emails sent for this step"),
     emailsOpened: z.number().describe("Emails opened for this step"),
     emailsReplied: z.number().describe("All human replies for this step"),
-    repliesPositive: z.number().describe("Sum of interested + meetingBooked + closed for this step"),
     repliesInterested: z.number().describe("Interested replies for this step"),
     repliesNeutral: z.number().describe("Neutral replies for this step"),
     repliesNotInterested: z.number().describe("Not interested replies for this step"),

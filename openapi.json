@@ -417,10 +417,6 @@
             "type": "number",
             "description": "All human replies for this step"
           },
-          "repliesPositive": {
-            "type": "number",
-            "description": "Sum of interested + meetingBooked + closed for this step"
-          },
           "repliesInterested": {
             "type": "number",
             "description": "Interested replies for this step"
@@ -443,7 +439,6 @@
           "emailsSent",
           "emailsOpened",
           "emailsReplied",
-          "repliesPositive",
           "repliesInterested",
           "repliesNeutral",
           "repliesNotInterested",
