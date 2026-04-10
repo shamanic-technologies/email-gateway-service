@@ -25,6 +25,7 @@ function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats
     emailsClicked: raw.emailsClicked,
     emailsReplied: raw.emailsReplied,
     emailsBounced: raw.emailsBounced,
+    repliesPositive: (raw.repliesInterested ?? 0) + (raw.repliesMeetingBooked ?? 0) + (raw.repliesClosed ?? 0),
     repliesInterested: raw.repliesInterested ?? 0,
     repliesMeetingBooked: raw.repliesMeetingBooked ?? 0,
     repliesClosed: raw.repliesClosed ?? 0,
@@ -38,7 +39,7 @@ function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats
 
 function normalizeStepStats(steps: ProviderStepStats[]): Array<{
   step: number; emailsSent: number; emailsOpened: number; emailsReplied: number;
-  repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
+  repliesPositive: number; repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
   emailsBounced: number;
 }> {
   return steps.map((s) => ({
@@ -46,6 +47,7 @@ function normalizeStepStats(steps: ProviderStepStats[]): Array<{
     emailsSent: s.emailsSent,
     emailsOpened: s.emailsOpened,
     emailsReplied: s.emailsReplied,
+    repliesPositive: s.repliesInterested ?? 0,
     repliesInterested: s.repliesInterested ?? 0,
     repliesNeutral: s.repliesNeutral ?? 0,
     repliesNotInterested: s.repliesNotInterested ?? 0,
@@ -75,6 +77,7 @@ const ZERO_STATS: Stats = {
   emailsClicked: 0,
   emailsReplied: 0,
   emailsBounced: 0,
+  repliesPositive: 0,
   repliesInterested: 0,
   repliesMeetingBooked: 0,
   repliesClosed: 0,
@@ -94,6 +97,7 @@ function addStats(a: Stats, b: Stats): Stats {
     emailsClicked: a.emailsClicked + b.emailsClicked,
     emailsReplied: a.emailsReplied + b.emailsReplied,
     emailsBounced: a.emailsBounced + b.emailsBounced,
+    repliesPositive: a.repliesPositive + b.repliesPositive,
     repliesInterested: a.repliesInterested + b.repliesInterested,
     repliesMeetingBooked: a.repliesMeetingBooked + b.repliesMeetingBooked,
     repliesClosed: a.repliesClosed + b.repliesClosed,

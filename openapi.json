@@ -341,6 +341,10 @@
             "type": "number",
             "description": "Total bounced emails"
           },
+          "repliesPositive": {
+            "type": "number",
+            "description": "Sum of interested + meetingBooked + closed replies"
+          },
           "repliesInterested": {
             "type": "number",
             "description": "Replies classified as interested"
@@ -382,6 +386,7 @@
           "emailsClicked",
           "emailsReplied",
           "emailsBounced",
+          "repliesPositive",
           "repliesInterested",
           "repliesMeetingBooked",
           "repliesClosed",
@@ -412,6 +417,10 @@
             "type": "number",
             "description": "All human replies for this step"
           },
+          "repliesPositive": {
+            "type": "number",
+            "description": "Sum of interested + meetingBooked + closed for this step"
+          },
           "repliesInterested": {
             "type": "number",
             "description": "Interested replies for this step"
@@ -434,6 +443,7 @@
           "emailsSent",
           "emailsOpened",
           "emailsReplied",
+          "repliesPositive",
           "repliesInterested",
           "repliesNeutral",
           "repliesNotInterested",
@@ -512,6 +522,7 @@
             "emailsClicked": 12,
             "emailsReplied": 8,
             "emailsBounced": 5,
+            "repliesPositive": 3,
             "repliesInterested": 2,
             "repliesMeetingBooked": 1,
             "repliesClosed": 0,
@@ -550,6 +561,7 @@
                 "emailsClicked": 12,
                 "emailsReplied": 8,
                 "emailsBounced": 5,
+                "repliesPositive": 3,
                 "repliesInterested": 2,
                 "repliesMeetingBooked": 1,
                 "repliesClosed": 0,
@@ -570,6 +582,7 @@
                 "emailsClicked": 5,
                 "emailsReplied": 3,
                 "emailsBounced": 2,
+                "repliesPositive": 1,
                 "repliesInterested": 1,
                 "repliesMeetingBooked": 0,
                 "repliesClosed": 0,

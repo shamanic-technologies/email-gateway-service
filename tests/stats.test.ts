@@ -220,6 +220,7 @@ describe("GET /orgs/stats", () => {
         emailsClicked: 10,
         emailsReplied: 5,
         emailsBounced: 3,
+        repliesPositive: 3,
         repliesInterested: 2,
         repliesMeetingBooked: 1,
         repliesClosed: 0,
@@ -273,6 +274,7 @@ describe("GET /orgs/stats", () => {
         emailsClicked: 3,
         emailsReplied: 2,
         emailsBounced: 5,
+        repliesPositive: 0,
         repliesInterested: 0,
         repliesMeetingBooked: 0,
         repliesClosed: 0,
@@ -434,6 +436,7 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
+      expect(res.body.broadcast.repliesPositive).toBe(0);
       expect(res.body.broadcast.repliesInterested).toBe(0);
       expect(res.body.broadcast.repliesMeetingBooked).toBe(0);
       expect(res.body.broadcast.repliesClosed).toBe(0);
@@ -700,6 +703,7 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];
+      expect(group.broadcast.repliesPositive).toBe(0);
       expect(group.broadcast.repliesInterested).toBe(0);
       expect(group.broadcast.repliesMeetingBooked).toBe(0);
       expect(group.broadcast.repliesClosed).toBe(0);
@@ -812,7 +816,11 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.stepStats).toEqual(steps);
+      expect(res.body.broadcast.stepStats).toEqual([
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, repliesPositive: 1, repliesInterested: 1, repliesNeutral: 0, repliesNotInterested: 0, emailsBounced: 1 },
+        { step: 2, emailsSent: 10, emailsOpened: 5, emailsReplied: 1, repliesPositive: 0, repliesInterested: 0, repliesNeutral: 1, repliesNotInterested: 0, emailsBounced: 1 },
+        { step: 3, emailsSent: 10, emailsOpened: 2, emailsReplied: 1, repliesPositive: 0, repliesInterested: 0, repliesNeutral: 0, repliesNotInterested: 1, emailsBounced: 0 },
+      ]);
       expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
@@ -840,7 +848,9 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.stepStats).toBeUndefined();
-      expect(res.body.broadcast.stepStats).toEqual(steps);
+      expect(res.body.broadcast.stepStats).toEqual([
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, repliesPositive: 1, repliesInterested: 1, repliesNeutral: 0, repliesNotInterested: 0, emailsBounced: 1 },
+      ]);
     });
   });
 
