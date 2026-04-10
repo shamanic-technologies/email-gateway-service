@@ -34,8 +34,8 @@ export type EmailType = z.infer<typeof EmailTypeSchema>;
 // --- POST /orgs/send ---
 
 const SendBaseSchema = z.object({
-  campaignId: z.string().optional().describe("Campaign ID"),
-  leadId: z.string().optional().describe("Lead ID from lead-service for end-to-end tracking"),
+  campaignId: z.string().optional().describe("Campaign ID for tracking and stats grouping"),
+  leadId: z.string().optional().describe("Lead ID for end-to-end tracking. When provided: logged on receipt, forwarded to the downstream provider (Postmark/Instantly), and returned as `messageId` in the response for broadcast sends. Omitting it means email stats cannot be correlated back to the lead."),
   workflowSlug: z.string().optional().describe("Workflow slug for tracking and grouping"),
   to: z.string({ required_error: "to (recipient email) is required — the lead has no email address", invalid_type_error: "to (recipient email) must be a string, got null — the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
   recipientFirstName: z.string({ required_error: "recipientFirstName is required", invalid_type_error: "recipientFirstName must be a string" }).describe("Recipient first name"),
@@ -44,7 +44,7 @@ const SendBaseSchema = z.object({
   replyTo: z.string().email().optional().describe("Reply-to email address"),
   tag: z.string().optional().describe("Email tag for categorization"),
   metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
-  idempotencyKey: z.string().optional().describe("Idempotency key to prevent duplicate sends (e.g. runId). If a send with the same key already succeeded, the previous result is returned without re-sending."),
+  idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."),
 });
 
 export const SequenceStepSchema = z
@@ -358,13 +358,84 @@ registry.registerPath({
   request: {
     headers: OrgScopedHeadersSchema,
     body: {
-      content: { "application/json": { schema: SendRequestSchema } },
+      content: {
+        "application/json": {
+          schema: SendRequestSchema,
+          examples: {
+            transactional: {
+              summary: "Transactional email with idempotency and lead tracking",
+              value: {
+                type: "transactional",
+                to: "alice@media.com",
+                recipientFirstName: "Alice",
+                recipientLastName: "Martin",
+                recipientCompany: "Media Corp",
+                subject: "Your PR coverage report is ready",
+                htmlBody: "<p>Hi Alice, your report is attached.</p>",
+                leadId: "a1b2c3d4-5678-9abc-def0-1234567890ab",
+                idempotencyKey: "run-abc123:email-send",
+                campaignId: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
+              },
+            },
+            broadcast: {
+              summary: "Broadcast sequence with lead tracking",
+              value: {
+                type: "broadcast",
+                to: "bob@press.org",
+                recipientFirstName: "Bob",
+                recipientLastName: "Jones",
+                recipientCompany: "Press Daily",
+                subject: "Exclusive story opportunity",
+                leadId: "f9e8d7c6-5432-1abc-def0-abcdef012345",
+                idempotencyKey: "run-xyz789:email-send",
+                campaignId: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
+                sequence: [
+                  { step: 1, bodyHtml: "<p>Hi Bob, I have a story for you.</p>", daysSinceLastStep: 0 },
+                  { step: 2, bodyHtml: "<p>Just following up on my previous email.</p>", daysSinceLastStep: 3 },
+                ],
+              },
+            },
+          },
+        },
+      },
     },
   },
   responses: {
     200: {
       description: "Email sent successfully",
-      content: { "application/json": { schema: SendResponseSchema } },
+      content: {
+        "application/json": {
+          schema: SendResponseSchema,
+          examples: {
+            transactionalSuccess: {
+              summary: "Transactional send — success",
+              value: {
+                success: true,
+                messageId: "e8b2d4f6-1234-5678-abcd-ef0123456789",
+                provider: "transactional",
+              },
+            },
+            broadcastSuccess: {
+              summary: "Broadcast send — success (messageId is the Instantly leadId)",
+              value: {
+                success: true,
+                messageId: "f9e8d7c6-5432-1abc-def0-abcdef012345",
+                provider: "broadcast",
+                campaignId: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
+              },
+            },
+            deduplicated: {
+              summary: "Idempotency hit — cached response returned, no email re-sent",
+              value: {
+                success: true,
+                messageId: "e8b2d4f6-1234-5678-abcd-ef0123456789",
+                provider: "transactional",
+                deduplicated: true,
+              },
+            },
+          },
+        },
+      },
     },
     400: { description: "Invalid request", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
