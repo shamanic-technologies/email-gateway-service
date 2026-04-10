@@ -25,18 +25,37 @@ function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats
     emailsClicked: raw.emailsClicked,
     emailsReplied: raw.emailsReplied,
     emailsBounced: raw.emailsBounced,
-    repliesWillingToMeet: raw.repliesWillingToMeet ?? 0,
     repliesInterested: raw.repliesInterested ?? 0,
+    repliesMeetingBooked: raw.repliesMeetingBooked ?? 0,
+    repliesClosed: raw.repliesClosed ?? 0,
     repliesNotInterested: raw.repliesNotInterested ?? 0,
+    repliesNeutral: raw.repliesNeutral ?? 0,
     repliesOutOfOffice: raw.repliesOutOfOffice ?? 0,
     repliesUnsubscribe: raw.repliesUnsubscribe ?? 0,
     recipients: recipients ?? raw.emailsSent,
   };
 }
 
+function normalizeStepStats(steps: ProviderStepStats[]): Array<{
+  step: number; emailsSent: number; emailsOpened: number; emailsReplied: number;
+  repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
+  emailsBounced: number;
+}> {
+  return steps.map((s) => ({
+    step: s.step,
+    emailsSent: s.emailsSent,
+    emailsOpened: s.emailsOpened,
+    emailsReplied: s.emailsReplied,
+    repliesInterested: s.repliesInterested ?? 0,
+    repliesNeutral: s.repliesNeutral ?? 0,
+    repliesNotInterested: s.repliesNotInterested ?? 0,
+    emailsBounced: s.emailsBounced,
+  }));
+}
+
 function normalizeBroadcastFlat(raw: ProviderStatsFlat): BroadcastStats {
   const base = normalizePayload(raw.stats, raw.recipients);
-  return raw.stepStats ? { ...base, stepStats: raw.stepStats } : base;
+  return raw.stepStats ? { ...base, stepStats: normalizeStepStats(raw.stepStats) } : base;
 }
 
 function isGrouped(result: ProviderStatsResult): result is ProviderStatsGrouped {
@@ -56,9 +75,11 @@ const ZERO_STATS: Stats = {
   emailsClicked: 0,
   emailsReplied: 0,
   emailsBounced: 0,
-  repliesWillingToMeet: 0,
   repliesInterested: 0,
+  repliesMeetingBooked: 0,
+  repliesClosed: 0,
   repliesNotInterested: 0,
+  repliesNeutral: 0,
   repliesOutOfOffice: 0,
   repliesUnsubscribe: 0,
   recipients: 0,
@@ -73,9 +94,11 @@ function addStats(a: Stats, b: Stats): Stats {
     emailsClicked: a.emailsClicked + b.emailsClicked,
     emailsReplied: a.emailsReplied + b.emailsReplied,
     emailsBounced: a.emailsBounced + b.emailsBounced,
-    repliesWillingToMeet: a.repliesWillingToMeet + b.repliesWillingToMeet,
     repliesInterested: a.repliesInterested + b.repliesInterested,
+    repliesMeetingBooked: a.repliesMeetingBooked + b.repliesMeetingBooked,
+    repliesClosed: a.repliesClosed + b.repliesClosed,
     repliesNotInterested: a.repliesNotInterested + b.repliesNotInterested,
+    repliesNeutral: a.repliesNeutral + b.repliesNeutral,
     repliesOutOfOffice: a.repliesOutOfOffice + b.repliesOutOfOffice,
     repliesUnsubscribe: a.repliesUnsubscribe + b.repliesUnsubscribe,
     recipients: a.recipients + b.recipients,
