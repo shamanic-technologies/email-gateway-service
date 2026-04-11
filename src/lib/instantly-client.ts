@@ -75,6 +75,18 @@ export async function atomicSend(body: {
   return request<AtomicSendResponse>("/orgs/send", { method: "POST", body, ctx });
 }
 
+export interface ProviderRepliesDetail {
+  interested?: number;
+  meetingBooked?: number;
+  closed?: number;
+  notInterested?: number;
+  wrongPerson?: number;
+  unsubscribe?: number;
+  neutral?: number;
+  autoReply?: number;
+  outOfOffice?: number;
+}
+
 export interface ProviderStatsPayload {
   emailsContacted?: number;
   emailsSent: number;
@@ -83,14 +95,11 @@ export interface ProviderStatsPayload {
   emailsClicked: number;
   emailsReplied: number;
   emailsBounced: number;
-  repliesInterested?: number;
-  repliesMeetingBooked?: number;
-  repliesClosed?: number;
-  repliesNotInterested?: number;
+  repliesPositive?: number;
+  repliesNegative?: number;
   repliesNeutral?: number;
   repliesAutoReply?: number;
-  repliesOutOfOffice?: number;
-  repliesUnsubscribe?: number;
+  repliesDetail?: ProviderRepliesDetail;
 }
 
 export interface ProviderStepStats {
@@ -98,10 +107,12 @@ export interface ProviderStepStats {
   emailsSent: number;
   emailsOpened: number;
   emailsReplied: number;
-  repliesInterested?: number;
-  repliesNeutral?: number;
-  repliesNotInterested?: number;
   emailsBounced: number;
+  repliesPositive?: number;
+  repliesNegative?: number;
+  repliesNeutral?: number;
+  repliesAutoReply?: number;
+  repliesDetail?: ProviderRepliesDetail;
 }
 
 export interface ProviderStatsFlat {

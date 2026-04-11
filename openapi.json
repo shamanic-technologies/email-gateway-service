@@ -310,6 +310,59 @@
           }
         ]
       },
+      "RepliesDetail": {
+        "type": "object",
+        "properties": {
+          "interested": {
+            "type": "number",
+            "description": "Replies classified as interested"
+          },
+          "meetingBooked": {
+            "type": "number",
+            "description": "Replies where a meeting was booked"
+          },
+          "closed": {
+            "type": "number",
+            "description": "Replies classified as closed/won"
+          },
+          "notInterested": {
+            "type": "number",
+            "description": "Replies not interested"
+          },
+          "wrongPerson": {
+            "type": "number",
+            "description": "Replies from wrong person"
+          },
+          "unsubscribe": {
+            "type": "number",
+            "description": "Unsubscribe replies"
+          },
+          "neutral": {
+            "type": "number",
+            "description": "Neutral replies"
+          },
+          "autoReply": {
+            "type": "number",
+            "description": "Auto-reply messages"
+          },
+          "outOfOffice": {
+            "type": "number",
+            "description": "Out of office replies"
+          }
+        },
+        "required": [
+          "interested",
+          "meetingBooked",
+          "closed",
+          "notInterested",
+          "wrongPerson",
+          "unsubscribe",
+          "neutral",
+          "autoReply",
+          "outOfOffice"
+        ],
+        "description": "Individual reply counts (9 categories)"
+      },
       "Stats": {
         "type": "object",
         "properties": {
@@ -343,35 +396,22 @@
           },
           "repliesPositive": {
             "type": "number",
-            "description": "Sum of interested + meetingBooked + closed replies"
+            "description": "Aggregate: interested + meetingBooked + closed"
           },
-          "repliesInterested": {
+          "repliesNegative": {
             "type": "number",
-            "description": "Replies classified as interested"
-          },
-          "repliesMeetingBooked": {
-            "type": "number",
-            "description": "Replies where a meeting was booked"
-          },
-          "repliesClosed": {
-            "type": "number",
-            "description": "Replies classified as closed/won"
-          },
-          "repliesNotInterested": {
-            "type": "number",
-            "description": "Replies not interested"
+            "description": "Aggregate: notInterested + wrongPerson + unsubscribe"
           },
           "repliesNeutral": {
             "type": "number",
-            "description": "Replies classified as neutral"
+            "description": "Aggregate: neutral"
           },
-          "repliesOutOfOffice": {
+          "repliesAutoReply": {
             "type": "number",
-            "description": "Replies out of office"
+            "description": "Aggregate: autoReply + outOfOffice"
           },
-          "repliesUnsubscribe": {
-            "type": "number",
-            "description": "Total unsubscribes"
+          "repliesDetail": {
+            "$ref": "#/components/schemas/RepliesDetail"
           },
           "recipients": {
             "type": "number",
@@ -387,13 +427,10 @@
           "emailsReplied",
           "emailsBounced",
           "repliesPositive",
-          "repliesInterested",
-          "repliesMeetingBooked",
-          "repliesClosed",
-          "repliesNotInterested",
+          "repliesNegative",
           "repliesNeutral",
-          "repliesOutOfOffice",
-          "repliesUnsubscribe",
+          "repliesAutoReply",
+          "repliesDetail",
           "recipients"
         ],
         "description": "Stats for transactional emails"
@@ -417,21 +454,35 @@
             "type": "number",
             "description": "All human replies for this step"
           },
-          "repliesInterested": {
-            "type": "number",
-            "description": "Interested replies for this step"
-          },
-          "repliesNeutral": {
-            "type": "number",
-            "description": "Neutral replies for this step"
-          },
-          "repliesNotInterested": {
-            "type": "number",
-            "description": "Not interested replies for this step"
-          },
           "emailsBounced": {
             "type": "number",
             "description": "Bounces for this step"
+          },
+          "repliesPositive": {
+            "type": "number",
+            "description": "Aggregate: interested + meetingBooked + closed"
+          },
+          "repliesNegative": {
+            "type": "number",
+            "description": "Aggregate: notInterested + wrongPerson + unsubscribe"
+          },
+          "repliesNeutral": {
+            "type": "number",
+            "description": "Aggregate: neutral"
+          },
+          "repliesAutoReply": {
+            "type": "number",
+            "description": "Aggregate: autoReply + outOfOffice"
+          },
+          "repliesDetail": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RepliesDetail"
+              },
+              {
+                "description": "Individual reply counts for this step"
+              }
+            ]
           }
         },
         "required": [
@@ -439,10 +490,12 @@
           "emailsSent",
           "emailsOpened",
           "emailsReplied",
-          "repliesInterested",
+          "emailsBounced",
+          "repliesPositive",
+          "repliesNegative",
           "repliesNeutral",
-          "repliesNotInterested",
-          "emailsBounced"
+          "repliesAutoReply",
+          "repliesDetail"
         ]
       },
       "BroadcastStats": {
@@ -518,13 +571,20 @@
             "emailsReplied": 8,
             "emailsBounced": 5,
             "repliesPositive": 3,
-            "repliesInterested": 2,
-            "repliesMeetingBooked": 1,
-            "repliesClosed": 0,
-            "repliesNotInterested": 1,
+            "repliesNegative": 2,
             "repliesNeutral": 0,
-            "repliesOutOfOffice": 1,
-            "repliesUnsubscribe": 1,
+            "repliesAutoReply": 2,
+            "repliesDetail": {
+              "interested": 2,
+              "meetingBooked": 1,
+              "closed": 0,
+              "notInterested": 1,
+              "wrongPerson": 0,
+              "unsubscribe": 1,
+              "neutral": 0,
+              "autoReply": 1,
+              "outOfOffice": 1
+            },
             "recipients": 150
           }
         }
@@ -557,13 +617,20 @@
                 "emailsReplied": 8,
                 "emailsBounced": 5,
                 "repliesPositive": 3,
-                "repliesInterested": 2,
-                "repliesMeetingBooked": 1,
-                "repliesClosed": 0,
-                "repliesNotInterested": 1,
+                "repliesNegative": 2,
                 "repliesNeutral": 0,
-                "repliesOutOfOffice": 1,
-                "repliesUnsubscribe": 1,
+                "repliesAutoReply": 2,
+                "repliesDetail": {
+                  "interested": 2,
+                  "meetingBooked": 1,
+                  "closed": 0,
+                  "notInterested": 1,
+                  "wrongPerson": 0,
+                  "unsubscribe": 1,
+                  "neutral": 0,
+                  "autoReply": 1,
+                  "outOfOffice": 1
+                },
                 "recipients": 150
               }
             },
@@ -578,13 +645,20 @@
                 "emailsReplied": 3,
                 "emailsBounced": 2,
                 "repliesPositive": 1,
-                "repliesInterested": 1,
-                "repliesMeetingBooked": 0,
-                "repliesClosed": 0,
-                "repliesNotInterested": 0,
+                "repliesNegative": 0,
                 "repliesNeutral": 0,
-                "repliesOutOfOffice": 1,
-                "repliesUnsubscribe": 0,
+                "repliesAutoReply": 1,
+                "repliesDetail": {
+                  "interested": 1,
+                  "meetingBooked": 0,
+                  "closed": 0,
+                  "notInterested": 0,
+                  "wrongPerson": 0,
+                  "unsubscribe": 0,
+                  "neutral": 0,
+                  "autoReply": 0,
+                  "outOfOffice": 1
+                },
                 "recipients": 80
               }
             }

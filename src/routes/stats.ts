@@ -1,20 +1,57 @@
 import { Router, Request, Response } from "express";
-import { StatsQuerySchema, Stats, BroadcastStats } from "../schemas";
+import { StatsQuerySchema, Stats, StepStats, BroadcastStats } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import { extractOrgContext, parseBrandIds } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import * as dynastyClient from "../lib/dynasty-client";
 import type {
+  ProviderRepliesDetail,
   ProviderStatsFlat,
   ProviderStatsGrouped,
   ProviderStatsPayload,
   ProviderStatsResult,
   ProviderStepStats,
 } from "../lib/instantly-client";
+import type { RepliesDetail } from "../schemas";
 
 const router = Router();
 const internalRouter = Router();
+
+const ZERO_DETAIL: RepliesDetail = {
+  interested: 0, meetingBooked: 0, closed: 0,
+  notInterested: 0, wrongPerson: 0, unsubscribe: 0,
+  neutral: 0, autoReply: 0, outOfOffice: 0,
+};
+
+function normalizeDetail(raw?: ProviderRepliesDetail): RepliesDetail {
+  if (!raw) return { ...ZERO_DETAIL };
+  return {
+    interested: raw.interested ?? 0,
+    meetingBooked: raw.meetingBooked ?? 0,
+    closed: raw.closed ?? 0,
+    notInterested: raw.notInterested ?? 0,
+    wrongPerson: raw.wrongPerson ?? 0,
+    unsubscribe: raw.unsubscribe ?? 0,
+    neutral: raw.neutral ?? 0,
+    autoReply: raw.autoReply ?? 0,
+    outOfOffice: raw.outOfOffice ?? 0,
+  };
+}
+
+function addDetail(a: RepliesDetail, b: RepliesDetail): RepliesDetail {
+  return {
+    interested: a.interested + b.interested,
+    meetingBooked: a.meetingBooked + b.meetingBooked,
+    closed: a.closed + b.closed,
+    notInterested: a.notInterested + b.notInterested,
+    wrongPerson: a.wrongPerson + b.wrongPerson,
+    unsubscribe: a.unsubscribe + b.unsubscribe,
+    neutral: a.neutral + b.neutral,
+    autoReply: a.autoReply + b.autoReply,
+    outOfOffice: a.outOfOffice + b.outOfOffice,
+  };
+}
 
 function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats {
   return {
@@ -25,32 +62,27 @@ function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats
     emailsClicked: raw.emailsClicked,
     emailsReplied: raw.emailsReplied,
     emailsBounced: raw.emailsBounced,
-    repliesPositive: (raw.repliesInterested ?? 0) + (raw.repliesMeetingBooked ?? 0) + (raw.repliesClosed ?? 0),
-    repliesInterested: raw.repliesInterested ?? 0,
-    repliesMeetingBooked: raw.repliesMeetingBooked ?? 0,
-    repliesClosed: raw.repliesClosed ?? 0,
-    repliesNotInterested: raw.repliesNotInterested ?? 0,
+    repliesPositive: raw.repliesPositive ?? 0,
+    repliesNegative: raw.repliesNegative ?? 0,
     repliesNeutral: raw.repliesNeutral ?? 0,
-    repliesOutOfOffice: raw.repliesOutOfOffice ?? 0,
-    repliesUnsubscribe: raw.repliesUnsubscribe ?? 0,
+    repliesAutoReply: raw.repliesAutoReply ?? 0,
+    repliesDetail: normalizeDetail(raw.repliesDetail),
     recipients: recipients ?? raw.emailsSent,
   };
 }
 
-function normalizeStepStats(steps: ProviderStepStats[]): Array<{
-  step: number; emailsSent: number; emailsOpened: number; emailsReplied: number;
-  repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
-  emailsBounced: number;
-}> {
+function normalizeStepStats(steps: ProviderStepStats[]): StepStats[] {
   return steps.map((s) => ({
     step: s.step,
     emailsSent: s.emailsSent,
     emailsOpened: s.emailsOpened,
     emailsReplied: s.emailsReplied,
-    repliesInterested: s.repliesInterested ?? 0,
-    repliesNeutral: s.repliesNeutral ?? 0,
-    repliesNotInterested: s.repliesNotInterested ?? 0,
     emailsBounced: s.emailsBounced,
+    repliesPositive: s.repliesPositive ?? 0,
+    repliesNegative: s.repliesNegative ?? 0,
+    repliesNeutral: s.repliesNeutral ?? 0,
+    repliesAutoReply: s.repliesAutoReply ?? 0,
+    repliesDetail: normalizeDetail(s.repliesDetail),
   }));
 }
 
@@ -77,13 +109,10 @@ const ZERO_STATS: Stats = {
   emailsReplied: 0,
   emailsBounced: 0,
   repliesPositive: 0,
-  repliesInterested: 0,
-  repliesMeetingBooked: 0,
-  repliesClosed: 0,
-  repliesNotInterested: 0,
+  repliesNegative: 0,
   repliesNeutral: 0,
-  repliesOutOfOffice: 0,
-  repliesUnsubscribe: 0,
+  repliesAutoReply: 0,
+  repliesDetail: { ...ZERO_DETAIL },
   recipients: 0,
 };
 
@@ -97,13 +126,10 @@ function addStats(a: Stats, b: Stats): Stats {
     emailsReplied: a.emailsReplied + b.emailsReplied,
     emailsBounced: a.emailsBounced + b.emailsBounced,
     repliesPositive: a.repliesPositive + b.repliesPositive,
-    repliesInterested: a.repliesInterested + b.repliesInterested,
-    repliesMeetingBooked: a.repliesMeetingBooked + b.repliesMeetingBooked,
-    repliesClosed: a.repliesClosed + b.repliesClosed,
-    repliesNotInterested: a.repliesNotInterested + b.repliesNotInterested,
+    repliesNegative: a.repliesNegative + b.repliesNegative,
     repliesNeutral: a.repliesNeutral + b.repliesNeutral,
-    repliesOutOfOffice: a.repliesOutOfOffice + b.repliesOutOfOffice,
-    repliesUnsubscribe: a.repliesUnsubscribe + b.repliesUnsubscribe,
+    repliesAutoReply: a.repliesAutoReply + b.repliesAutoReply,
+    repliesDetail: addDetail(a.repliesDetail, b.repliesDetail),
     recipients: a.recipients + b.recipients,
   };
 }

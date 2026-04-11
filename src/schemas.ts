@@ -112,6 +112,22 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
+export const RepliesDetailSchema = z
+  .object({
+    interested: z.number().describe("Replies classified as interested"),
+    meetingBooked: z.number().describe("Replies where a meeting was booked"),
+    closed: z.number().describe("Replies classified as closed/won"),
+    notInterested: z.number().describe("Replies not interested"),
+    wrongPerson: z.number().describe("Replies from wrong person"),
+    unsubscribe: z.number().describe("Unsubscribe replies"),
+    neutral: z.number().describe("Neutral replies"),
+    autoReply: z.number().describe("Auto-reply messages"),
+    outOfOffice: z.number().describe("Out of office replies"),
+  })
+  .openapi("RepliesDetail");
+
+export type RepliesDetail = z.infer<typeof RepliesDetailSchema>;
+
 export const StatsSchema = z
   .object({
     emailsContacted: z.number().describe("Total leads contacted (added to campaign / send attempted)"),
@@ -121,14 +137,11 @@ export const StatsSchema = z
     emailsClicked: z.number().describe("Total link clicks"),
     emailsReplied: z.number().describe("All human replies (excludes auto-replies)"),
     emailsBounced: z.number().describe("Total bounced emails"),
-    repliesPositive: z.number().describe("Sum of interested + meetingBooked + closed replies"),
-    repliesInterested: z.number().describe("Replies classified as interested"),
-    repliesMeetingBooked: z.number().describe("Replies where a meeting was booked"),
-    repliesClosed: z.number().describe("Replies classified as closed/won"),
-    repliesNotInterested: z.number().describe("Replies not interested"),
-    repliesNeutral: z.number().describe("Replies classified as neutral"),
-    repliesOutOfOffice: z.number().describe("Replies out of office"),
-    repliesUnsubscribe: z.number().describe("Total unsubscribes"),
+    repliesPositive: z.number().describe("Aggregate: interested + meetingBooked + closed"),
+    repliesNegative: z.number().describe("Aggregate: notInterested + wrongPerson + unsubscribe"),
+    repliesNeutral: z.number().describe("Aggregate: neutral"),
+    repliesAutoReply: z.number().describe("Aggregate: autoReply + outOfOffice"),
+    repliesDetail: RepliesDetailSchema.describe("Individual reply counts (9 categories)"),
     recipients: z.number().describe("Total unique recipients"),
   })
   .openapi("Stats");
@@ -141,10 +154,12 @@ export const StepStatsSchema = z
     emailsSent: z.number().describe("Emails sent for this step"),
     emailsOpened: z.number().describe("Emails opened for this step"),
     emailsReplied: z.number().describe("All human replies for this step"),
-    repliesInterested: z.number().describe("Interested replies for this step"),
-    repliesNeutral: z.number().describe("Neutral replies for this step"),
-    repliesNotInterested: z.number().describe("Not interested replies for this step"),
     emailsBounced: z.number().describe("Bounces for this step"),
+    repliesPositive: z.number().describe("Aggregate: interested + meetingBooked + closed"),
+    repliesNegative: z.number().describe("Aggregate: notInterested + wrongPerson + unsubscribe"),
+    repliesNeutral: z.number().describe("Aggregate: neutral"),
+    repliesAutoReply: z.number().describe("Aggregate: autoReply + outOfOffice"),
+    repliesDetail: RepliesDetailSchema.describe("Individual reply counts for this step"),
   })
   .openapi("StepStats");
 
@@ -183,13 +198,14 @@ export const StatsGroupSchema = z
         emailsReplied: 8,
         emailsBounced: 5,
         repliesPositive: 3,
-        repliesInterested: 2,
-        repliesMeetingBooked: 1,
-        repliesClosed: 0,
-        repliesNotInterested: 1,
+        repliesNegative: 2,
         repliesNeutral: 0,
-        repliesOutOfOffice: 1,
-        repliesUnsubscribe: 1,
+        repliesAutoReply: 2,
+        repliesDetail: {
+          interested: 2, meetingBooked: 1, closed: 0,
+          notInterested: 1, wrongPerson: 0, unsubscribe: 1,
+          neutral: 0, autoReply: 1, outOfOffice: 1,
+        },
         recipients: 150,
       },
     },
@@ -210,9 +226,13 @@ export const GroupedStatsResponseSchema = z
           broadcast: {
             emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
             emailsOpened: 45, emailsClicked: 12, emailsReplied: 8,
-            emailsBounced: 5, repliesPositive: 3, repliesInterested: 2, repliesMeetingBooked: 1,
-            repliesClosed: 0, repliesNotInterested: 1, repliesNeutral: 0,
-            repliesOutOfOffice: 1, repliesUnsubscribe: 1,
+            emailsBounced: 5, repliesPositive: 3, repliesNegative: 2,
+            repliesNeutral: 0, repliesAutoReply: 2,
+            repliesDetail: {
+              interested: 2, meetingBooked: 1, closed: 0,
+              notInterested: 1, wrongPerson: 0, unsubscribe: 1,
+              neutral: 0, autoReply: 1, outOfOffice: 1,
+            },
             recipients: 150,
           },
         },
@@ -221,9 +241,13 @@ export const GroupedStatsResponseSchema = z
           broadcast: {
             emailsContacted: 80, emailsSent: 70, emailsDelivered: 65,
             emailsOpened: 20, emailsClicked: 5, emailsReplied: 3,
-            emailsBounced: 2, repliesPositive: 1, repliesInterested: 1, repliesMeetingBooked: 0,
-            repliesClosed: 0, repliesNotInterested: 0, repliesNeutral: 0,
-            repliesOutOfOffice: 1, repliesUnsubscribe: 0,
+            emailsBounced: 2, repliesPositive: 1, repliesNegative: 0,
+            repliesNeutral: 0, repliesAutoReply: 1,
+            repliesDetail: {
+              interested: 1, meetingBooked: 0, closed: 0,
+              notInterested: 0, wrongPerson: 0, unsubscribe: 0,
+              neutral: 0, autoReply: 0, outOfOffice: 1,
+            },
             recipients: 80,
           },
         },
