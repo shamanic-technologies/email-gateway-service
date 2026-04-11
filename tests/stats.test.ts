@@ -78,7 +78,7 @@ function mockInstantlyStats(overrides = {}, stepStats?: unknown[]) {
           emailsDelivered: 75,
           emailsOpened: 30,
           emailsClicked: 3,
-          emailsReplied: 2,
+
           emailsBounced: 5,
           repliesPositive: 0,
           repliesNegative: 1,
@@ -141,7 +141,7 @@ function mockGroupedInstantly(groups: Array<{ key: string; overrides?: Record<st
             emailsDelivered: 38,
             emailsOpened: 15,
             emailsClicked: 2,
-            emailsReplied: 1,
+
             emailsBounced: 2,
             repliesPositive: 0,
             repliesNegative: 1,
@@ -224,7 +224,6 @@ describe("GET /orgs/stats", () => {
         emailsDelivered: 95,
         emailsOpened: 40,
         emailsClicked: 10,
-        emailsReplied: 0,
         emailsBounced: 3,
         repliesPositive: 0,
         repliesNegative: 0,
@@ -279,7 +278,6 @@ describe("GET /orgs/stats", () => {
         emailsDelivered: 75,
         emailsOpened: 30,
         emailsClicked: 3,
-        emailsReplied: 2,
         emailsBounced: 5,
         repliesPositive: 0,
         repliesNegative: 1,
@@ -417,7 +415,7 @@ describe("GET /orgs/stats", () => {
               emailsDelivered: 75,
               emailsOpened: 30,
               emailsClicked: 3,
-              emailsReplied: 2,
+    
               emailsBounced: 5,
             },
             recipients: 75,
@@ -819,9 +817,9 @@ describe("GET /orgs/stats", () => {
 
     it("forwards stepStats from instantly in broadcast block", async () => {
       const steps = [
-        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, interested: 1 } },
-        { step: 2, emailsSent: 10, emailsOpened: 5, emailsReplied: 1, emailsBounced: 1, repliesPositive: 0, repliesNegative: 0, repliesNeutral: 1, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, neutral: 1 } },
-        { step: 3, emailsSent: 10, emailsOpened: 2, emailsReplied: 1, emailsBounced: 0, repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, notInterested: 1 } },
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, interested: 1 } },
+        { step: 2, emailsSent: 10, emailsOpened: 5, emailsBounced: 1, repliesPositive: 0, repliesNegative: 0, repliesNeutral: 1, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, neutral: 1 } },
+        { step: 3, emailsSent: 10, emailsOpened: 2, emailsBounced: 0, repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, notInterested: 1 } },
       ];
       mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, steps));
 
@@ -844,7 +842,7 @@ describe("GET /orgs/stats", () => {
 
     it("includes stepStats in broadcast block when aggregating both providers", async () => {
       const steps = [
-        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, interested: 1 } },
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_STEP_DETAIL, interested: 1 } },
       ];
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());

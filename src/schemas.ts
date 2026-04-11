@@ -135,7 +135,6 @@ export const StatsSchema = z
     emailsDelivered: z.number().describe("Total emails delivered"),
     emailsOpened: z.number().describe("Total emails opened"),
     emailsClicked: z.number().describe("Total link clicks"),
-    emailsReplied: z.number().describe("All human replies (excludes auto-replies)"),
     emailsBounced: z.number().describe("Total bounced emails"),
     repliesPositive: z.number().describe("Aggregate: interested + meetingBooked + closed"),
     repliesNegative: z.number().describe("Aggregate: notInterested + wrongPerson + unsubscribe"),
@@ -153,7 +152,6 @@ export const StepStatsSchema = z
     step: z.number().describe("Step number"),
     emailsSent: z.number().describe("Emails sent for this step"),
     emailsOpened: z.number().describe("Emails opened for this step"),
-    emailsReplied: z.number().describe("All human replies for this step"),
     emailsBounced: z.number().describe("Bounces for this step"),
     repliesPositive: z.number().describe("Aggregate: interested + meetingBooked + closed"),
     repliesNegative: z.number().describe("Aggregate: notInterested + wrongPerson + unsubscribe"),
@@ -195,7 +193,7 @@ export const StatsGroupSchema = z
         emailsDelivered: 115,
         emailsOpened: 45,
         emailsClicked: 12,
-        emailsReplied: 8,
+
         emailsBounced: 5,
         repliesPositive: 3,
         repliesNegative: 2,
@@ -225,7 +223,7 @@ export const GroupedStatsResponseSchema = z
           key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
           broadcast: {
             emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
-            emailsOpened: 45, emailsClicked: 12, emailsReplied: 8,
+            emailsOpened: 45, emailsClicked: 12,
             emailsBounced: 5, repliesPositive: 3, repliesNegative: 2,
             repliesNeutral: 0, repliesAutoReply: 2,
             repliesDetail: {
@@ -240,7 +238,7 @@ export const GroupedStatsResponseSchema = z
           key: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
           broadcast: {
             emailsContacted: 80, emailsSent: 70, emailsDelivered: 65,
-            emailsOpened: 20, emailsClicked: 5, emailsReplied: 3,
+            emailsOpened: 20, emailsClicked: 5,
             emailsBounced: 2, repliesPositive: 1, repliesNegative: 0,
             repliesNeutral: 0, repliesAutoReply: 1,
             repliesDetail: {

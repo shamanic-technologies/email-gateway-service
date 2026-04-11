@@ -386,10 +386,6 @@
             "type": "number",
             "description": "Total link clicks"
           },
-          "emailsReplied": {
-            "type": "number",
-            "description": "All human replies (excludes auto-replies)"
-          },
           "emailsBounced": {
             "type": "number",
             "description": "Total bounced emails"
@@ -424,7 +420,6 @@
           "emailsDelivered",
           "emailsOpened",
           "emailsClicked",
-          "emailsReplied",
           "emailsBounced",
           "repliesPositive",
           "repliesNegative",
@@ -449,10 +444,6 @@
           "emailsOpened": {
             "type": "number",
             "description": "Emails opened for this step"
-          },
-          "emailsReplied": {
-            "type": "number",
-            "description": "All human replies for this step"
           },
           "emailsBounced": {
             "type": "number",
@@ -489,7 +480,6 @@
           "step",
           "emailsSent",
           "emailsOpened",
-          "emailsReplied",
           "emailsBounced",
           "repliesPositive",
           "repliesNegative",
@@ -568,7 +558,6 @@
             "emailsDelivered": 115,
             "emailsOpened": 45,
             "emailsClicked": 12,
-            "emailsReplied": 8,
             "emailsBounced": 5,
             "repliesPositive": 3,
             "repliesNegative": 2,
@@ -614,7 +603,6 @@
                 "emailsDelivered": 115,
                 "emailsOpened": 45,
                 "emailsClicked": 12,
-                "emailsReplied": 8,
                 "emailsBounced": 5,
                 "repliesPositive": 3,
                 "repliesNegative": 2,
@@ -642,7 +630,6 @@
                 "emailsDelivered": 65,
                 "emailsOpened": 20,
                 "emailsClicked": 5,
-                "emailsReplied": 3,
                 "emailsBounced": 2,
                 "repliesPositive": 1,
                 "repliesNegative": 0,
