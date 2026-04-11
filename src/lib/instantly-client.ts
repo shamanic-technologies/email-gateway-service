@@ -93,7 +93,7 @@ export interface ProviderStatsPayload {
   emailsDelivered: number;
   emailsOpened: number;
   emailsClicked: number;
-  emailsReplied: number;
+  emailsReplied?: number;
   emailsBounced: number;
   repliesPositive?: number;
   repliesNegative?: number;
@@ -106,7 +106,7 @@ export interface ProviderStepStats {
   step: number;
   emailsSent: number;
   emailsOpened: number;
-  emailsReplied: number;
+  emailsReplied?: number;
   emailsBounced: number;
   repliesPositive?: number;
   repliesNegative?: number;

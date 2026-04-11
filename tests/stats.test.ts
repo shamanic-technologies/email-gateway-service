@@ -50,19 +50,19 @@ function mockPostmarkStats(overrides = {}) {
           emailsDelivered: 95,
           emailsOpened: 40,
           emailsClicked: 10,
-          emailsReplied: 5,
           emailsBounced: 3,
-          repliesPositive: 3,
-          repliesNegative: 2,
+          repliesPositive: 0,
+          repliesNegative: 0,
           repliesNeutral: 0,
-          repliesAutoReply: 1,
+          repliesAutoReply: 0,
           repliesDetail: {
-            interested: 2, meetingBooked: 1, closed: 0,
-            notInterested: 0, wrongPerson: 0, unsubscribe: 2,
-            neutral: 0, autoReply: 0, outOfOffice: 1,
+            interested: 0, meetingBooked: 0, closed: 0,
+            notInterested: 0, wrongPerson: 0, unsubscribe: 0,
+            neutral: 0, autoReply: 0, outOfOffice: 0,
           },
           ...overrides,
         },
+        recipients: 70,
       }),
   };
 }
@@ -110,20 +110,19 @@ function mockGroupedPostmark(groups: Array<{ key: string; overrides?: Record<str
             emailsDelivered: 45,
             emailsOpened: 20,
             emailsClicked: 5,
-            emailsReplied: 2,
             emailsBounced: 1,
-            repliesPositive: 1,
+            repliesPositive: 0,
             repliesNegative: 0,
             repliesNeutral: 0,
             repliesAutoReply: 0,
             repliesDetail: {
-              interested: 1, meetingBooked: 0, closed: 0,
+              interested: 0, meetingBooked: 0, closed: 0,
               notInterested: 0, wrongPerson: 0, unsubscribe: 0,
               neutral: 0, autoReply: 0, outOfOffice: 0,
             },
             ...g.overrides,
           },
-          recipients: g.recipients,
+          recipients: g.recipients ?? 45,
         })),
       }),
   };
@@ -225,18 +224,18 @@ describe("GET /orgs/stats", () => {
         emailsDelivered: 95,
         emailsOpened: 40,
         emailsClicked: 10,
-        emailsReplied: 5,
+        emailsReplied: 0,
         emailsBounced: 3,
-        repliesPositive: 3,
-        repliesNegative: 2,
+        repliesPositive: 0,
+        repliesNegative: 0,
         repliesNeutral: 0,
-        repliesAutoReply: 1,
+        repliesAutoReply: 0,
         repliesDetail: {
-          interested: 2, meetingBooked: 1, closed: 0,
-          notInterested: 0, wrongPerson: 0, unsubscribe: 2,
-          neutral: 0, autoReply: 0, outOfOffice: 1,
+          interested: 0, meetingBooked: 0, closed: 0,
+          notInterested: 0, wrongPerson: 0, unsubscribe: 0,
+          neutral: 0, autoReply: 0, outOfOffice: 0,
         },
-        recipients: 100,
+        recipients: 70,
       });
       expect(res.body.broadcast).toBeUndefined();
     });
@@ -432,12 +431,12 @@ describe("GET /orgs/stats", () => {
       expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
-    it("falls back to emailsSent for recipients when field is missing (Postmark)", async () => {
+    it("uses recipients field from Postmark when available", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
       const res = await authedGet("/orgs/stats?type=transactional");
 
-      expect(res.body.transactional.recipients).toBe(100);
+      expect(res.body.transactional.recipients).toBe(70);
     });
 
     it("defaults missing reply aggregates to 0", async () => {
