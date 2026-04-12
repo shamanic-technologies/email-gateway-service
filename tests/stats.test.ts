@@ -208,13 +208,11 @@ describe("GET /orgs/stats", () => {
         emailsOpened: 40,
         emailsClicked: 10,
         emailsBounced: 3,
-        repliesInterested: 2,
-        repliesMeetingBooked: 1,
-        repliesClosed: 0,
-        repliesNotInterested: 0,
+        repliesPositive: 3,
+        repliesNegative: 0,
         repliesNeutral: 0,
-        repliesOutOfOffice: 1,
-        repliesUnsubscribe: 2,
+        repliesAutoReply: 1,
+        repliesDetail: { ...ZERO_DETAIL, interested: 2, meetingBooked: 1, outOfOffice: 1, unsubscribe: 2 },
         recipients: 100,
       });
       expect(res.body.broadcast).toBeUndefined();
@@ -260,13 +258,11 @@ describe("GET /orgs/stats", () => {
         emailsOpened: 30,
         emailsClicked: 3,
         emailsBounced: 5,
-        repliesInterested: 0,
-        repliesMeetingBooked: 0,
-        repliesClosed: 0,
-        repliesNotInterested: 1,
+        repliesPositive: 0,
+        repliesNegative: 1,
         repliesNeutral: 0,
-        repliesOutOfOffice: 2,
-        repliesUnsubscribe: 0,
+        repliesAutoReply: 2,
+        repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 },
         recipients: 75,
       });
       expect(res.body.transactional).toBeUndefined();
@@ -420,20 +416,19 @@ describe("GET /orgs/stats", () => {
       expect(res.body.transactional.recipients).toBe(100);
     });
 
-    it("defaults missing reply subtypes to 0", async () => {
+    it("passes through reply buckets and detail as-is from provider", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
-      expect(res.body.broadcast.repliesInterested).toBe(0);
-      expect(res.body.broadcast.repliesMeetingBooked).toBe(0);
-      expect(res.body.broadcast.repliesClosed).toBe(0);
-      expect(res.body.broadcast.repliesNotInterested).toBe(1);
+      expect(res.body.broadcast.repliesPositive).toBe(0);
+      expect(res.body.broadcast.repliesNegative).toBe(1);
       expect(res.body.broadcast.repliesNeutral).toBe(0);
-      expect(res.body.broadcast.repliesOutOfOffice).toBe(2);
+      expect(res.body.broadcast.repliesAutoReply).toBe(2);
+      expect(res.body.broadcast.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 });
     });
 
-    it("maps repliesDetail.interested to repliesInterested (not repliesNeutral)", async () => {
+    it("passes through repliesDetail.interested correctly", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats({
         repliesPositive: 1,
         repliesNeutral: 0,
@@ -443,7 +438,8 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.repliesInterested).toBe(1);
+      expect(res.body.broadcast.repliesPositive).toBe(1);
+      expect(res.body.broadcast.repliesDetail.interested).toBe(1);
       expect(res.body.broadcast.repliesNeutral).toBe(0);
     });
   });
@@ -696,7 +692,7 @@ describe("GET /orgs/stats", () => {
       expect(res.body.groups[0].transactional).toBeUndefined();
     });
 
-    it("normalizes grouped stats (defaults missing reply subtypes to 0)", async () => {
+    it("passes through grouped reply buckets as-is from provider", async () => {
       mockFetch.mockResolvedValueOnce(
         mockGroupedInstantly([{ key: "lead@example.com", recipients: 1 }])
       );
@@ -705,11 +701,11 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];
-      expect(group.broadcast.repliesInterested).toBe(0);
-      expect(group.broadcast.repliesMeetingBooked).toBe(0);
-      expect(group.broadcast.repliesClosed).toBe(0);
-      expect(group.broadcast.repliesNotInterested).toBe(1);
+      expect(group.broadcast.repliesPositive).toBe(0);
+      expect(group.broadcast.repliesNegative).toBe(1);
       expect(group.broadcast.repliesNeutral).toBe(0);
+      expect(group.broadcast.repliesAutoReply).toBe(1);
+      expect(group.broadcast.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 });
     });
 
     it("returns empty groups when both providers fail (grouped mode)", async () => {
@@ -817,11 +813,7 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.stepStats).toEqual([
-        { step: 1, emailsSent: 10, emailsOpened: 8, repliesInterested: 1, repliesNeutral: 0, repliesNotInterested: 0, emailsBounced: 1 },
-        { step: 2, emailsSent: 10, emailsOpened: 5, repliesInterested: 0, repliesNeutral: 1, repliesNotInterested: 0, emailsBounced: 1 },
-        { step: 3, emailsSent: 10, emailsOpened: 2, repliesInterested: 0, repliesNeutral: 0, repliesNotInterested: 1, emailsBounced: 0 },
-      ]);
+      expect(res.body.broadcast.stepStats).toEqual(providerSteps);
       expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
@@ -849,9 +841,7 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.stepStats).toBeUndefined();
-      expect(res.body.broadcast.stepStats).toEqual([
-        { step: 1, emailsSent: 10, emailsOpened: 8, repliesInterested: 1, repliesNeutral: 0, repliesNotInterested: 0, emailsBounced: 1 },
-      ]);
+      expect(res.body.broadcast.stepStats).toEqual(providerSteps);
     });
   });
 
