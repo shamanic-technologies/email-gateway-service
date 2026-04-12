@@ -333,10 +333,6 @@
             "type": "number",
             "description": "Total link clicks"
           },
-          "emailsReplied": {
-            "type": "number",
-            "description": "All human replies (excludes auto-replies)"
-          },
           "emailsBounced": {
             "type": "number",
             "description": "Total bounced emails"
@@ -380,7 +376,6 @@
           "emailsDelivered",
           "emailsOpened",
           "emailsClicked",
-          "emailsReplied",
           "emailsBounced",
           "repliesInterested",
           "repliesMeetingBooked",
@@ -408,10 +403,6 @@
             "type": "number",
             "description": "Emails opened for this step"
           },
-          "emailsReplied": {
-            "type": "number",
-            "description": "All human replies for this step"
-          },
           "repliesInterested": {
             "type": "number",
             "description": "Interested replies for this step"
@@ -433,7 +424,6 @@
           "step",
           "emailsSent",
           "emailsOpened",
-          "emailsReplied",
           "repliesInterested",
           "repliesNeutral",
           "repliesNotInterested",
@@ -510,7 +500,6 @@
             "emailsDelivered": 115,
             "emailsOpened": 45,
             "emailsClicked": 12,
-            "emailsReplied": 8,
             "emailsBounced": 5,
             "repliesInterested": 2,
             "repliesMeetingBooked": 1,
@@ -548,7 +537,6 @@
                 "emailsDelivered": 115,
                 "emailsOpened": 45,
                 "emailsClicked": 12,
-                "emailsReplied": 8,
                 "emailsBounced": 5,
                 "repliesInterested": 2,
                 "repliesMeetingBooked": 1,
@@ -568,7 +556,6 @@
                 "emailsDelivered": 65,
                 "emailsOpened": 20,
                 "emailsClicked": 5,
-                "emailsReplied": 3,
                 "emailsBounced": 2,
                 "repliesInterested": 1,
                 "repliesMeetingBooked": 0,
