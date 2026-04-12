@@ -11,46 +11,53 @@ import type {
   ProviderStatsPayload,
   ProviderStatsResult,
   ProviderStepStats,
+  ProviderRepliesDetail,
 } from "../lib/instantly-client";
 
 const router = Router();
 const internalRouter = Router();
 
+function detailOrZero(detail: ProviderRepliesDetail | undefined): ProviderRepliesDetail {
+  return detail ?? { interested: 0, meetingBooked: 0, closed: 0, notInterested: 0, wrongPerson: 0, unsubscribe: 0, neutral: 0, autoReply: 0, outOfOffice: 0 };
+}
+
 function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats {
+  const d = detailOrZero(raw.repliesDetail);
   return {
     emailsContacted: raw.emailsContacted ?? 0,
     emailsSent: raw.emailsSent,
     emailsDelivered: raw.emailsDelivered,
     emailsOpened: raw.emailsOpened,
     emailsClicked: raw.emailsClicked,
-    emailsReplied: raw.emailsReplied,
     emailsBounced: raw.emailsBounced,
-    repliesInterested: raw.repliesInterested ?? 0,
-    repliesMeetingBooked: raw.repliesMeetingBooked ?? 0,
-    repliesClosed: raw.repliesClosed ?? 0,
-    repliesNotInterested: raw.repliesNotInterested ?? 0,
-    repliesNeutral: raw.repliesNeutral ?? 0,
-    repliesOutOfOffice: raw.repliesOutOfOffice ?? 0,
-    repliesUnsubscribe: raw.repliesUnsubscribe ?? 0,
+    repliesInterested: d.interested,
+    repliesMeetingBooked: d.meetingBooked,
+    repliesClosed: d.closed,
+    repliesNotInterested: d.notInterested,
+    repliesNeutral: d.neutral,
+    repliesOutOfOffice: d.outOfOffice,
+    repliesUnsubscribe: d.unsubscribe,
     recipients: recipients ?? raw.emailsSent,
   };
 }
 
 function normalizeStepStats(steps: ProviderStepStats[]): Array<{
-  step: number; emailsSent: number; emailsOpened: number; emailsReplied: number;
+  step: number; emailsSent: number; emailsOpened: number;
   repliesInterested: number; repliesNeutral: number; repliesNotInterested: number;
   emailsBounced: number;
 }> {
-  return steps.map((s) => ({
-    step: s.step,
-    emailsSent: s.emailsSent,
-    emailsOpened: s.emailsOpened,
-    emailsReplied: s.emailsReplied,
-    repliesInterested: s.repliesInterested ?? 0,
-    repliesNeutral: s.repliesNeutral ?? 0,
-    repliesNotInterested: s.repliesNotInterested ?? 0,
-    emailsBounced: s.emailsBounced,
-  }));
+  return steps.map((s) => {
+    const d = detailOrZero(s.repliesDetail);
+    return {
+      step: s.step,
+      emailsSent: s.emailsSent,
+      emailsOpened: s.emailsOpened,
+      repliesInterested: d.interested,
+      repliesNeutral: d.neutral,
+      repliesNotInterested: d.notInterested,
+      emailsBounced: s.emailsBounced,
+    };
+  });
 }
 
 function normalizeBroadcastFlat(raw: ProviderStatsFlat): BroadcastStats {
@@ -73,7 +80,6 @@ const ZERO_STATS: Stats = {
   emailsDelivered: 0,
   emailsOpened: 0,
   emailsClicked: 0,
-  emailsReplied: 0,
   emailsBounced: 0,
   repliesInterested: 0,
   repliesMeetingBooked: 0,
@@ -92,7 +98,6 @@ function addStats(a: Stats, b: Stats): Stats {
     emailsDelivered: a.emailsDelivered + b.emailsDelivered,
     emailsOpened: a.emailsOpened + b.emailsOpened,
     emailsClicked: a.emailsClicked + b.emailsClicked,
-    emailsReplied: a.emailsReplied + b.emailsReplied,
     emailsBounced: a.emailsBounced + b.emailsBounced,
     repliesInterested: a.repliesInterested + b.repliesInterested,
     repliesMeetingBooked: a.repliesMeetingBooked + b.repliesMeetingBooked,
