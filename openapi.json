@@ -670,6 +670,10 @@
             "type": "boolean",
             "description": "Whether the recipient opened any email in this scope"
           },
+          "clicked": {
+            "type": "boolean",
+            "description": "Whether the recipient clicked any link in this scope"
+          },
           "replied": {
             "type": "boolean",
             "description": "Whether the recipient replied in this scope"
@@ -695,6 +699,7 @@
           "contacted",
           "delivered",
           "opened",
+          "clicked",
           "replied",
           "replyClassification",
           "bounced",
@@ -705,6 +710,7 @@
           "contacted": true,
           "delivered": true,
           "opened": true,
+          "clicked": false,
           "replied": true,
           "replyClassification": "positive",
           "bounced": false,
@@ -1624,6 +1630,7 @@
                               "contacted": true,
                               "delivered": true,
                               "opened": false,
+                              "clicked": false,
                               "replied": false,
                               "replyClassification": null,
                               "bounced": false,
@@ -1654,6 +1661,7 @@
                                 "contacted": true,
                                 "delivered": true,
                                 "opened": false,
+                                "clicked": false,
                                 "replied": false,
                                 "replyClassification": null,
                                 "bounced": false,
@@ -1664,6 +1672,7 @@
                                 "contacted": true,
                                 "delivered": true,
                                 "opened": true,
+                                "clicked": true,
                                 "replied": true,
                                 "replyClassification": "positive",
                                 "bounced": false,
@@ -1676,6 +1685,7 @@
                               "contacted": true,
                               "delivered": true,
                               "opened": true,
+                              "clicked": true,
                               "replied": true,
                               "replyClassification": "positive",
                               "bounced": false,
