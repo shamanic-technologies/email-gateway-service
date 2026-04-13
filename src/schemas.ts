@@ -93,7 +93,7 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 // --- Stats ---
 
-export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "leadEmail", "workflowDynastySlug", "featureDynastySlug"]);
+export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "workflowDynastySlug", "featureDynastySlug"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
 export const StatsQuerySchema = z
@@ -152,6 +152,7 @@ export const StepStatsSchema = z
     step: z.number().describe("Step number"),
     emailsSent: z.number().describe("Emails sent for this step"),
     emailsOpened: z.number().describe("Emails opened for this step"),
+    emailsClicked: z.number().describe("Link clicks for this step"),
     emailsBounced: z.number().describe("Bounces for this step"),
     repliesPositive: z.number().describe("interested + meetingBooked + closed"),
     repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
@@ -204,7 +205,7 @@ export const GroupedStatsResponseSchema = z
     groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension. Each entry contains the key and the stats for that bucket."),
   })
   .openapi("GroupedStatsResponse", {
-    description: "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or leadEmail).",
+    description: "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or recipientEmail).",
     example: {
       groups: [
         {
