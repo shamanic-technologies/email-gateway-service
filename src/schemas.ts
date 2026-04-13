@@ -242,6 +242,7 @@ const StatusScopeSchema = z
     contacted: z.boolean().describe("Whether this email has been contacted in this scope"),
     delivered: z.boolean().describe("Whether an email was delivered in this scope"),
     opened: z.boolean().describe("Whether the recipient opened any email in this scope"),
+    clicked: z.boolean().describe("Whether the recipient clicked any link in this scope"),
     replied: z.boolean().describe("Whether the recipient replied in this scope"),
     replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive, negative, neutral, or null if no reply"),
     bounced: z.boolean().describe("Whether an email bounced in this scope"),
@@ -253,6 +254,7 @@ const StatusScopeSchema = z
       contacted: true,
       delivered: true,
       opened: true,
+      clicked: false,
       replied: true,
       replyClassification: "positive",
       bounced: false,
@@ -577,7 +579,7 @@ registry.registerPath({
                   broadcast: {
                     byCampaign: null,
                     campaign: {
-                      contacted: true, delivered: true, opened: false, replied: false,
+                      contacted: true, delivered: true, opened: false, clicked: false, replied: false,
                       replyClassification: null, bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-02-20T14:30:00.000Z",
                     },
@@ -595,19 +597,19 @@ registry.registerPath({
                   broadcast: {
                     byCampaign: {
                       "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
-                        contacted: true, delivered: true, opened: false, replied: false,
+                        contacted: true, delivered: true, opened: false, clicked: false, replied: false,
                         replyClassification: null, bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-01T10:00:00.000Z",
                       },
                       "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
-                        contacted: true, delivered: true, opened: true, replied: true,
+                        contacted: true, delivered: true, opened: true, clicked: true, replied: true,
                         replyClassification: "positive", bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                       },
                     },
                     campaign: null,
                     brand: {
-                      contacted: true, delivered: true, opened: true, replied: true,
+                      contacted: true, delivered: true, opened: true, clicked: true, replied: true,
                       replyClassification: "positive", bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                     },
