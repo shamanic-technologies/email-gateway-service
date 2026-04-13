@@ -32,6 +32,7 @@ function authedPost(path: string) {
 
 const emptyScope = {
   contacted: false,
+  sent: false,
   delivered: false,
   opened: false,
   clicked: false,
@@ -44,6 +45,7 @@ const emptyScope = {
 
 const deliveredScope = {
   contacted: true,
+  sent: true,
   delivered: true,
   opened: false,
   clicked: false,
@@ -397,6 +399,7 @@ describe("POST /orgs/status", () => {
   it("passes through replyClassification from providers", async () => {
     const repliedScope = {
       contacted: true,
+      sent: true,
       delivered: true,
       opened: true,
       clicked: false,
