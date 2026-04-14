@@ -112,6 +112,22 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
+export const RepliesDetailSchema = z
+  .object({
+    interested: z.number().describe("lead_interested events"),
+    meetingBooked: z.number().describe("lead_meeting_booked events"),
+    closed: z.number().describe("lead_closed events"),
+    notInterested: z.number().describe("lead_not_interested events"),
+    wrongPerson: z.number().describe("lead_wrong_person events"),
+    unsubscribe: z.number().describe("lead_unsubscribed events"),
+    neutral: z.number().describe("lead_neutral events"),
+    autoReply: z.number().describe("auto_reply_received events"),
+    outOfOffice: z.number().describe("lead_out_of_office events"),
+  })
+  .openapi("RepliesDetail");
+
+export type RepliesDetail = z.infer<typeof RepliesDetailSchema>;
+
 export const StatsSchema = z
   .object({
     emailsContacted: z.number().describe("Total leads contacted (added to campaign / send attempted)"),
@@ -119,15 +135,12 @@ export const StatsSchema = z
     emailsDelivered: z.number().describe("Total emails delivered"),
     emailsOpened: z.number().describe("Total emails opened"),
     emailsClicked: z.number().describe("Total link clicks"),
-    emailsReplied: z.number().describe("All human replies (excludes auto-replies)"),
     emailsBounced: z.number().describe("Total bounced emails"),
-    repliesInterested: z.number().describe("Replies classified as interested"),
-    repliesMeetingBooked: z.number().describe("Replies where a meeting was booked"),
-    repliesClosed: z.number().describe("Replies classified as closed/won"),
-    repliesNotInterested: z.number().describe("Replies not interested"),
-    repliesNeutral: z.number().describe("Replies classified as neutral"),
-    repliesOutOfOffice: z.number().describe("Replies out of office"),
-    repliesUnsubscribe: z.number().describe("Total unsubscribes"),
+    repliesPositive: z.number().describe("interested + meetingBooked + closed"),
+    repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
+    repliesNeutral: z.number().describe("neutral (lead_neutral events only)"),
+    repliesAutoReply: z.number().describe("autoReply + outOfOffice"),
+    repliesDetail: RepliesDetailSchema.describe("Granular reply breakdown by classification"),
     recipients: z.number().describe("Total unique recipients"),
   })
   .openapi("Stats");
@@ -139,11 +152,12 @@ export const StepStatsSchema = z
     step: z.number().describe("Step number"),
     emailsSent: z.number().describe("Emails sent for this step"),
     emailsOpened: z.number().describe("Emails opened for this step"),
-    emailsReplied: z.number().describe("All human replies for this step"),
-    repliesInterested: z.number().describe("Interested replies for this step"),
-    repliesNeutral: z.number().describe("Neutral replies for this step"),
-    repliesNotInterested: z.number().describe("Not interested replies for this step"),
     emailsBounced: z.number().describe("Bounces for this step"),
+    repliesPositive: z.number().describe("interested + meetingBooked + closed"),
+    repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
+    repliesNeutral: z.number().describe("neutral (lead_neutral events only)"),
+    repliesAutoReply: z.number().describe("autoReply + outOfOffice"),
+    repliesDetail: RepliesDetailSchema.describe("Granular reply breakdown by classification"),
   })
   .openapi("StepStats");
 
@@ -174,20 +188,10 @@ export const StatsGroupSchema = z
     example: {
       key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
       broadcast: {
-        emailsContacted: 150,
-        emailsSent: 120,
-        emailsDelivered: 115,
-        emailsOpened: 45,
-        emailsClicked: 12,
-        emailsReplied: 8,
-        emailsBounced: 5,
-        repliesInterested: 2,
-        repliesMeetingBooked: 1,
-        repliesClosed: 0,
-        repliesNotInterested: 1,
-        repliesNeutral: 0,
-        repliesOutOfOffice: 1,
-        repliesUnsubscribe: 1,
+        emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
+        emailsOpened: 45, emailsClicked: 12, emailsBounced: 5,
+        repliesPositive: 3, repliesNegative: 2, repliesNeutral: 0, repliesAutoReply: 1,
+        repliesDetail: { interested: 2, meetingBooked: 1, closed: 0, notInterested: 1, wrongPerson: 0, unsubscribe: 1, neutral: 0, autoReply: 0, outOfOffice: 1 },
         recipients: 150,
       },
     },
@@ -207,10 +211,9 @@ export const GroupedStatsResponseSchema = z
           key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
           broadcast: {
             emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
-            emailsOpened: 45, emailsClicked: 12, emailsReplied: 8,
-            emailsBounced: 5, repliesInterested: 2, repliesMeetingBooked: 1,
-            repliesClosed: 0, repliesNotInterested: 1, repliesNeutral: 0,
-            repliesOutOfOffice: 1, repliesUnsubscribe: 1,
+            emailsOpened: 45, emailsClicked: 12, emailsBounced: 5,
+            repliesPositive: 3, repliesNegative: 2, repliesNeutral: 0, repliesAutoReply: 1,
+            repliesDetail: { interested: 2, meetingBooked: 1, closed: 0, notInterested: 1, wrongPerson: 0, unsubscribe: 1, neutral: 0, autoReply: 0, outOfOffice: 1 },
             recipients: 150,
           },
         },
@@ -218,10 +221,9 @@ export const GroupedStatsResponseSchema = z
           key: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
           broadcast: {
             emailsContacted: 80, emailsSent: 70, emailsDelivered: 65,
-            emailsOpened: 20, emailsClicked: 5, emailsReplied: 3,
-            emailsBounced: 2, repliesInterested: 1, repliesMeetingBooked: 0,
-            repliesClosed: 0, repliesNotInterested: 0, repliesNeutral: 0,
-            repliesOutOfOffice: 1, repliesUnsubscribe: 0,
+            emailsOpened: 20, emailsClicked: 5, emailsBounced: 2,
+            repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 1,
+            repliesDetail: { interested: 1, meetingBooked: 0, closed: 0, notInterested: 0, wrongPerson: 0, unsubscribe: 0, neutral: 0, autoReply: 0, outOfOffice: 1 },
             recipients: 80,
           },
         },
@@ -240,6 +242,7 @@ const StatusScopeSchema = z
     contacted: z.boolean().describe("Whether this email has been contacted in this scope"),
     delivered: z.boolean().describe("Whether an email was delivered in this scope"),
     opened: z.boolean().describe("Whether the recipient opened any email in this scope"),
+    clicked: z.boolean().describe("Whether the recipient clicked any link in this scope"),
     replied: z.boolean().describe("Whether the recipient replied in this scope"),
     replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive, negative, neutral, or null if no reply"),
     bounced: z.boolean().describe("Whether an email bounced in this scope"),
@@ -251,6 +254,7 @@ const StatusScopeSchema = z
       contacted: true,
       delivered: true,
       opened: true,
+      clicked: false,
       replied: true,
       replyClassification: "positive",
       bounced: false,
@@ -575,7 +579,7 @@ registry.registerPath({
                   broadcast: {
                     byCampaign: null,
                     campaign: {
-                      contacted: true, delivered: true, opened: false, replied: false,
+                      contacted: true, delivered: true, opened: false, clicked: false, replied: false,
                       replyClassification: null, bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-02-20T14:30:00.000Z",
                     },
@@ -593,19 +597,19 @@ registry.registerPath({
                   broadcast: {
                     byCampaign: {
                       "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
-                        contacted: true, delivered: true, opened: false, replied: false,
+                        contacted: true, delivered: true, opened: false, clicked: false, replied: false,
                         replyClassification: null, bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-01T10:00:00.000Z",
                       },
                       "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
-                        contacted: true, delivered: true, opened: true, replied: true,
+                        contacted: true, delivered: true, opened: true, clicked: true, replied: true,
                         replyClassification: "positive", bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                       },
                     },
                     campaign: null,
                     brand: {
-                      contacted: true, delivered: true, opened: true, replied: true,
+                      contacted: true, delivered: true, opened: true, clicked: true, replied: true,
                       replyClassification: "positive", bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                     },

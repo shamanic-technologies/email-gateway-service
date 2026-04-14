@@ -39,6 +39,8 @@ function serviceAuthGet(path: string) {
     .set("X-API-Key", API_KEY);
 }
 
+const ZERO_DETAIL = { interested: 0, meetingBooked: 0, closed: 0, notInterested: 0, wrongPerson: 0, unsubscribe: 0, neutral: 0, autoReply: 0, outOfOffice: 0 };
+
 function mockPostmarkStats(overrides = {}) {
   return {
     ok: true,
@@ -50,22 +52,19 @@ function mockPostmarkStats(overrides = {}) {
           emailsDelivered: 95,
           emailsOpened: 40,
           emailsClicked: 10,
-          emailsReplied: 5,
           emailsBounced: 3,
-          repliesInterested: 2,
-          repliesMeetingBooked: 1,
-          repliesClosed: 0,
-          repliesNotInterested: 0,
+          repliesPositive: 3,
+          repliesNegative: 0,
           repliesNeutral: 0,
-          repliesOutOfOffice: 1,
-          repliesUnsubscribe: 2,
+          repliesAutoReply: 1,
+          repliesDetail: { ...ZERO_DETAIL, interested: 2, meetingBooked: 1, outOfOffice: 1, unsubscribe: 2 },
           ...overrides,
         },
       }),
   };
 }
 
-function mockInstantlyStats(overrides = {}, stepStats?: Array<{ step: number; emailsSent: number; emailsOpened: number; emailsReplied: number; repliesInterested: number; repliesNeutral: number; repliesNotInterested: number; emailsBounced: number }>) {
+function mockInstantlyStats(overrides = {}, stepStats?: Array<Record<string, unknown>>) {
   return {
     ok: true,
     json: () =>
@@ -76,16 +75,12 @@ function mockInstantlyStats(overrides = {}, stepStats?: Array<{ step: number; em
           emailsDelivered: 75,
           emailsOpened: 30,
           emailsClicked: 3,
-          emailsReplied: 2,
           emailsBounced: 5,
-          repliesInterested: 0,
-          repliesMeetingBooked: 0,
-          repliesClosed: 0,
-          repliesNotInterested: 1,
+          repliesPositive: 0,
+          repliesNegative: 1,
           repliesNeutral: 0,
           repliesAutoReply: 2,
-          repliesOutOfOffice: 2,
-          repliesUnsubscribe: 0,
+          repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 },
           ...overrides,
         },
         recipients: 75,
@@ -107,15 +102,12 @@ function mockGroupedPostmark(groups: Array<{ key: string; overrides?: Record<str
             emailsDelivered: 45,
             emailsOpened: 20,
             emailsClicked: 5,
-            emailsReplied: 2,
             emailsBounced: 1,
-            repliesInterested: 1,
-            repliesMeetingBooked: 0,
-            repliesClosed: 0,
-            repliesNotInterested: 0,
+            repliesPositive: 1,
+            repliesNegative: 0,
             repliesNeutral: 0,
-            repliesOutOfOffice: 0,
-            repliesUnsubscribe: 0,
+            repliesAutoReply: 0,
+            repliesDetail: { ...ZERO_DETAIL, interested: 1 },
             ...g.overrides,
           },
           recipients: g.recipients,
@@ -137,15 +129,12 @@ function mockGroupedInstantly(groups: Array<{ key: string; overrides?: Record<st
             emailsDelivered: 38,
             emailsOpened: 15,
             emailsClicked: 2,
-            emailsReplied: 1,
             emailsBounced: 2,
-            repliesInterested: 0,
-            repliesMeetingBooked: 0,
-            repliesClosed: 0,
-            repliesNotInterested: 1,
+            repliesPositive: 0,
+            repliesNegative: 1,
             repliesNeutral: 0,
-            repliesOutOfOffice: 1,
-            repliesUnsubscribe: 0,
+            repliesAutoReply: 1,
+            repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 },
             ...g.overrides,
           },
           recipients: g.recipients ?? 35,
@@ -218,15 +207,12 @@ describe("GET /orgs/stats", () => {
         emailsDelivered: 95,
         emailsOpened: 40,
         emailsClicked: 10,
-        emailsReplied: 5,
         emailsBounced: 3,
-        repliesInterested: 2,
-        repliesMeetingBooked: 1,
-        repliesClosed: 0,
-        repliesNotInterested: 0,
+        repliesPositive: 3,
+        repliesNegative: 0,
         repliesNeutral: 0,
-        repliesOutOfOffice: 1,
-        repliesUnsubscribe: 2,
+        repliesAutoReply: 1,
+        repliesDetail: { ...ZERO_DETAIL, interested: 2, meetingBooked: 1, outOfOffice: 1, unsubscribe: 2 },
         recipients: 100,
       });
       expect(res.body.broadcast).toBeUndefined();
@@ -271,15 +257,12 @@ describe("GET /orgs/stats", () => {
         emailsDelivered: 75,
         emailsOpened: 30,
         emailsClicked: 3,
-        emailsReplied: 2,
         emailsBounced: 5,
-        repliesInterested: 0,
-        repliesMeetingBooked: 0,
-        repliesClosed: 0,
-        repliesNotInterested: 1,
+        repliesPositive: 0,
+        repliesNegative: 1,
         repliesNeutral: 0,
-        repliesOutOfOffice: 2,
-        repliesUnsubscribe: 0,
+        repliesAutoReply: 2,
+        repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 },
         recipients: 75,
       });
       expect(res.body.transactional).toBeUndefined();
@@ -407,8 +390,12 @@ describe("GET /orgs/stats", () => {
               emailsDelivered: 75,
               emailsOpened: 30,
               emailsClicked: 3,
-              emailsReplied: 2,
               emailsBounced: 5,
+              repliesPositive: 0,
+              repliesNegative: 0,
+              repliesNeutral: 0,
+              repliesAutoReply: 0,
+              repliesDetail: { ...ZERO_DETAIL },
             },
             recipients: 75,
           }),
@@ -429,17 +416,31 @@ describe("GET /orgs/stats", () => {
       expect(res.body.transactional.recipients).toBe(100);
     });
 
-    it("defaults missing reply subtypes to 0", async () => {
+    it("passes through reply buckets and detail as-is from provider", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
-      expect(res.body.broadcast.repliesInterested).toBe(0);
-      expect(res.body.broadcast.repliesMeetingBooked).toBe(0);
-      expect(res.body.broadcast.repliesClosed).toBe(0);
-      expect(res.body.broadcast.repliesNotInterested).toBe(1);
+      expect(res.body.broadcast.repliesPositive).toBe(0);
+      expect(res.body.broadcast.repliesNegative).toBe(1);
       expect(res.body.broadcast.repliesNeutral).toBe(0);
-      expect(res.body.broadcast.repliesOutOfOffice).toBe(2);
+      expect(res.body.broadcast.repliesAutoReply).toBe(2);
+      expect(res.body.broadcast.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 });
+    });
+
+    it("passes through repliesDetail.interested correctly", async () => {
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats({
+        repliesPositive: 1,
+        repliesNeutral: 0,
+        repliesDetail: { ...ZERO_DETAIL, interested: 1 },
+      }));
+
+      const res = await authedGet("/orgs/stats?type=broadcast");
+
+      expect(res.status).toBe(200);
+      expect(res.body.broadcast.repliesPositive).toBe(1);
+      expect(res.body.broadcast.repliesDetail.interested).toBe(1);
+      expect(res.body.broadcast.repliesNeutral).toBe(0);
     });
   });
 
@@ -691,7 +692,7 @@ describe("GET /orgs/stats", () => {
       expect(res.body.groups[0].transactional).toBeUndefined();
     });
 
-    it("normalizes grouped stats (defaults missing reply subtypes to 0)", async () => {
+    it("passes through grouped reply buckets as-is from provider", async () => {
       mockFetch.mockResolvedValueOnce(
         mockGroupedInstantly([{ key: "lead@example.com", recipients: 1 }])
       );
@@ -700,11 +701,11 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];
-      expect(group.broadcast.repliesInterested).toBe(0);
-      expect(group.broadcast.repliesMeetingBooked).toBe(0);
-      expect(group.broadcast.repliesClosed).toBe(0);
-      expect(group.broadcast.repliesNotInterested).toBe(1);
+      expect(group.broadcast.repliesPositive).toBe(0);
+      expect(group.broadcast.repliesNegative).toBe(1);
       expect(group.broadcast.repliesNeutral).toBe(0);
+      expect(group.broadcast.repliesAutoReply).toBe(1);
+      expect(group.broadcast.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 });
     });
 
     it("returns empty groups when both providers fail (grouped mode)", async () => {
@@ -802,17 +803,17 @@ describe("GET /orgs/stats", () => {
 
   describe("stepStats (broadcast only)", () => {
     it("forwards stepStats from instantly in broadcast block", async () => {
-      const steps = [
-        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, repliesInterested: 1, repliesNeutral: 0, repliesNotInterested: 0, emailsBounced: 1 },
-        { step: 2, emailsSent: 10, emailsOpened: 5, emailsReplied: 1, repliesInterested: 0, repliesNeutral: 1, repliesNotInterested: 0, emailsBounced: 1 },
-        { step: 3, emailsSent: 10, emailsOpened: 2, emailsReplied: 1, repliesInterested: 0, repliesNeutral: 0, repliesNotInterested: 1, emailsBounced: 0 },
+      const providerSteps = [
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
+        { step: 2, emailsSent: 10, emailsOpened: 5, emailsBounced: 1, repliesPositive: 0, repliesNegative: 0, repliesNeutral: 1, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, neutral: 1 } },
+        { step: 3, emailsSent: 10, emailsOpened: 2, emailsBounced: 0, repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, notInterested: 1 } },
       ];
-      mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, steps));
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, providerSteps));
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.stepStats).toEqual(steps);
+      expect(res.body.broadcast.stepStats).toEqual(providerSteps);
       expect(res.body.broadcast.emailsSent).toBe(80);
     });
 
@@ -827,12 +828,12 @@ describe("GET /orgs/stats", () => {
     });
 
     it("includes stepStats in broadcast block when aggregating both providers", async () => {
-      const steps = [
-        { step: 1, emailsSent: 10, emailsOpened: 8, emailsReplied: 1, repliesInterested: 1, repliesNeutral: 0, repliesNotInterested: 0, emailsBounced: 1 },
+      const providerSteps = [
+        { step: 1, emailsSent: 10, emailsOpened: 8, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
       ];
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
-        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats({}, steps));
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats({}, providerSteps));
         return Promise.reject(new Error("Unexpected URL"));
       });
 
@@ -840,7 +841,7 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.stepStats).toBeUndefined();
-      expect(res.body.broadcast.stepStats).toEqual(steps);
+      expect(res.body.broadcast.stepStats).toEqual(providerSteps);
     });
   });
 
