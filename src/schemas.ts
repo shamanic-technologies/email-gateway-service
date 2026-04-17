@@ -93,7 +93,7 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 // --- Stats ---
 
-export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "leadEmail", "workflowDynastySlug", "featureDynastySlug"]);
+export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "workflowDynastySlug", "featureDynastySlug"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
 export const StatsQuerySchema = z
@@ -152,6 +152,7 @@ export const StepStatsSchema = z
     step: z.number().describe("Step number"),
     emailsSent: z.number().describe("Emails sent for this step"),
     emailsOpened: z.number().describe("Emails opened for this step"),
+    emailsClicked: z.number().describe("Link clicks for this step"),
     emailsBounced: z.number().describe("Bounces for this step"),
     repliesPositive: z.number().describe("interested + meetingBooked + closed"),
     repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
@@ -204,7 +205,7 @@ export const GroupedStatsResponseSchema = z
     groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension. Each entry contains the key and the stats for that bucket."),
   })
   .openapi("GroupedStatsResponse", {
-    description: "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or leadEmail).",
+    description: "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or recipientEmail).",
     example: {
       groups: [
         {
@@ -240,6 +241,7 @@ export const ReplyClassificationSchema = z.enum(["positive", "negative", "neutra
 const StatusScopeSchema = z
   .object({
     contacted: z.boolean().describe("Whether this email has been contacted in this scope"),
+    sent: z.boolean().describe("Whether an email was sent in this scope"),
     delivered: z.boolean().describe("Whether an email was delivered in this scope"),
     opened: z.boolean().describe("Whether the recipient opened any email in this scope"),
     clicked: z.boolean().describe("Whether the recipient clicked any link in this scope"),
@@ -252,6 +254,7 @@ const StatusScopeSchema = z
   .openapi("StatusScope", {
     example: {
       contacted: true,
+      sent: true,
       delivered: true,
       opened: true,
       clicked: false,
@@ -579,7 +582,7 @@ registry.registerPath({
                   broadcast: {
                     byCampaign: null,
                     campaign: {
-                      contacted: true, delivered: true, opened: false, clicked: false, replied: false,
+                      contacted: true, sent: true, delivered: true, opened: false, clicked: false, replied: false,
                       replyClassification: null, bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-02-20T14:30:00.000Z",
                     },
@@ -597,19 +600,19 @@ registry.registerPath({
                   broadcast: {
                     byCampaign: {
                       "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
-                        contacted: true, delivered: true, opened: false, clicked: false, replied: false,
+                        contacted: true, sent: true, delivered: true, opened: false, clicked: false, replied: false,
                         replyClassification: null, bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-01T10:00:00.000Z",
                       },
                       "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
-                        contacted: true, delivered: true, opened: true, clicked: true, replied: true,
+                        contacted: true, sent: true, delivered: true, opened: true, clicked: true, replied: true,
                         replyClassification: "positive", bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                       },
                     },
                     campaign: null,
                     brand: {
-                      contacted: true, delivered: true, opened: true, clicked: true, replied: true,
+                      contacted: true, sent: true, delivered: true, opened: true, clicked: true, replied: true,
                       replyClassification: "positive", bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                     },

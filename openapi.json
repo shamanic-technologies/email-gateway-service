@@ -445,6 +445,10 @@
             "type": "number",
             "description": "Emails opened for this step"
           },
+          "emailsClicked": {
+            "type": "number",
+            "description": "Link clicks for this step"
+          },
           "emailsBounced": {
             "type": "number",
             "description": "Bounces for this step"
@@ -473,6 +477,7 @@
           "step",
           "emailsSent",
           "emailsOpened",
+          "emailsClicked",
           "emailsBounced",
           "repliesPositive",
           "repliesNegative",
@@ -585,7 +590,7 @@
         "required": [
           "groups"
         ],
-        "description": "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or leadEmail).",
+        "description": "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or recipientEmail).",
         "example": {
           "groups": [
             {
@@ -662,6 +667,10 @@
             "type": "boolean",
             "description": "Whether this email has been contacted in this scope"
           },
+          "sent": {
+            "type": "boolean",
+            "description": "Whether an email was sent in this scope"
+          },
           "delivered": {
             "type": "boolean",
             "description": "Whether an email was delivered in this scope"
@@ -697,6 +706,7 @@
         },
         "required": [
           "contacted",
+          "sent",
           "delivered",
           "opened",
           "clicked",
@@ -708,6 +718,7 @@
         ],
         "example": {
           "contacted": true,
+          "sent": true,
           "delivered": true,
           "opened": true,
           "clicked": false,
@@ -1208,7 +1219,7 @@
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
-                "leadEmail",
+                "recipientEmail",
                 "workflowDynastySlug",
                 "featureDynastySlug"
               ],
@@ -1436,7 +1447,7 @@
                 "campaignId",
                 "workflowSlug",
                 "featureSlug",
-                "leadEmail",
+                "recipientEmail",
                 "workflowDynastySlug",
                 "featureDynastySlug"
               ],
@@ -1628,6 +1639,7 @@
                             "byCampaign": null,
                             "campaign": {
                               "contacted": true,
+                              "sent": true,
                               "delivered": true,
                               "opened": false,
                               "clicked": false,
@@ -1659,6 +1671,7 @@
                             "byCampaign": {
                               "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
                                 "contacted": true,
+                                "sent": true,
                                 "delivered": true,
                                 "opened": false,
                                 "clicked": false,
@@ -1670,6 +1683,7 @@
                               },
                               "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
                                 "contacted": true,
+                                "sent": true,
                                 "delivered": true,
                                 "opened": true,
                                 "clicked": true,
@@ -1683,6 +1697,7 @@
                             "campaign": null,
                             "brand": {
                               "contacted": true,
+                              "sent": true,
                               "delivered": true,
                               "opened": true,
                               "clicked": true,

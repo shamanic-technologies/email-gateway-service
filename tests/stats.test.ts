@@ -697,7 +697,7 @@ describe("GET /orgs/stats", () => {
         mockGroupedInstantly([{ key: "lead@example.com", recipients: 1 }])
       );
 
-      const res = await authedGet("/orgs/stats?type=broadcast&groupBy=leadEmail");
+      const res = await authedGet("/orgs/stats?type=broadcast&groupBy=recipientEmail");
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];

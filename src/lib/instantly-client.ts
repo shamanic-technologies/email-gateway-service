@@ -105,6 +105,7 @@ export interface ProviderStepStats {
   step: number;
   emailsSent: number;
   emailsOpened: number;
+  emailsClicked: number;
   emailsBounced: number;
   repliesPositive: number;
   repliesNegative: number;
