@@ -335,6 +335,8 @@ async function handleGrouped(
       existing.broadcast = normalizePayload(g.stats, g.recipients);
       merged.set(g.key, existing);
     }
+  } else if (instantlyResult.status === "fulfilled") {
+    console.warn(`[email-gateway] Instantly returned non-grouped response when grouped was expected — broadcast stats dropped`);
   } else if (instantlyResult.status === "rejected") {
     console.error(`[email-gateway] Instantly failed (grouped): ${instantlyResult.reason?.message}`);
   }
@@ -422,7 +424,9 @@ async function handleDynastyGrouped(
       existing.broadcast = g.stats;
       merged.set(g.key, existing);
     }
-  } else if (instantlyResult instanceof Error) {
+  } else if (!(instantlyResult instanceof Error)) {
+    console.warn(`[email-gateway] Instantly returned non-grouped response when dynasty grouped was expected — broadcast stats dropped`);
+  } else {
     console.error(`[email-gateway] Instantly failed (dynasty grouped): ${instantlyResult.message}`);
   }
 
