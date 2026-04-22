@@ -7,8 +7,6 @@ export interface OrgContext {
   campaignId?: string;
   /** Raw x-brand-id header value (CSV string) — used for forwarding to downstream services */
   brandId?: string;
-  /** Parsed brand IDs from the x-brand-id header */
-  brandIds: string[];
   workflowSlug?: string;
   featureSlug?: string;
 }
@@ -34,7 +32,6 @@ export function extractOrgContext(req: Request): OrgContext | null {
     runId: optionalString(req.headers["x-run-id"]),
     campaignId: optionalString(req.headers["x-campaign-id"]),
     brandId,
-    brandIds: parseBrandIds(brandId),
     workflowSlug: optionalString(req.headers["x-workflow-slug"]),
     featureSlug: optionalString(req.headers["x-feature-slug"]),
   };

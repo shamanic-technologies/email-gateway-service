@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { StatsQuerySchema, Stats, BroadcastStats, RepliesDetail } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
-import { extractOrgContext, parseBrandIds } from "../middleware/requireOrgId";
+import { extractOrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import * as dynastyClient from "../lib/dynasty-client";
@@ -178,7 +178,6 @@ function extractPartialContext(req: Request): OrgContext | undefined {
     runId,
     campaignId,
     brandId,
-    brandIds: parseBrandIds(brandId),
     workflowSlug,
     featureSlug,
   };

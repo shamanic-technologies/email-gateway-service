@@ -204,10 +204,10 @@ describe("POST /orgs/send", () => {
       ]);
       expect(body.email).toBeUndefined();
       expect(body.variables).toEqual({ source: "test" });
-      // orgId, campaignId, brandIds, workflowSlug now go via headers, not body
+      // orgId, campaignId, brandId, workflowSlug now go via headers, not body
       expect(body.orgId).toBeUndefined();
       expect(body.campaignId).toBeUndefined();
-      expect(body.brandIds).toBeUndefined();
+      expect(body.brandId).toBeUndefined();
       expect(body.workflowSlug).toBeUndefined();
       expect(body.appId).toBeUndefined();
       expect(body.parentRunId).toBeUndefined();
@@ -693,7 +693,7 @@ describe("POST /orgs/send", () => {
       expect(postmarkHeaders["x-feature-slug"]).toBe("hdr_feature");
     });
 
-    it("does not include brandIds/campaignId/workflowSlug in body for broadcast (headers only)", async () => {
+    it("does not include brandId/campaignId/workflowSlug in body for broadcast (headers only)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -704,7 +704,7 @@ describe("POST /orgs/send", () => {
       await authedPostWithTracking("/orgs/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toBeUndefined();
+      expect(body.brandId).toBeUndefined();
       expect(body.campaignId).toBeUndefined();
       expect(body.workflowSlug).toBeUndefined();
       // These are forwarded via headers instead
@@ -724,7 +724,7 @@ describe("POST /orgs/send", () => {
       await authedPostWithTracking("/orgs/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toEqual(["hdr_brand"]);
+      expect(body.brandId).toEqual(["hdr_brand"]);
       expect(body.campaignId).toBe("hdr_campaign");
       expect(body.workflowSlug).toBe("hdr_workflow");
     });
@@ -745,7 +745,7 @@ describe("POST /orgs/send", () => {
       expect(body.workflowSlug).toBeUndefined();
     });
 
-    it("does not pass brandIds in body to instantly (forwarded via x-brand-id header)", async () => {
+    it("does not pass brandId in body to instantly (forwarded via x-brand-id header)", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -755,7 +755,7 @@ describe("POST /orgs/send", () => {
       await authedPost("/orgs/send").send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toBeUndefined();
+      expect(body.brandId).toBeUndefined();
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-brand-id"]).toBe("brand_1");
     });
@@ -772,7 +772,7 @@ describe("POST /orgs/send", () => {
         .send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandIds).toBeUndefined();
+      expect(body.brandId).toBeUndefined();
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-brand-id"]).toBe("brand_a,brand_b,brand_c");
     });
