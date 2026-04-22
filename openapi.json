@@ -1158,7 +1158,7 @@
             },
             "required": false,
             "description": "Comma-separated brand IDs to filter by",
-            "name": "brandIds",
+            "name": "brandId",
             "in": "query"
           },
           {
@@ -1386,7 +1386,7 @@
             },
             "required": false,
             "description": "Comma-separated brand IDs to filter by",
-            "name": "brandIds",
+            "name": "brandId",
             "in": "query"
           },
           {

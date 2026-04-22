@@ -54,7 +54,7 @@ export async function sendEmail(body: {
   orgId?: string;
   userId?: string;
   runId?: string;
-  brandIds?: string[];
+  brandId?: string[];
   leadId?: string;
   workflowSlug?: string;
   campaignId?: string;
@@ -98,7 +98,7 @@ export async function getStats(filters: {
   runIds?: string[];
   orgId?: string;
   userId?: string;
-  brandIds?: string;
+  brandId?: string;
   campaignId?: string;
   workflowSlugs?: string;
   featureSlugs?: string;
