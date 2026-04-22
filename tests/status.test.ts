@@ -174,11 +174,7 @@ describe("POST /orgs/status", () => {
     for (const call of mockFetch.mock.calls) {
       const body = JSON.parse(call[1].body);
       expect(body.campaignId).toBe("camp_1");
-      if (call[0].includes("3010")) {
-        expect(body.brandId).toEqual(["brand_1"]);
-      } else {
-        expect(body.brandId).toBe("brand_1");
-      }
+      expect(body.brandId).toBe("brand_1");
     }
   });
 
@@ -197,11 +193,7 @@ describe("POST /orgs/status", () => {
 
     for (const call of mockFetch.mock.calls) {
       const body = JSON.parse(call[1].body);
-      if (call[0].includes("3010")) {
-        expect(body.brandId).toEqual(["brand_1"]);
-      } else {
-        expect(body.brandId).toBe("brand_1");
-      }
+      expect(body.brandId).toBe("brand_1");
       expect(body.campaignId).toBeUndefined();
     }
   });
@@ -378,11 +370,7 @@ describe("POST /orgs/status", () => {
       const headers = call[1].headers;
       expect(headers["x-brand-id"]).toBe("header_brand");
       const body = JSON.parse(call[1].body);
-      if (call[0].includes("3010")) {
-        expect(body.brandId).toEqual(["body_brand"]);
-      } else {
-        expect(body.brandId).toBe("body_brand");
-      }
+      expect(body.brandId).toBe("body_brand");
     }
   });
 
