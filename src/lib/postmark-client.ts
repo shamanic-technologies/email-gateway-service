@@ -129,7 +129,7 @@ export interface StatusResult {
 }
 
 export async function getStatus(body: {
-  brandId?: string;
+  brandId?: string[];
   campaignId?: string;
   items: Array<{ email: string }>;
 }, ctx?: OrgContext) {
