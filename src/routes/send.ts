@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { SendRequestSchema } from "../schemas";
-import type { OrgContext } from "../middleware/requireOrgId";
+import { type OrgContext, parseBrandIds } from "../middleware/requireOrgId";
 
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
@@ -39,7 +39,7 @@ router.post("/send", async (req: Request, res: Response) => {
 
   // Use context headers as fallbacks for body fields the LLM may have omitted
   const effectiveCampaignId = body.campaignId ?? ctx.campaignId;
-  const { brandIds } = ctx;
+  const brandId = parseBrandIds(ctx.brandId);
   const effectiveWorkflowName = body.workflowSlug ?? ctx.workflowSlug;
 
   console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${ctx.runId} workflow=${effectiveWorkflowName}`);
@@ -52,7 +52,7 @@ router.post("/send", async (req: Request, res: Response) => {
         orgId: ctx.orgId,
         userId: ctx.userId,
         runId: ctx.runId,
-        brandIds,
+        brandId,
         leadId: body.leadId,
         workflowSlug: effectiveWorkflowName,
         campaignId: effectiveCampaignId,

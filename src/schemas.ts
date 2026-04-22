@@ -100,7 +100,7 @@ export const StatsQuerySchema = z
   .object({
     type: EmailTypeSchema.optional().describe("Filter by email channel type"),
     runIds: z.string().optional().describe("Comma-separated run IDs"),
-    brandIds: z.string().optional().describe("Comma-separated brand IDs to filter by"),
+    brandId: z.string().optional().describe("Comma-separated brand IDs to filter by"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by"),
     featureSlugs: z.string().optional().describe("Comma-separated feature slugs to filter by"),
