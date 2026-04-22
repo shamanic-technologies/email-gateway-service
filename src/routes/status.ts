@@ -16,12 +16,10 @@ router.post("/status", async (req: Request, res: Response) => {
   const { brandId, campaignId, items } = parsed.data;
   const ctx = res.locals.orgContext as OrgContext;
 
-  const payload = { brandId, campaignId, items };
-
   try {
     const [broadcastResult, transactionalResult] = await Promise.allSettled([
-      instantlyClient.getStatus(payload, ctx),
-      postmarkClient.getStatus(payload, ctx),
+      instantlyClient.getStatus({ brandId, campaignId, items }, ctx),
+      postmarkClient.getStatus({ brandId: brandId ? [brandId] : undefined, campaignId, items }, ctx),
     ]);
 
     const broadcastMap = new Map<string, instantlyClient.StatusResult>();
