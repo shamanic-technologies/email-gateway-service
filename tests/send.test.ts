@@ -724,7 +724,7 @@ describe("POST /orgs/send", () => {
       await authedPostWithTracking("/orgs/send").send(bodyWithout);
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.brandId).toEqual(["hdr_brand"]);
+      expect(body.brandId).toBeUndefined();
       expect(body.campaignId).toBe("hdr_campaign");
       expect(body.workflowSlug).toBe("hdr_workflow");
     });
@@ -775,6 +775,23 @@ describe("POST /orgs/send", () => {
       expect(body.brandId).toBeUndefined();
       const headers = mockFetch.mock.calls[0][1].headers;
       expect(headers["x-brand-id"]).toBe("brand_a,brand_b,brand_c");
+    });
+
+    it("does not send brandId as array in postmark body (regression: postmark expects string)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_reg" }),
+      });
+
+      await authedPost("/orgs/send")
+        .set("x-brand-id", "brand_a,brand_b")
+        .send(buildTransactionalBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      // brandId must NOT appear in the body — it's forwarded via x-brand-id header only
+      expect(body.brandId).toBeUndefined();
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-brand-id"]).toBe("brand_a,brand_b");
     });
   });
 
