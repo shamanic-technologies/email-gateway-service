@@ -11,11 +11,6 @@ export interface OrgContext {
   featureSlug?: string;
 }
 
-export function parseBrandIds(raw: string | undefined): string[] {
-  if (!raw) return [];
-  return raw.split(",").map(s => s.trim()).filter(Boolean);
-}
-
 function optionalString(value: string | string[] | undefined): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
