@@ -54,7 +54,6 @@ export async function sendEmail(body: {
   orgId?: string;
   userId?: string;
   runId?: string;
-  brandId?: string[];
   leadId?: string;
   workflowSlug?: string;
   campaignId?: string;
