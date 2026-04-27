@@ -87,13 +87,14 @@ export interface ProviderRepliesDetail {
   outOfOffice: number;
 }
 
-export interface ProviderStatsPayload {
-  emailsContacted?: number;
-  emailsSent: number;
-  emailsDelivered: number;
-  emailsOpened: number;
-  emailsClicked: number;
-  emailsBounced: number;
+export interface ProviderRecipientStats {
+  contacted: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  bounced: number;
+  clicked: number;
+  unsubscribed: number;
   repliesPositive: number;
   repliesNegative: number;
   repliesNeutral: number;
@@ -103,10 +104,12 @@ export interface ProviderStatsPayload {
 
 export interface ProviderStepStats {
   step: number;
-  emailsSent: number;
-  emailsOpened: number;
-  emailsClicked: number;
-  emailsBounced: number;
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  unsubscribed: number;
   repliesPositive: number;
   repliesNegative: number;
   repliesNeutral: number;
@@ -114,17 +117,26 @@ export interface ProviderStepStats {
   repliesDetail: ProviderRepliesDetail;
 }
 
-export interface ProviderStatsFlat {
-  stats: ProviderStatsPayload;
-  recipients?: number;
+export interface ProviderEmailStats {
+  sent: number;
+  delivered: number;
+  opened: number;
+  clicked: number;
+  bounced: number;
+  unsubscribed: number;
   stepStats?: ProviderStepStats[];
+}
+
+export interface ProviderStatsFlat {
+  recipientStats: ProviderRecipientStats;
+  emailStats: ProviderEmailStats;
 }
 
 export interface ProviderStatsGrouped {
   groups: Array<{
     key: string;
-    stats: ProviderStatsPayload;
-    recipients?: number;
+    recipientStats: ProviderRecipientStats;
+    emailStats: ProviderEmailStats;
   }>;
 }
 

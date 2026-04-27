@@ -128,32 +128,34 @@ export const RepliesDetailSchema = z
 
 export type RepliesDetail = z.infer<typeof RepliesDetailSchema>;
 
-export const StatsSchema = z
+export const RecipientStatsSchema = z
   .object({
-    emailsContacted: z.number().describe("Total leads contacted (added to campaign / send attempted)"),
-    emailsSent: z.number().describe("Total emails sent"),
-    emailsDelivered: z.number().describe("Total emails delivered"),
-    emailsOpened: z.number().describe("Total emails opened"),
-    emailsClicked: z.number().describe("Total link clicks"),
-    emailsBounced: z.number().describe("Total bounced emails"),
+    contacted: z.number().describe("Leads added to a campaign / send attempted"),
+    sent: z.number().describe("Leads with at least 1 email sent (COUNT DISTINCT lead)"),
+    delivered: z.number().describe("Leads delivered (sent - bounced)"),
+    opened: z.number().describe("Leads who opened at least 1 email"),
+    bounced: z.number().describe("Leads with at least 1 bounce"),
+    clicked: z.number().describe("Leads who clicked at least 1 link"),
+    unsubscribed: z.number().describe("Leads who unsubscribed"),
     repliesPositive: z.number().describe("interested + meetingBooked + closed"),
     repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
     repliesNeutral: z.number().describe("neutral (lead_neutral events only)"),
     repliesAutoReply: z.number().describe("autoReply + outOfOffice"),
     repliesDetail: RepliesDetailSchema.describe("Granular reply breakdown by classification"),
-    recipients: z.number().describe("Total unique recipients"),
   })
-  .openapi("Stats");
+  .openapi("RecipientStats");
 
-export type Stats = z.infer<typeof StatsSchema>;
+export type RecipientStats = z.infer<typeof RecipientStatsSchema>;
 
 export const StepStatsSchema = z
   .object({
     step: z.number().describe("Step number"),
-    emailsSent: z.number().describe("Emails sent for this step"),
-    emailsOpened: z.number().describe("Emails opened for this step"),
-    emailsClicked: z.number().describe("Link clicks for this step"),
-    emailsBounced: z.number().describe("Bounces for this step"),
+    sent: z.number().describe("Emails sent for this step"),
+    delivered: z.number().describe("Emails delivered for this step"),
+    opened: z.number().describe("Emails opened for this step"),
+    clicked: z.number().describe("Link clicks for this step"),
+    bounced: z.number().describe("Bounces for this step"),
+    unsubscribed: z.number().describe("Unsubscribes for this step"),
     repliesPositive: z.number().describe("interested + meetingBooked + closed"),
     repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
     repliesNeutral: z.number().describe("neutral (lead_neutral events only)"),
@@ -164,16 +166,33 @@ export const StepStatsSchema = z
 
 export type StepStats = z.infer<typeof StepStatsSchema>;
 
-export const BroadcastStatsSchema = StatsSchema.extend({
-  stepStats: z.array(StepStatsSchema).optional().describe("Per-step breakdown (broadcast sequences only)"),
-}).openapi("BroadcastStats");
+export const EmailStatsSchema = z
+  .object({
+    sent: z.number().describe("Total emails sent (COUNT *, all steps)"),
+    delivered: z.number().describe("Total emails delivered (sent - bounced)"),
+    opened: z.number().describe("Unique emails opened at least once (COUNT DISTINCT)"),
+    clicked: z.number().describe("Unique emails with at least 1 click (COUNT DISTINCT)"),
+    bounced: z.number().describe("Total emails bounced"),
+    unsubscribed: z.number().describe("Total unsubscribe events"),
+    stepStats: z.array(StepStatsSchema).optional().describe("Per-step breakdown"),
+  })
+  .openapi("EmailStats");
 
-export type BroadcastStats = z.infer<typeof BroadcastStatsSchema>;
+export type EmailStats = z.infer<typeof EmailStatsSchema>;
+
+export const ChannelStatsSchema = z
+  .object({
+    recipientStats: RecipientStatsSchema.describe("Recipient-level stats (COUNT DISTINCT lead)"),
+    emailStats: EmailStatsSchema.describe("Email-level stats (COUNT *)"),
+  })
+  .openapi("ChannelStats");
+
+export type ChannelStats = z.infer<typeof ChannelStatsSchema>;
 
 export const StatsResponseSchema = z
   .object({
-    transactional: StatsSchema.optional().describe("Stats for transactional emails"),
-    broadcast: BroadcastStatsSchema.optional().describe("Stats for broadcast emails"),
+    transactional: ChannelStatsSchema.optional().describe("Stats for transactional emails"),
+    broadcast: ChannelStatsSchema.optional().describe("Stats for broadcast emails"),
   })
   .openapi("StatsResponse");
 
@@ -181,55 +200,20 @@ export type StatsResponse = z.infer<typeof StatsResponseSchema>;
 
 export const StatsGroupSchema = z
   .object({
-    key: z.string().describe("The value of the groupBy dimension for this bucket. When groupBy=brandId this is the brand UUID; when groupBy=campaignId it is the campaign UUID; when groupBy=workflowSlug it is the workflow slug string; etc."),
-    transactional: StatsSchema.optional().describe("Transactional (Postmark) stats for this group. Omitted when type=broadcast or when no transactional data exists for this key."),
-    broadcast: StatsSchema.optional().describe("Broadcast (Instantly) stats for this group. Omitted when type=transactional or when no broadcast data exists for this key."),
+    key: z.string().describe("The value of the groupBy dimension for this bucket."),
+    transactional: ChannelStatsSchema.optional().describe("Transactional (Postmark) stats for this group."),
+    broadcast: ChannelStatsSchema.optional().describe("Broadcast (Instantly) stats for this group."),
   })
-  .openapi("StatsGroup", {
-    example: {
-      key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
-      broadcast: {
-        emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
-        emailsOpened: 45, emailsClicked: 12, emailsBounced: 5,
-        repliesPositive: 3, repliesNegative: 2, repliesNeutral: 0, repliesAutoReply: 1,
-        repliesDetail: { interested: 2, meetingBooked: 1, closed: 0, notInterested: 1, wrongPerson: 0, unsubscribe: 1, neutral: 0, autoReply: 0, outOfOffice: 1 },
-        recipients: 150,
-      },
-    },
-  });
+  .openapi("StatsGroup");
 
 export type StatsGroup = z.infer<typeof StatsGroupSchema>;
 
 export const GroupedStatsResponseSchema = z
   .object({
-    groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension. Each entry contains the key and the stats for that bucket."),
+    groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension."),
   })
   .openapi("GroupedStatsResponse", {
-    description: "Returned instead of StatsResponse when the groupBy query parameter is set. Groups stats by the requested dimension (brandId, campaignId, workflowSlug, featureSlug, or recipientEmail).",
-    example: {
-      groups: [
-        {
-          key: "b47ac10b-58cc-4372-a567-0e02b2c3d479",
-          broadcast: {
-            emailsContacted: 150, emailsSent: 120, emailsDelivered: 115,
-            emailsOpened: 45, emailsClicked: 12, emailsBounced: 5,
-            repliesPositive: 3, repliesNegative: 2, repliesNeutral: 0, repliesAutoReply: 1,
-            repliesDetail: { interested: 2, meetingBooked: 1, closed: 0, notInterested: 1, wrongPerson: 0, unsubscribe: 1, neutral: 0, autoReply: 0, outOfOffice: 1 },
-            recipients: 150,
-          },
-        },
-        {
-          key: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
-          broadcast: {
-            emailsContacted: 80, emailsSent: 70, emailsDelivered: 65,
-            emailsOpened: 20, emailsClicked: 5, emailsBounced: 2,
-            repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 1,
-            repliesDetail: { interested: 1, meetingBooked: 0, closed: 0, notInterested: 0, wrongPerson: 0, unsubscribe: 0, neutral: 0, autoReply: 0, outOfOffice: 1 },
-            recipients: 80,
-          },
-        },
-      ],
-    },
+    description: "Returned instead of StatsResponse when the groupBy query parameter is set.",
   });
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { StatsQuerySchema, Stats, BroadcastStats, RepliesDetail } from "../schemas";
+import { StatsQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import { extractOrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
@@ -8,7 +8,6 @@ import * as dynastyClient from "../lib/dynasty-client";
 import type {
   ProviderStatsFlat,
   ProviderStatsGrouped,
-  ProviderStatsPayload,
   ProviderStatsResult,
 } from "../lib/instantly-client";
 
@@ -17,52 +16,28 @@ const internalRouter = Router();
 
 const ZERO_DETAIL: RepliesDetail = { interested: 0, meetingBooked: 0, closed: 0, notInterested: 0, wrongPerson: 0, unsubscribe: 0, neutral: 0, autoReply: 0, outOfOffice: 0 };
 
-/** Pass-through: provider shape → email-gateway shape (identical) */
-function normalizePayload(raw: ProviderStatsPayload, recipients?: number): Stats {
-  return {
-    emailsContacted: raw.emailsContacted ?? 0,
-    emailsSent: raw.emailsSent,
-    emailsDelivered: raw.emailsDelivered,
-    emailsOpened: raw.emailsOpened,
-    emailsClicked: raw.emailsClicked,
-    emailsBounced: raw.emailsBounced,
-    repliesPositive: raw.repliesPositive,
-    repliesNegative: raw.repliesNegative,
-    repliesNeutral: raw.repliesNeutral,
-    repliesAutoReply: raw.repliesAutoReply,
-    repliesDetail: raw.repliesDetail ?? ZERO_DETAIL,
-    recipients: recipients ?? raw.emailsSent,
-  };
-}
+const ZERO_RECIPIENT_STATS: RecipientStats = {
+  contacted: 0, sent: 0, delivered: 0, opened: 0, bounced: 0, clicked: 0, unsubscribed: 0,
+  repliesPositive: 0, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0,
+  repliesDetail: ZERO_DETAIL,
+};
 
-function normalizeBroadcastFlat(raw: ProviderStatsFlat): BroadcastStats {
-  const base = normalizePayload(raw.stats, raw.recipients);
-  return raw.stepStats ? { ...base, stepStats: raw.stepStats } : base;
+const ZERO_EMAIL_STATS: EmailStats = {
+  sent: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, unsubscribed: 0,
+};
+
+const ZERO_CHANNEL_STATS: ChannelStats = {
+  recipientStats: ZERO_RECIPIENT_STATS,
+  emailStats: ZERO_EMAIL_STATS,
+};
+
+function toChannelStats(raw: ProviderStatsFlat): ChannelStats {
+  return { recipientStats: raw.recipientStats, emailStats: raw.emailStats };
 }
 
 function isGrouped(result: ProviderStatsResult): result is ProviderStatsGrouped {
   return "groups" in result;
 }
-
-function normalizeFlatResult(raw: ProviderStatsResult): Stats {
-  const flat = raw as ProviderStatsFlat;
-  return normalizePayload(flat.stats, flat.recipients);
-}
-
-const ZERO_STATS: Stats = {
-  emailsContacted: 0,
-  emailsSent: 0,
-  emailsDelivered: 0,
-  emailsOpened: 0,
-  emailsClicked: 0,
-  emailsBounced: 0,
-  repliesPositive: 0,
-  repliesNegative: 0,
-  repliesNeutral: 0,
-  repliesAutoReply: 0,
-  repliesDetail: ZERO_DETAIL,
-  recipients: 0,
-};
 
 function addDetail(a: RepliesDetail, b: RepliesDetail): RepliesDetail {
   return {
@@ -78,20 +53,38 @@ function addDetail(a: RepliesDetail, b: RepliesDetail): RepliesDetail {
   };
 }
 
-function addStats(a: Stats, b: Stats): Stats {
+function addRecipientStats(a: RecipientStats, b: RecipientStats): RecipientStats {
   return {
-    emailsContacted: a.emailsContacted + b.emailsContacted,
-    emailsSent: a.emailsSent + b.emailsSent,
-    emailsDelivered: a.emailsDelivered + b.emailsDelivered,
-    emailsOpened: a.emailsOpened + b.emailsOpened,
-    emailsClicked: a.emailsClicked + b.emailsClicked,
-    emailsBounced: a.emailsBounced + b.emailsBounced,
+    contacted: a.contacted + b.contacted,
+    sent: a.sent + b.sent,
+    delivered: a.delivered + b.delivered,
+    opened: a.opened + b.opened,
+    bounced: a.bounced + b.bounced,
+    clicked: a.clicked + b.clicked,
+    unsubscribed: a.unsubscribed + b.unsubscribed,
     repliesPositive: a.repliesPositive + b.repliesPositive,
     repliesNegative: a.repliesNegative + b.repliesNegative,
     repliesNeutral: a.repliesNeutral + b.repliesNeutral,
     repliesAutoReply: a.repliesAutoReply + b.repliesAutoReply,
     repliesDetail: addDetail(a.repliesDetail, b.repliesDetail),
-    recipients: a.recipients + b.recipients,
+  };
+}
+
+function addEmailStats(a: EmailStats, b: EmailStats): EmailStats {
+  return {
+    sent: a.sent + b.sent,
+    delivered: a.delivered + b.delivered,
+    opened: a.opened + b.opened,
+    clicked: a.clicked + b.clicked,
+    bounced: a.bounced + b.bounced,
+    unsubscribed: a.unsubscribed + b.unsubscribed,
+  };
+}
+
+function addChannelStats(a: ChannelStats, b: ChannelStats): ChannelStats {
+  return {
+    recipientStats: addRecipientStats(a.recipientStats, b.recipientStats),
+    emailStats: addEmailStats(a.emailStats, b.emailStats),
   };
 }
 
@@ -145,17 +138,17 @@ function rewriteGroupByForProvider(groupBy: string): string {
 }
 
 function regroupByDynasty(
-  groups: Array<{ key: string; stats: ProviderStatsPayload; recipients?: number }>,
+  groups: ProviderStatsGrouped["groups"],
   slugToDynastyMap: Map<string, string>,
-): Array<{ key: string; stats: Stats }> {
-  const dynastyGroups = new Map<string, Stats>();
+): Array<{ key: string; channelStats: ChannelStats }> {
+  const dynastyGroups = new Map<string, ChannelStats>();
   for (const g of groups) {
     const dynastyKey = slugToDynastyMap.get(g.key) ?? g.key;
-    const normalized = normalizePayload(g.stats, g.recipients);
-    const existing = dynastyGroups.get(dynastyKey) ?? { ...ZERO_STATS };
-    dynastyGroups.set(dynastyKey, addStats(existing, normalized));
+    const stats: ChannelStats = { recipientStats: g.recipientStats, emailStats: g.emailStats };
+    const existing = dynastyGroups.get(dynastyKey) ?? { ...ZERO_CHANNEL_STATS };
+    dynastyGroups.set(dynastyKey, addChannelStats(existing, stats));
   }
-  return Array.from(dynastyGroups.entries()).map(([key, stats]) => ({ key, stats }));
+  return Array.from(dynastyGroups.entries()).map(([key, channelStats]) => ({ key, channelStats }));
 }
 
 /** Extract a partial OrgContext for public routes where x-org-id may be absent */
@@ -204,8 +197,8 @@ async function statsHandler(req: Request, res: Response) {
         res.json({ groups: [] });
       } else {
         const response: Record<string, unknown> = {};
-        if (!type || type === "transactional") response.transactional = { ...ZERO_STATS };
-        if (!type || type === "broadcast") response.broadcast = { ...ZERO_STATS };
+        if (!type || type === "transactional") response.transactional = { ...ZERO_CHANNEL_STATS };
+        if (!type || type === "broadcast") response.broadcast = { ...ZERO_CHANNEL_STATS };
         res.json(response);
       }
       return;
@@ -239,14 +232,13 @@ async function handleFlat(
 ) {
   if (type === "transactional") {
     const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], ctx);
-    res.json({ transactional: normalizeFlatResult(raw) });
+    res.json({ transactional: toChannelStats(raw as ProviderStatsFlat) });
     return;
   }
 
   if (type === "broadcast") {
     const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx);
-    const flat = raw as ProviderStatsFlat;
-    res.json({ broadcast: normalizeBroadcastFlat(flat) });
+    res.json({ broadcast: toChannelStats(raw as ProviderStatsFlat) });
     return;
   }
 
@@ -259,15 +251,14 @@ async function handleFlat(
   const response: Record<string, unknown> = {};
 
   if (postmarkResult.status === "fulfilled") {
-    response.transactional = normalizeFlatResult(postmarkResult.value);
+    response.transactional = toChannelStats(postmarkResult.value as ProviderStatsFlat);
   } else {
     console.error(`[email-gateway] Postmark failed: ${postmarkResult.reason?.message}`);
     response.transactional = { error: postmarkResult.reason?.message };
   }
 
   if (instantlyResult.status === "fulfilled") {
-    const flat = instantlyResult.value as ProviderStatsFlat;
-    response.broadcast = normalizeBroadcastFlat(flat);
+    response.broadcast = toChannelStats(instantlyResult.value as ProviderStatsFlat);
   } else {
     console.error(`[email-gateway] Instantly failed: ${instantlyResult.reason?.message}`);
     response.broadcast = { error: instantlyResult.reason?.message };
@@ -292,7 +283,7 @@ async function handleGrouped(
     }
     const groups = raw.groups.map((g) => ({
       key: g.key,
-      transactional: normalizePayload(g.stats, g.recipients),
+      transactional: { recipientStats: g.recipientStats, emailStats: g.emailStats } as ChannelStats,
     }));
     res.json({ groups });
     return;
@@ -306,7 +297,7 @@ async function handleGrouped(
     }
     const groups = raw.groups.map((g) => ({
       key: g.key,
-      broadcast: normalizePayload(g.stats, g.recipients),
+      broadcast: { recipientStats: g.recipientStats, emailStats: g.emailStats } as ChannelStats,
     }));
     res.json({ groups });
     return;
@@ -318,11 +309,11 @@ async function handleGrouped(
     instantlyClient.getStats(castFilters, ctx),
   ]);
 
-  const merged = new Map<string, { transactional?: Stats; broadcast?: Stats }>();
+  const merged = new Map<string, { transactional?: ChannelStats; broadcast?: ChannelStats }>();
 
   if (postmarkResult.status === "fulfilled" && isGrouped(postmarkResult.value)) {
     for (const g of postmarkResult.value.groups) {
-      merged.set(g.key, { transactional: normalizePayload(g.stats, g.recipients) });
+      merged.set(g.key, { transactional: { recipientStats: g.recipientStats, emailStats: g.emailStats } });
     }
   } else if (postmarkResult.status === "rejected") {
     console.error(`[email-gateway] Postmark failed (grouped): ${postmarkResult.reason?.message}`);
@@ -331,7 +322,7 @@ async function handleGrouped(
   if (instantlyResult.status === "fulfilled" && isGrouped(instantlyResult.value)) {
     for (const g of instantlyResult.value.groups) {
       const existing = merged.get(g.key) ?? {};
-      existing.broadcast = normalizePayload(g.stats, g.recipients);
+      existing.broadcast = { recipientStats: g.recipientStats, emailStats: g.emailStats };
       merged.set(g.key, existing);
     }
   } else if (instantlyResult.status === "fulfilled") {
@@ -378,7 +369,7 @@ async function handleDynastyGrouped(
       return;
     }
     const regrouped = regroupByDynasty(raw.groups, slugMap);
-    res.json({ groups: regrouped.map((g) => ({ key: g.key, transactional: g.stats })) });
+    res.json({ groups: regrouped.map((g) => ({ key: g.key, transactional: g.channelStats })) });
     return;
   }
 
@@ -393,7 +384,7 @@ async function handleDynastyGrouped(
       return;
     }
     const regrouped = regroupByDynasty(raw.groups, slugMap);
-    res.json({ groups: regrouped.map((g) => ({ key: g.key, broadcast: g.stats })) });
+    res.json({ groups: regrouped.map((g) => ({ key: g.key, broadcast: g.channelStats })) });
     return;
   }
 
@@ -405,12 +396,12 @@ async function handleDynastyGrouped(
   ]);
 
   const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
-  const merged = new Map<string, { transactional?: Stats; broadcast?: Stats }>();
+  const merged = new Map<string, { transactional?: ChannelStats; broadcast?: ChannelStats }>();
 
   if (!(postmarkResult instanceof Error) && isGrouped(postmarkResult)) {
     const regrouped = regroupByDynasty(postmarkResult.groups, slugMap);
     for (const g of regrouped) {
-      merged.set(g.key, { transactional: g.stats });
+      merged.set(g.key, { transactional: g.channelStats });
     }
   } else if (postmarkResult instanceof Error) {
     console.error(`[email-gateway] Postmark failed (dynasty grouped): ${postmarkResult.message}`);
@@ -420,7 +411,7 @@ async function handleDynastyGrouped(
     const regrouped = regroupByDynasty(instantlyResult.groups, slugMap);
     for (const g of regrouped) {
       const existing = merged.get(g.key) ?? {};
-      existing.broadcast = g.stats;
+      existing.broadcast = g.channelStats;
       merged.set(g.key, existing);
     }
   } else if (!(instantlyResult instanceof Error)) {
