@@ -41,103 +41,84 @@ function serviceAuthGet(path: string) {
 
 const ZERO_DETAIL = { interested: 0, meetingBooked: 0, closed: 0, notInterested: 0, wrongPerson: 0, unsubscribe: 0, neutral: 0, autoReply: 0, outOfOffice: 0 };
 
-function mockPostmarkStats(overrides = {}) {
+function mockPostmarkStats(recipientOverrides = {}, emailOverrides = {}) {
   return {
     ok: true,
     json: () =>
       Promise.resolve({
-        stats: {
-          emailsContacted: 100,
-          emailsSent: 100,
-          emailsDelivered: 95,
-          emailsOpened: 40,
-          emailsClicked: 10,
-          emailsBounced: 3,
-          repliesPositive: 3,
-          repliesNegative: 0,
-          repliesNeutral: 0,
-          repliesAutoReply: 1,
+        recipientStats: {
+          contacted: 100, sent: 100, delivered: 95, opened: 40, bounced: 3, clicked: 10, unsubscribed: 0,
+          repliesPositive: 3, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 1,
           repliesDetail: { ...ZERO_DETAIL, interested: 2, meetingBooked: 1, outOfOffice: 1, unsubscribe: 2 },
-          ...overrides,
+          ...recipientOverrides,
+        },
+        emailStats: {
+          sent: 100, delivered: 95, opened: 40, clicked: 10, bounced: 3, unsubscribed: 0,
+          ...emailOverrides,
         },
       }),
   };
 }
 
-function mockInstantlyStats(overrides = {}, stepStats?: Array<Record<string, unknown>>) {
+function mockInstantlyStats(recipientOverrides = {}, emailOverrides = {}, stepStats?: Array<Record<string, unknown>>) {
   return {
     ok: true,
     json: () =>
       Promise.resolve({
-        stats: {
-          emailsContacted: 85,
-          emailsSent: 80,
-          emailsDelivered: 75,
-          emailsOpened: 30,
-          emailsClicked: 3,
-          emailsBounced: 5,
-          repliesPositive: 0,
-          repliesNegative: 1,
-          repliesNeutral: 0,
-          repliesAutoReply: 2,
+        recipientStats: {
+          contacted: 85, sent: 75, delivered: 70, opened: 30, bounced: 5, clicked: 3, unsubscribed: 0,
+          repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 2,
           repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 },
-          ...overrides,
+          ...recipientOverrides,
         },
-        recipients: 75,
-        ...(stepStats ? { stepStats } : {}),
+        emailStats: {
+          sent: 80, delivered: 75, opened: 30, clicked: 3, bounced: 5, unsubscribed: 0,
+          ...(stepStats ? { stepStats } : {}),
+          ...emailOverrides,
+        },
       }),
   };
 }
 
-function mockGroupedPostmark(groups: Array<{ key: string; overrides?: Record<string, unknown>; recipients?: number }>) {
+function mockGroupedPostmark(groups: Array<{ key: string; recipientOverrides?: Record<string, unknown>; emailOverrides?: Record<string, unknown> }>) {
   return {
     ok: true,
     json: () =>
       Promise.resolve({
         groups: groups.map((g) => ({
           key: g.key,
-          stats: {
-            emailsContacted: 50,
-            emailsSent: 50,
-            emailsDelivered: 45,
-            emailsOpened: 20,
-            emailsClicked: 5,
-            emailsBounced: 1,
-            repliesPositive: 1,
-            repliesNegative: 0,
-            repliesNeutral: 0,
-            repliesAutoReply: 0,
+          recipientStats: {
+            contacted: 50, sent: 50, delivered: 45, opened: 20, bounced: 1, clicked: 5, unsubscribed: 0,
+            repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0,
             repliesDetail: { ...ZERO_DETAIL, interested: 1 },
-            ...g.overrides,
+            ...g.recipientOverrides,
           },
-          recipients: g.recipients,
+          emailStats: {
+            sent: 50, delivered: 45, opened: 20, clicked: 5, bounced: 1, unsubscribed: 0,
+            ...g.emailOverrides,
+          },
         })),
       }),
   };
 }
 
-function mockGroupedInstantly(groups: Array<{ key: string; overrides?: Record<string, unknown>; recipients?: number }>) {
+function mockGroupedInstantly(groups: Array<{ key: string; recipientOverrides?: Record<string, unknown>; emailOverrides?: Record<string, unknown> }>) {
   return {
     ok: true,
     json: () =>
       Promise.resolve({
         groups: groups.map((g) => ({
           key: g.key,
-          stats: {
-            emailsContacted: 42,
-            emailsSent: 40,
-            emailsDelivered: 38,
-            emailsOpened: 15,
-            emailsClicked: 2,
-            emailsBounced: 2,
-            repliesPositive: 0,
-            repliesNegative: 1,
-            repliesNeutral: 0,
-            repliesAutoReply: 1,
+          recipientStats: {
+            contacted: 42, sent: 35, delivered: 33, opened: 15, bounced: 2, clicked: 2, unsubscribed: 0,
+            repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 1,
             repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 },
-            ...g.overrides,
+            ...g.recipientOverrides,
           },
-          recipients: g.recipients ?? 35,
+          emailStats: {
+            sent: 40, delivered: 38, opened: 15, clicked: 2, bounced: 2, unsubscribed: 0,
+            ...g.emailOverrides,
+          },
         })),
       }),
   };
@@ -195,25 +176,19 @@ describe("GET /orgs/stats", () => {
   });
 
   describe("type: transactional", () => {
-    it("returns normalized transactional stats from Postmark", async () => {
+    it("returns transactional channel stats from Postmark", async () => {
       mockFetch.mockResolvedValueOnce(mockPostmarkStats());
 
       const res = await authedGet("/orgs/stats?type=transactional");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional).toEqual({
-        emailsContacted: 100,
-        emailsSent: 100,
-        emailsDelivered: 95,
-        emailsOpened: 40,
-        emailsClicked: 10,
-        emailsBounced: 3,
-        repliesPositive: 3,
-        repliesNegative: 0,
-        repliesNeutral: 0,
-        repliesAutoReply: 1,
+      expect(res.body.transactional.recipientStats).toEqual({
+        contacted: 100, sent: 100, delivered: 95, opened: 40, bounced: 3, clicked: 10, unsubscribed: 0,
+        repliesPositive: 3, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 1,
         repliesDetail: { ...ZERO_DETAIL, interested: 2, meetingBooked: 1, outOfOffice: 1, unsubscribe: 2 },
-        recipients: 100,
+      });
+      expect(res.body.transactional.emailStats).toEqual({
+        sent: 100, delivered: 95, opened: 40, clicked: 10, bounced: 3, unsubscribed: 0,
       });
       expect(res.body.broadcast).toBeUndefined();
     });
@@ -245,25 +220,19 @@ describe("GET /orgs/stats", () => {
   });
 
   describe("type: broadcast", () => {
-    it("returns normalized broadcast stats from Instantly", async () => {
+    it("returns broadcast channel stats from Instantly", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast).toEqual({
-        emailsContacted: 85,
-        emailsSent: 80,
-        emailsDelivered: 75,
-        emailsOpened: 30,
-        emailsClicked: 3,
-        emailsBounced: 5,
-        repliesPositive: 0,
-        repliesNegative: 1,
-        repliesNeutral: 0,
-        repliesAutoReply: 2,
+      expect(res.body.broadcast.recipientStats).toEqual({
+        contacted: 85, sent: 75, delivered: 70, opened: 30, bounced: 5, clicked: 3, unsubscribed: 0,
+        repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 2,
         repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 },
-        recipients: 75,
+      });
+      expect(res.body.broadcast.emailStats).toEqual({
+        sent: 80, delivered: 75, opened: 30, clicked: 3, bounced: 5, unsubscribed: 0,
       });
       expect(res.body.transactional).toBeUndefined();
     });
@@ -304,8 +273,8 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.emailsSent).toBe(100);
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.transactional.emailStats.sent).toBe(100);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
     it("returns error for broadcast when Instantly fails", async () => {
@@ -323,7 +292,7 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.emailsSent).toBe(100);
+      expect(res.body.transactional.emailStats.sent).toBe(100);
       expect(res.body.broadcast.error).toBeDefined();
     });
 
@@ -343,7 +312,7 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.error).toBeDefined();
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
     it("returns errors for both when both fail", async () => {
@@ -371,49 +340,15 @@ describe("GET /orgs/stats", () => {
     });
   });
 
-  describe("unified normalizer", () => {
-    it("uses recipients field when available (Instantly)", async () => {
+  describe("pass-through shape", () => {
+    it("passes through recipientStats and emailStats from provider", async () => {
       mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
-      expect(res.body.broadcast.recipients).toBe(75);
-    });
-
-    it("defaults emailsContacted to 0 when field is missing from provider", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({
-            stats: {
-              emailsSent: 80,
-              emailsDelivered: 75,
-              emailsOpened: 30,
-              emailsClicked: 3,
-              emailsBounced: 5,
-              repliesPositive: 0,
-              repliesNegative: 0,
-              repliesNeutral: 0,
-              repliesAutoReply: 0,
-              repliesDetail: { ...ZERO_DETAIL },
-            },
-            recipients: 75,
-          }),
-      });
-
-      const res = await authedGet("/orgs/stats?type=broadcast");
-
-      expect(res.status).toBe(200);
-      expect(res.body.broadcast.emailsContacted).toBe(0);
-      expect(res.body.broadcast.emailsSent).toBe(80);
-    });
-
-    it("falls back to emailsSent for recipients when field is missing (Postmark)", async () => {
-      mockFetch.mockResolvedValueOnce(mockPostmarkStats());
-
-      const res = await authedGet("/orgs/stats?type=transactional");
-
-      expect(res.body.transactional.recipients).toBe(100);
+      expect(res.body.broadcast.recipientStats.contacted).toBe(85);
+      expect(res.body.broadcast.recipientStats.sent).toBe(75);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
     it("passes through reply buckets and detail as-is from provider", async () => {
@@ -421,11 +356,11 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
-      expect(res.body.broadcast.repliesPositive).toBe(0);
-      expect(res.body.broadcast.repliesNegative).toBe(1);
-      expect(res.body.broadcast.repliesNeutral).toBe(0);
-      expect(res.body.broadcast.repliesAutoReply).toBe(2);
-      expect(res.body.broadcast.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 });
+      expect(res.body.broadcast.recipientStats.repliesPositive).toBe(0);
+      expect(res.body.broadcast.recipientStats.repliesNegative).toBe(1);
+      expect(res.body.broadcast.recipientStats.repliesNeutral).toBe(0);
+      expect(res.body.broadcast.recipientStats.repliesAutoReply).toBe(2);
+      expect(res.body.broadcast.recipientStats.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 });
     });
 
     it("passes through repliesDetail.interested correctly", async () => {
@@ -438,9 +373,9 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.repliesPositive).toBe(1);
-      expect(res.body.broadcast.repliesDetail.interested).toBe(1);
-      expect(res.body.broadcast.repliesNeutral).toBe(0);
+      expect(res.body.broadcast.recipientStats.repliesPositive).toBe(1);
+      expect(res.body.broadcast.recipientStats.repliesDetail.interested).toBe(1);
+      expect(res.body.broadcast.recipientStats.repliesNeutral).toBe(0);
     });
   });
 
@@ -579,8 +514,8 @@ describe("GET /orgs/stats", () => {
     it("returns grouped broadcast stats from a single provider", async () => {
       mockFetch.mockResolvedValueOnce(
         mockGroupedInstantly([
-          { key: "brand_1", recipients: 30 },
-          { key: "brand_2", recipients: 20 },
+          { key: "brand_1" },
+          { key: "brand_2" },
         ])
       );
 
@@ -589,8 +524,8 @@ describe("GET /orgs/stats", () => {
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
       expect(res.body.groups[0].key).toBe("brand_1");
-      expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
-      expect(res.body.groups[0].broadcast.recipients).toBe(30);
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+      expect(res.body.groups[0].broadcast.recipientStats.sent).toBe(35);
       expect(res.body.groups[0].transactional).toBeUndefined();
       expect(res.body.groups[1].key).toBe("brand_2");
     });
@@ -608,7 +543,7 @@ describe("GET /orgs/stats", () => {
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
       expect(res.body.groups[0].key).toBe("camp_1");
-      expect(res.body.groups[0].transactional.emailsSent).toBe(50);
+      expect(res.body.groups[0].transactional.emailStats.sent).toBe(50);
       expect(res.body.groups[0].broadcast).toBeUndefined();
     });
 
@@ -624,8 +559,8 @@ describe("GET /orgs/stats", () => {
         if (url.includes("3011"))
           return Promise.resolve(
             mockGroupedInstantly([
-              { key: "brand_1", recipients: 30 },
-              { key: "brand_3", recipients: 25 },
+              { key: "brand_1" },
+              { key: "brand_3" },
             ])
           );
         return Promise.reject(new Error("Unexpected URL"));
@@ -639,16 +574,16 @@ describe("GET /orgs/stats", () => {
       const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
 
       const brand1 = byKey.get("brand_1");
-      expect(brand1.transactional.emailsSent).toBe(50);
-      expect(brand1.broadcast.emailsSent).toBe(40);
+      expect(brand1.transactional.emailStats.sent).toBe(50);
+      expect(brand1.broadcast.emailStats.sent).toBe(40);
 
       const brand2 = byKey.get("brand_2");
-      expect(brand2.transactional.emailsSent).toBe(50);
+      expect(brand2.transactional.emailStats.sent).toBe(50);
       expect(brand2.broadcast).toBeUndefined();
 
       const brand3 = byKey.get("brand_3");
       expect(brand3.transactional).toBeUndefined();
-      expect(brand3.broadcast.emailsSent).toBe(40);
+      expect(brand3.broadcast.emailStats.sent).toBe(40);
     });
 
     it("passes groupBy to providers in query params", async () => {
@@ -678,7 +613,7 @@ describe("GET /orgs/stats", () => {
           });
         if (url.includes("3011"))
           return Promise.resolve(
-            mockGroupedInstantly([{ key: "brand_1", recipients: 30 }])
+            mockGroupedInstantly([{ key: "brand_1" }])
           );
         return Promise.reject(new Error("Unexpected URL"));
       });
@@ -688,24 +623,24 @@ describe("GET /orgs/stats", () => {
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
       expect(res.body.groups[0].key).toBe("brand_1");
-      expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
       expect(res.body.groups[0].transactional).toBeUndefined();
     });
 
     it("passes through grouped reply buckets as-is from provider", async () => {
       mockFetch.mockResolvedValueOnce(
-        mockGroupedInstantly([{ key: "lead@example.com", recipients: 1 }])
+        mockGroupedInstantly([{ key: "lead@example.com" }])
       );
 
       const res = await authedGet("/orgs/stats?type=broadcast&groupBy=recipientEmail");
 
       expect(res.status).toBe(200);
       const group = res.body.groups[0];
-      expect(group.broadcast.repliesPositive).toBe(0);
-      expect(group.broadcast.repliesNegative).toBe(1);
-      expect(group.broadcast.repliesNeutral).toBe(0);
-      expect(group.broadcast.repliesAutoReply).toBe(1);
-      expect(group.broadcast.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 });
+      expect(group.broadcast.recipientStats.repliesPositive).toBe(0);
+      expect(group.broadcast.recipientStats.repliesNegative).toBe(1);
+      expect(group.broadcast.recipientStats.repliesNeutral).toBe(0);
+      expect(group.broadcast.recipientStats.repliesAutoReply).toBe(1);
+      expect(group.broadcast.recipientStats.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 });
     });
 
     it("returns empty groups when both providers fail (grouped mode)", async () => {
@@ -747,7 +682,7 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
       expect(callCount).toBe(2);
     });
 
@@ -796,25 +731,25 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.emailsSent).toBe(100);
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.transactional.emailStats.sent).toBe(100);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
   });
 
   describe("stepStats (broadcast only)", () => {
-    it("forwards stepStats from instantly in broadcast block", async () => {
+    it("forwards stepStats from instantly in broadcast emailStats", async () => {
       const providerSteps = [
-        { step: 1, emailsSent: 10, emailsOpened: 8, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
-        { step: 2, emailsSent: 10, emailsOpened: 5, emailsBounced: 1, repliesPositive: 0, repliesNegative: 0, repliesNeutral: 1, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, neutral: 1 } },
-        { step: 3, emailsSent: 10, emailsOpened: 2, emailsBounced: 0, repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, notInterested: 1 } },
+        { step: 1, sent: 10, delivered: 9, opened: 8, bounced: 1, clicked: 0, unsubscribed: 0, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
+        { step: 2, sent: 10, delivered: 9, opened: 5, bounced: 1, clicked: 0, unsubscribed: 0, repliesPositive: 0, repliesNegative: 0, repliesNeutral: 1, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, neutral: 1 } },
+        { step: 3, sent: 10, delivered: 10, opened: 2, bounced: 0, clicked: 0, unsubscribed: 0, repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, notInterested: 1 } },
       ];
-      mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, providerSteps));
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats({}, { stepStats: providerSteps }));
 
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.stepStats).toEqual(providerSteps);
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.broadcast.emailStats.stepStats).toEqual(providerSteps);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
     it("omits stepStats when not present in provider response", async () => {
@@ -823,25 +758,25 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.stepStats).toBeUndefined();
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.broadcast.emailStats.stepStats).toBeUndefined();
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
-    it("includes stepStats in broadcast block when aggregating both providers", async () => {
+    it("includes stepStats in broadcast emailStats when aggregating both providers", async () => {
       const providerSteps = [
-        { step: 1, emailsSent: 10, emailsOpened: 8, emailsBounced: 1, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
+        { step: 1, sent: 10, delivered: 9, opened: 8, bounced: 1, clicked: 0, unsubscribed: 0, repliesPositive: 1, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 0, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
       ];
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
-        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats({}, providerSteps));
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats({}, { stepStats: providerSteps }));
         return Promise.reject(new Error("Unexpected URL"));
       });
 
       const res = await authedGet("/orgs/stats");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.stepStats).toBeUndefined();
-      expect(res.body.broadcast.stepStats).toEqual(providerSteps);
+      expect(res.body.transactional.emailStats.stepStats).toBeUndefined();
+      expect(res.body.broadcast.emailStats.stepStats).toEqual(providerSteps);
     });
   });
 
@@ -861,8 +796,8 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?workflowDynastySlug=cold-email");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.emailsSent).toBe(100);
-      expect(res.body.broadcast.emailsSent).toBe(80);
+      expect(res.body.transactional.emailStats.sent).toBe(100);
+      expect(res.body.broadcast.emailStats.sent).toBe(80);
 
       // Verify providers got workflowSlugs, not workflowDynastySlug
       const providerCalls = mockFetch.mock.calls.filter(
@@ -913,8 +848,8 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?workflowDynastySlug=nonexistent");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.emailsSent).toBe(0);
-      expect(res.body.broadcast.emailsSent).toBe(0);
+      expect(res.body.transactional.recipientStats.sent).toBe(0);
+      expect(res.body.broadcast.recipientStats.sent).toBe(0);
       // Should NOT call providers at all
       const providerCalls = mockFetch.mock.calls.filter(
         (c) => c[0].includes("3010") || c[0].includes("3011")
@@ -935,7 +870,7 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=transactional&featureDynastySlug=empty");
 
       expect(res.status).toBe(200);
-      expect(res.body.transactional.emailsSent).toBe(0);
+      expect(res.body.transactional.recipientStats.sent).toBe(0);
       expect(res.body.broadcast).toBeUndefined();
     });
 
@@ -1000,8 +935,8 @@ describe("GET /orgs/stats", () => {
         if (url.includes("3010"))
           return Promise.resolve(
             mockGroupedPostmark([
-              { key: "cold-email", overrides: { emailsSent: 30 } },
-              { key: "cold-email-v2", overrides: { emailsSent: 20 } },
+              { key: "cold-email", emailOverrides: { sent: 30 } },
+              { key: "cold-email-v2", emailOverrides: { sent: 20 } },
             ])
           );
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
@@ -1013,7 +948,7 @@ describe("GET /orgs/stats", () => {
       expect(res.body.groups).toHaveLength(1);
       expect(res.body.groups[0].key).toBe("cold-email");
       // 30 + 20 = 50
-      expect(res.body.groups[0].transactional.emailsSent).toBe(50);
+      expect(res.body.groups[0].transactional.emailStats.sent).toBe(50);
     });
 
     it("regroups by featureDynastySlug (broadcast)", async () => {
@@ -1031,8 +966,8 @@ describe("GET /orgs/stats", () => {
         if (url.includes("3011"))
           return Promise.resolve(
             mockGroupedInstantly([
-              { key: "feat-alpha", overrides: { emailsSent: 25 }, recipients: 20 },
-              { key: "feat-alpha-v2", overrides: { emailsSent: 15 }, recipients: 10 },
+              { key: "feat-alpha", recipientOverrides: { sent: 20 }, emailOverrides: { sent: 25 } },
+              { key: "feat-alpha-v2", recipientOverrides: { sent: 10 }, emailOverrides: { sent: 15 } },
             ])
           );
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
@@ -1043,8 +978,8 @@ describe("GET /orgs/stats", () => {
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(1);
       expect(res.body.groups[0].key).toBe("feat-alpha");
-      expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
-      expect(res.body.groups[0].broadcast.recipients).toBe(30);
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+      expect(res.body.groups[0].broadcast.recipientStats.sent).toBe(30);
     });
 
     it("sends groupBy=workflowSlug to providers when dynasty groupBy requested", async () => {
@@ -1081,8 +1016,8 @@ describe("GET /orgs/stats", () => {
         if (url.includes("3010"))
           return Promise.resolve(
             mockGroupedPostmark([
-              { key: "cold-email", overrides: { emailsSent: 30 } },
-              { key: "orphan-slug", overrides: { emailsSent: 10 } },
+              { key: "cold-email", emailOverrides: { sent: 30 } },
+              { key: "orphan-slug", emailOverrides: { sent: 10 } },
             ])
           );
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
@@ -1093,8 +1028,8 @@ describe("GET /orgs/stats", () => {
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
       const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
-      expect(byKey.get("cold-email").transactional.emailsSent).toBe(30);
-      expect(byKey.get("orphan-slug").transactional.emailsSent).toBe(10);
+      expect(byKey.get("cold-email").transactional.emailStats.sent).toBe(30);
+      expect(byKey.get("orphan-slug").transactional.emailStats.sent).toBe(10);
     });
 
     it("merges dynasty groups from both providers", async () => {
@@ -1119,8 +1054,8 @@ describe("GET /orgs/stats", () => {
         if (url.includes("3011"))
           return Promise.resolve(
             mockGroupedInstantly([
-              { key: "cold-email", recipients: 20 },
-              { key: "cold-email-v2", recipients: 15 },
+              { key: "cold-email" },
+              { key: "cold-email-v2" },
             ])
           );
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
@@ -1135,9 +1070,9 @@ describe("GET /orgs/stats", () => {
       expect(res.body.groups[0].transactional).toBeDefined();
       expect(res.body.groups[0].broadcast).toBeDefined();
       // Transactional: 50 + 50 = 100
-      expect(res.body.groups[0].transactional.emailsSent).toBe(100);
+      expect(res.body.groups[0].transactional.emailStats.sent).toBe(100);
       // Broadcast: 40 + 40 = 80
-      expect(res.body.groups[0].broadcast.emailsSent).toBe(80);
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(80);
     });
   });
 });
@@ -1158,7 +1093,7 @@ describe("GET /public/stats", () => {
     const res = await serviceAuthGet("/public/stats?type=broadcast");
 
     expect(res.status).toBe(200);
-    expect(res.body.broadcast.emailsSent).toBe(80);
+    expect(res.body.broadcast.emailStats.sent).toBe(80);
   });
 
   it("calls downstream /stats/public (no ctx) when no identity headers provided", async () => {
@@ -1190,8 +1125,8 @@ describe("GET /public/stats", () => {
   it("returns grouped broadcast stats", async () => {
     mockFetch.mockResolvedValueOnce(
       mockGroupedInstantly([
-        { key: "brand_1", recipients: 30 },
-        { key: "brand_2", recipients: 20 },
+        { key: "brand_1" },
+        { key: "brand_2" },
       ])
     );
 
@@ -1200,7 +1135,7 @@ describe("GET /public/stats", () => {
     expect(res.status).toBe(200);
     expect(res.body.groups).toHaveLength(2);
     expect(res.body.groups[0].key).toBe("brand_1");
-    expect(res.body.groups[0].broadcast.emailsSent).toBe(40);
+    expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
   });
 
   it("calls downstream /stats (not /stats/public) and forwards headers when caller provides identity headers", async () => {
