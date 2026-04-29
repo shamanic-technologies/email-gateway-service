@@ -2,17 +2,39 @@ import { config } from "../config";
 
 const TIMEOUT_MS = 10_000;
 
-interface DynastySlugResponse {
-  slugs: string[];
-}
-
+/** Internal normalized shape used by buildSlugToDynastyMap / regroupByDynasty */
 interface Dynasty {
   dynastySlug: string;
   slugs: string[];
 }
 
-interface DynastiesResponse {
-  dynasties: Dynasty[];
+/** Raw response from GET /workflows/dynasty/slugs */
+interface WorkflowDynastySlugResponse {
+  workflowDynastySlug: string;
+  workflowDynastyName: string;
+  workflowSlugs: string[];
+}
+
+/** Raw response from GET /workflows/dynasties */
+interface WorkflowDynastiesResponse {
+  dynasties: Array<{
+    workflowDynastySlug: string;
+    workflowDynastyName: string;
+    workflowSlugs: string[];
+  }>;
+}
+
+/** Raw response from GET /features/dynasty/slugs */
+interface FeatureDynastySlugResponse {
+  slugs: string[];
+}
+
+/** Raw response from GET /features/dynasties */
+interface FeatureDynastiesResponse {
+  dynasties: Array<{
+    dynastySlug: string;
+    slugs: string[];
+  }>;
 }
 
 interface IdentityHeaders {
@@ -47,29 +69,35 @@ async function fetchJson<T>(url: string, apiKey: string, identityHeaders?: Ident
 export async function resolveWorkflowDynastySlugs(dynastySlug: string, identityHeaders?: IdentityHeaders): Promise<string[]> {
   const { url, apiKey } = config.workflow;
   const endpoint = `${url}/workflows/dynasty/slugs?dynastySlug=${encodeURIComponent(dynastySlug)}`;
-  const result = await fetchJson<DynastySlugResponse>(endpoint, apiKey, identityHeaders);
-  return result.slugs;
+  const result = await fetchJson<WorkflowDynastySlugResponse>(endpoint, apiKey, identityHeaders);
+  return result.workflowSlugs;
 }
 
 export async function resolveFeatureDynastySlugs(dynastySlug: string, identityHeaders?: IdentityHeaders): Promise<string[]> {
   const { url, apiKey } = config.features;
   const endpoint = `${url}/features/dynasty/slugs?dynastySlug=${encodeURIComponent(dynastySlug)}`;
-  const result = await fetchJson<DynastySlugResponse>(endpoint, apiKey, identityHeaders);
+  const result = await fetchJson<FeatureDynastySlugResponse>(endpoint, apiKey, identityHeaders);
   return result.slugs;
 }
 
 export async function fetchWorkflowDynasties(identityHeaders?: IdentityHeaders): Promise<Dynasty[]> {
   const { url, apiKey } = config.workflow;
   const endpoint = `${url}/workflows/dynasties`;
-  const result = await fetchJson<DynastiesResponse>(endpoint, apiKey, identityHeaders);
-  return result.dynasties;
+  const result = await fetchJson<WorkflowDynastiesResponse>(endpoint, apiKey, identityHeaders);
+  return result.dynasties.map((d) => ({
+    dynastySlug: d.workflowDynastySlug,
+    slugs: d.workflowSlugs,
+  }));
 }
 
 export async function fetchFeatureDynasties(identityHeaders?: IdentityHeaders): Promise<Dynasty[]> {
   const { url, apiKey } = config.features;
   const endpoint = `${url}/features/dynasties`;
-  const result = await fetchJson<DynastiesResponse>(endpoint, apiKey, identityHeaders);
-  return result.dynasties;
+  const result = await fetchJson<FeatureDynastiesResponse>(endpoint, apiKey, identityHeaders);
+  return result.dynasties.map((d) => ({
+    dynastySlug: d.dynastySlug,
+    slugs: d.slugs,
+  }));
 }
 
 export function buildSlugToDynastyMap(dynasties: Dynasty[]): Map<string, string> {

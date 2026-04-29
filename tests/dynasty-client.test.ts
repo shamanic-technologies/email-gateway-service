@@ -26,7 +26,7 @@ describe("dynasty-client", () => {
     it("calls workflow-service and returns slugs", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ slugs: ["cold-email", "cold-email-v2", "cold-email-v3"] }),
+        json: () => Promise.resolve({ workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email", "cold-email-v2", "cold-email-v3"] }),
       });
 
       // Re-import to get fresh module with mocked config
@@ -43,7 +43,7 @@ describe("dynasty-client", () => {
     it("forwards identity headers when provided", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ slugs: ["cold-email"] }),
+        json: () => Promise.resolve({ workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email"] }),
       });
 
       const { resolveWorkflowDynastySlugs } = await import("../src/lib/dynasty-client");
@@ -58,7 +58,7 @@ describe("dynasty-client", () => {
     it("omits identity headers when not provided", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ slugs: ["cold-email"] }),
+        json: () => Promise.resolve({ workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email"] }),
       });
 
       const { resolveWorkflowDynastySlugs } = await import("../src/lib/dynasty-client");
@@ -73,7 +73,7 @@ describe("dynasty-client", () => {
     it("returns empty array when dynasty has no slugs", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ slugs: [] }),
+        json: () => Promise.resolve({ workflowDynastySlug: "nonexistent", workflowDynastyName: "", workflowSlugs: [] }),
       });
 
       const { resolveWorkflowDynastySlugs } = await import("../src/lib/dynasty-client");
@@ -112,20 +112,23 @@ describe("dynasty-client", () => {
   });
 
   describe("fetchWorkflowDynasties", () => {
-    it("returns all workflow dynasties", async () => {
-      const dynasties = [
-        { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
-        { dynastySlug: "warm-intro", slugs: ["warm-intro"] },
+    it("returns all workflow dynasties (normalized from API shape)", async () => {
+      const apiDynasties = [
+        { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email", "cold-email-v2"] },
+        { workflowDynastySlug: "warm-intro", workflowDynastyName: "Warm Intro", workflowSlugs: ["warm-intro"] },
       ];
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: () => Promise.resolve({ dynasties }),
+        json: () => Promise.resolve({ dynasties: apiDynasties }),
       });
 
       const { fetchWorkflowDynasties } = await import("../src/lib/dynasty-client");
       const result = await fetchWorkflowDynasties();
 
-      expect(result).toEqual(dynasties);
+      expect(result).toEqual([
+        { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+        { dynastySlug: "warm-intro", slugs: ["warm-intro"] },
+      ]);
       expect(mockFetch.mock.calls[0][0]).toContain("/workflows/dynasties");
     });
 
