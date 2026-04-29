@@ -786,7 +786,7 @@ describe("GET /orgs/stats", () => {
         if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ slugs: ["cold-email", "cold-email-v2"] }),
+            json: () => Promise.resolve({ workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email", "cold-email-v2"] }),
           });
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
         if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
@@ -815,7 +815,7 @@ describe("GET /orgs/stats", () => {
         if (url.includes("features:3020") && url.includes("/features/dynasty/slugs"))
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ slugs: ["feat-a", "feat-a-v2"] }),
+            json: () => Promise.resolve({ slugs: ["feat-a", "feat-a-v2"] }),  // features-service uses generic shape
           });
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
         if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
@@ -840,7 +840,7 @@ describe("GET /orgs/stats", () => {
         if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ slugs: [] }),
+            json: () => Promise.resolve({ workflowDynastySlug: "nonexistent", workflowDynastyName: "", workflowSlugs: [] }),
           });
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
@@ -879,7 +879,7 @@ describe("GET /orgs/stats", () => {
         if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ slugs: [] }),
+            json: () => Promise.resolve({ workflowDynastySlug: "nonexistent", workflowDynastyName: "", workflowSlugs: [] }),
           });
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
       });
@@ -895,7 +895,7 @@ describe("GET /orgs/stats", () => {
         if (url.includes("workflow:3021") && url.includes("/workflows/dynasty/slugs"))
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ slugs: ["wf-1", "wf-1-v2"] }),
+            json: () => Promise.resolve({ workflowDynastySlug: "wf-1", workflowDynastyName: "WF 1", workflowSlugs: ["wf-1", "wf-1-v2"] }),
           });
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
         return Promise.reject(new Error(`Unexpected URL: ${url}`));
@@ -928,7 +928,7 @@ describe("GET /orgs/stats", () => {
             json: () =>
               Promise.resolve({
                 dynasties: [
-                  { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+                  { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email", "cold-email-v2"] },
                 ],
               }),
           });
@@ -1009,7 +1009,7 @@ describe("GET /orgs/stats", () => {
             json: () =>
               Promise.resolve({
                 dynasties: [
-                  { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+                  { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email", "cold-email-v2"] },
                 ],
               }),
           });
@@ -1040,7 +1040,7 @@ describe("GET /orgs/stats", () => {
             json: () =>
               Promise.resolve({
                 dynasties: [
-                  { dynastySlug: "cold-email", slugs: ["cold-email", "cold-email-v2"] },
+                  { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email", "cold-email-v2"] },
                 ],
               }),
           });
