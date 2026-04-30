@@ -3,6 +3,7 @@ import { StatusRequestSchema } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
+import { traceEvent } from "../lib/trace-event";
 
 const router = Router();
 
@@ -15,6 +16,10 @@ router.post("/status", async (req: Request, res: Response) => {
 
   const { brandId, campaignId, items } = parsed.data;
   const ctx = res.locals.orgContext as OrgContext;
+
+  if (ctx.runId) {
+    traceEvent(ctx.runId, { service: "email-gateway-service", event: "status-start", detail: `items=${items.length}, brandId=${brandId ?? "none"}, campaignId=${campaignId ?? "none"}` }, req.headers).catch(() => {});
+  }
 
   const payload = { brandId, campaignId, items };
 
@@ -80,6 +85,9 @@ router.post("/status", async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Failed: ${message}`);
+    if (ctx.runId) {
+      traceEvent(ctx.runId, { service: "email-gateway-service", event: "status-error", detail: message, level: "error" }, req.headers).catch(() => {});
+    }
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
