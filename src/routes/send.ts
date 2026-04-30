@@ -6,6 +6,7 @@ import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import { appendSignature } from "../lib/signature";
 import * as idempotencyStore from "../lib/idempotency-store";
+import { traceEvent } from "../lib/trace-event";
 
 const router = Router();
 
@@ -24,24 +25,30 @@ router.post("/send", async (req: Request, res: Response) => {
   }
 
   const body = parsed.data;
+  const ctx = res.locals.orgContext as OrgContext;
 
   // Idempotency check — return cached result if key was already processed
   if (body.idempotencyKey) {
     const cached = idempotencyStore.get(body.idempotencyKey);
     if (cached) {
       console.log(`[email-gateway] idempotency hit key=${body.idempotencyKey} to=${body.to}`);
+      if (ctx.runId) {
+        traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-idempotency-hit", detail: `key=${body.idempotencyKey}, to=${body.to}` }, req.headers).catch(() => {});
+      }
       res.status(cached.statusCode).json({ ...cached.response, deduplicated: true });
       return;
     }
   }
-
-  const ctx = res.locals.orgContext as OrgContext;
 
   // Use context headers as fallbacks for body fields the LLM may have omitted
   const effectiveCampaignId = body.campaignId ?? ctx.campaignId;
   const effectiveWorkflowName = body.workflowSlug ?? ctx.workflowSlug;
 
   console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${ctx.runId} workflow=${effectiveWorkflowName}`);
+
+  if (ctx.runId) {
+    traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-start", detail: `type=${body.type}, to=${body.to}, campaign=${effectiveCampaignId ?? "none"}` }, req.headers).catch(() => {});
+  }
 
   try {
     if (body.type === "transactional") {
@@ -65,6 +72,9 @@ router.post("/send", async (req: Request, res: Response) => {
       }, ctx);
 
       console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
+      if (ctx.runId) {
+        traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-transactional-done", detail: `messageId=${result.messageId}, to=${body.to}` }, req.headers).catch(() => {});
+      }
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
       if (body.idempotencyKey) {
         idempotencyStore.set(body.idempotencyKey, 200, response);
@@ -86,6 +96,9 @@ router.post("/send", async (req: Request, res: Response) => {
       }, ctx);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
+      if (ctx.runId) {
+        traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-broadcast-done", detail: `campaignId=${result.campaignId}, leadId=${result.leadId}, added=${result.added}` }, req.headers).catch(() => {});
+      }
 
       if (result.added === 0) {
         const response = {
@@ -116,6 +129,9 @@ router.post("/send", async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Failed: ${message}`);
+    if (ctx.runId) {
+      traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-error", detail: message, level: "error" }, req.headers).catch(() => {});
+    }
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
