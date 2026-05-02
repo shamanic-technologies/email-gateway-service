@@ -11,6 +11,7 @@ vi.mock("../src/config", () => ({
     key: { url: "", apiKey: "" },
     features: { url: "http://features:3020", apiKey: "feat-key" },
     workflow: { url: "http://workflow:3021", apiKey: "wf-key" },
+    runs: { url: "", apiKey: "" },
   },
 }));
 
