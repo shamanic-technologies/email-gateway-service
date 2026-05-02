@@ -1,128 +1,119 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { OrgContext } from "../src/middleware/requireOrgId";
+
+// Mock config — must come before importing traceEvent
+vi.mock("../src/config", () => ({
+  config: {
+    port: 3009,
+    apiKey: "test-api-key",
+    postmark: { url: "http://localhost:3010", apiKey: "pm-key" },
+    instantly: { url: "http://localhost:3011", apiKey: "inst-key" },
+    brand: { url: "http://localhost:3005", apiKey: "brand-key" },
+    key: { url: "", apiKey: "" },
+    runs: { url: "https://runs.test", apiKey: "runs-key" },
+  },
+}));
+
 import { traceEvent } from "../src/lib/trace-event";
 
+const mockFetch = vi.fn();
+const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+beforeEach(() => {
+  mockFetch.mockReset();
+  mockFetch.mockResolvedValue({ ok: true });
+  global.fetch = mockFetch;
+  consoleSpy.mockClear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const fullCtx: OrgContext = {
+  orgId: "org_123",
+  userId: "user_456",
+  runId: "run_789",
+  brandId: "brand_abc",
+  campaignId: "camp_def",
+  workflowSlug: "onboarding-v2",
+  featureSlug: "welcome-email",
+};
+
 describe("traceEvent", () => {
-  const originalEnv = process.env;
-
-  beforeEach(() => {
-    process.env = { ...originalEnv };
-    vi.restoreAllMocks();
-  });
-
-  afterEach(() => {
-    process.env = originalEnv;
-  });
-
-  it("should POST event to runs-service", async () => {
-    process.env.RUNS_SERVICE_URL = "https://runs.test";
-    process.env.RUNS_SERVICE_API_KEY = "test-key";
-
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal("fetch", mockFetch);
-
-    await traceEvent(
-      "run-123",
-      { service: "email-gateway-service", event: "test-event", detail: "details here" },
-      { "x-org-id": "org-1", "x-user-id": "user-1" }
-    );
+  it("POSTs to correct URL with event/detail payload", () => {
+    traceEvent(fullCtx, "email.sent", "Sent transactional email to user@example.com");
 
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://runs.test/v1/runs/run-123/events");
+    expect(url).toBe("https://runs.test/v1/runs/run_789/events");
     expect(opts.method).toBe("POST");
-    expect(opts.headers["x-api-key"]).toBe("test-key");
-    expect(opts.headers["x-org-id"]).toBe("org-1");
-    expect(opts.headers["x-user-id"]).toBe("user-1");
-    const body = JSON.parse(opts.body);
-    expect(body.service).toBe("email-gateway-service");
-    expect(body.event).toBe("test-event");
-    expect(body.detail).toBe("details here");
+    expect(JSON.parse(opts.body)).toEqual({
+      event: "email.sent",
+      detail: "Sent transactional email to user@example.com",
+    });
   });
 
-  it("should skip when RUNS_SERVICE_URL is not set", async () => {
-    delete process.env.RUNS_SERVICE_URL;
-    delete process.env.RUNS_SERVICE_API_KEY;
+  it("forwards all 6 identity headers from OrgContext", () => {
+    traceEvent(fullCtx, "email.sent", "detail");
 
-    const mockFetch = vi.fn();
-    vi.stubGlobal("fetch", mockFetch);
-    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const [, opts] = mockFetch.mock.calls[0];
+    expect(opts.headers["x-org-id"]).toBe("org_123");
+    expect(opts.headers["x-user-id"]).toBe("user_456");
+    expect(opts.headers["x-brand-id"]).toBe("brand_abc");
+    expect(opts.headers["x-campaign-id"]).toBe("camp_def");
+    expect(opts.headers["x-workflow-slug"]).toBe("onboarding-v2");
+    expect(opts.headers["x-feature-slug"]).toBe("welcome-email");
+  });
 
-    await traceEvent(
-      "run-123",
-      { service: "email-gateway-service", event: "test" },
-      {}
-    );
+  it("sends API key as X-API-Key header", () => {
+    traceEvent(fullCtx, "email.sent", "detail");
 
+    const [, opts] = mockFetch.mock.calls[0];
+    expect(opts.headers["X-API-Key"]).toBe("runs-key");
+  });
+
+  it("skips POST when runId is missing", () => {
+    const ctxNoRun: OrgContext = { orgId: "org_123" };
+    traceEvent(ctxNoRun, "email.sent", "detail");
     expect(mockFetch).not.toHaveBeenCalled();
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining("RUNS_SERVICE_URL or RUNS_SERVICE_API_KEY not set")
-    );
   });
 
-  it("should not throw on fetch failure", async () => {
-    process.env.RUNS_SERVICE_URL = "https://runs.test";
-    process.env.RUNS_SERVICE_API_KEY = "test-key";
-
-    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network down")));
-    vi.spyOn(console, "error").mockImplementation(() => {});
-
-    await expect(
-      traceEvent(
-        "run-123",
-        { service: "email-gateway-service", event: "test" },
-        {}
-      )
-    ).resolves.toBeUndefined();
+  it("skips POST when ctx is undefined", () => {
+    traceEvent(undefined, "email.sent", "detail");
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("should forward all identity headers when present", async () => {
-    process.env.RUNS_SERVICE_URL = "https://runs.test";
-    process.env.RUNS_SERVICE_API_KEY = "test-key";
+  it("logs error on fetch failure but does not throw", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockFetch.mockRejectedValue(new Error("network down"));
 
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal("fetch", mockFetch);
+    traceEvent(fullCtx, "email.sent", "detail");
 
-    await traceEvent(
-      "run-123",
-      { service: "email-gateway-service", event: "test" },
-      {
-        "x-org-id": "org-1",
-        "x-user-id": "user-1",
-        "x-brand-id": "brand-1,brand-2",
-        "x-campaign-id": "camp-1",
-        "x-workflow-slug": "wf-slug",
-        "x-feature-slug": "feat-slug",
-      }
+    // Wait for the microtask (.catch handler) to execute
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[email-gateway] traceEvent failed: network down"
     );
-
-    const headers = mockFetch.mock.calls[0][1].headers;
-    expect(headers["x-org-id"]).toBe("org-1");
-    expect(headers["x-user-id"]).toBe("user-1");
-    expect(headers["x-brand-id"]).toBe("brand-1,brand-2");
-    expect(headers["x-campaign-id"]).toBe("camp-1");
-    expect(headers["x-workflow-slug"]).toBe("wf-slug");
-    expect(headers["x-feature-slug"]).toBe("feat-slug");
+    errorSpy.mockRestore();
   });
 
-  it("should omit undefined identity headers", async () => {
-    process.env.RUNS_SERVICE_URL = "https://runs.test";
-    process.env.RUNS_SERVICE_API_KEY = "test-key";
+  it("returns void (fire-and-forget)", () => {
+    const result = traceEvent(fullCtx, "email.sent", "detail");
+    expect(result).toBeUndefined();
+  });
 
-    const mockFetch = vi.fn().mockResolvedValue({ ok: true });
-    vi.stubGlobal("fetch", mockFetch);
+  it("omits optional headers when context fields are missing", () => {
+    const minimalCtx: OrgContext = { orgId: "org_123", runId: "run_1" };
+    traceEvent(minimalCtx, "email.sent", "detail");
 
-    await traceEvent(
-      "run-123",
-      { service: "email-gateway-service", event: "test" },
-      { "x-org-id": "org-1" }
-    );
-
-    const headers = mockFetch.mock.calls[0][1].headers;
-    expect(headers["x-org-id"]).toBe("org-1");
-    expect(headers).not.toHaveProperty("x-brand-id");
-    expect(headers).not.toHaveProperty("x-campaign-id");
-    expect(headers).not.toHaveProperty("x-user-id");
-    expect(headers).not.toHaveProperty("x-workflow-slug");
-    expect(headers).not.toHaveProperty("x-feature-slug");
+    const [, opts] = mockFetch.mock.calls[0];
+    expect(opts.headers["x-org-id"]).toBe("org_123");
+    expect(opts.headers).not.toHaveProperty("x-user-id");
+    expect(opts.headers).not.toHaveProperty("x-brand-id");
+    expect(opts.headers).not.toHaveProperty("x-campaign-id");
+    expect(opts.headers).not.toHaveProperty("x-workflow-slug");
+    expect(opts.headers).not.toHaveProperty("x-feature-slug");
   });
 });

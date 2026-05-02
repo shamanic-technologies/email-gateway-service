@@ -35,4 +35,8 @@ export const config = {
     url: process.env.WORKFLOW_SERVICE_URL || "",
     apiKey: process.env.WORKFLOW_SERVICE_API_KEY || "",
   },
+  runs: {
+    url: process.env.RUNS_SERVICE_URL || "",
+    apiKey: process.env.RUNS_SERVICE_API_KEY || "",
+  },
 } as const;
