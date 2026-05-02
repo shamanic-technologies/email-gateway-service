@@ -17,9 +17,7 @@ router.post("/status", async (req: Request, res: Response) => {
   const { brandId, campaignId, items } = parsed.data;
   const ctx = res.locals.orgContext as OrgContext;
 
-  if (ctx.runId) {
-    traceEvent(ctx.runId, { service: "email-gateway-service", event: "status-start", detail: `items=${items.length}, brandId=${brandId ?? "none"}, campaignId=${campaignId ?? "none"}` }, req.headers).catch(() => {});
-  }
+  traceEvent(ctx, "status.start", `items=${items.length} brandId=${brandId ?? "none"} campaignId=${campaignId ?? "none"}`);
 
   const payload = { brandId, campaignId, items };
 
@@ -85,9 +83,7 @@ router.post("/status", async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Failed: ${message}`);
-    if (ctx.runId) {
-      traceEvent(ctx.runId, { service: "email-gateway-service", event: "status-error", detail: message, level: "error" }, req.headers).catch(() => {});
-    }
+    traceEvent(ctx, "status.error", message);
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });

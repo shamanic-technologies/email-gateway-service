@@ -15,6 +15,7 @@ vi.mock("../src/config", () => ({
     instantly: { url: "http://localhost:3011", apiKey: "inst-key" },
     brand: { url: "http://localhost:3005", apiKey: "brand-key" },
     key: { url: "", apiKey: "" },
+    runs: { url: "", apiKey: "" },
   },
 }));
 

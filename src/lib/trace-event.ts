@@ -1,36 +1,34 @@
-export async function traceEvent(
-  runId: string,
-  payload: {
-    service: string;
-    event: string;
-    detail?: string;
-    level?: "info" | "warn" | "error";
-    data?: Record<string, unknown>;
-  },
-  headers: Record<string, string | string[] | undefined>
-): Promise<void> {
-  const url = process.env.RUNS_SERVICE_URL;
-  const apiKey = process.env.RUNS_SERVICE_API_KEY;
-  if (!url || !apiKey) {
-    console.error("[email-gateway-service] RUNS_SERVICE_URL or RUNS_SERVICE_API_KEY not set, skipping trace");
-    return;
-  }
-  try {
-    await fetch(`${url}/v1/runs/${runId}/events`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        ...(headers["x-org-id"] ? { "x-org-id": headers["x-org-id"] as string } : {}),
-        ...(headers["x-user-id"] ? { "x-user-id": headers["x-user-id"] as string } : {}),
-        ...(headers["x-brand-id"] ? { "x-brand-id": headers["x-brand-id"] as string } : {}),
-        ...(headers["x-campaign-id"] ? { "x-campaign-id": headers["x-campaign-id"] as string } : {}),
-        ...(headers["x-workflow-slug"] ? { "x-workflow-slug": headers["x-workflow-slug"] as string } : {}),
-        ...(headers["x-feature-slug"] ? { "x-feature-slug": headers["x-feature-slug"] as string } : {}),
-      },
-      body: JSON.stringify(payload),
-    });
-  } catch (err) {
-    console.error("[email-gateway-service] Failed to trace event:", err);
-  }
+import { config } from "../config";
+import type { OrgContext } from "../middleware/requireOrgId";
+
+export function traceEvent(
+  ctx: OrgContext | undefined,
+  event: string,
+  detail: string,
+): void {
+  if (!ctx?.runId) return;
+  if (!config.runs.url || !config.runs.apiKey) return;
+
+  const url = `${config.runs.url}/v1/runs/${ctx.runId}/events`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-API-Key": config.runs.apiKey,
+  };
+
+  if (ctx.orgId) headers["x-org-id"] = ctx.orgId;
+  if (ctx.userId) headers["x-user-id"] = ctx.userId;
+  if (ctx.brandId) headers["x-brand-id"] = ctx.brandId;
+  if (ctx.campaignId) headers["x-campaign-id"] = ctx.campaignId;
+  if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
+  if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
+
+  fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ event, detail }),
+  }).catch((err: unknown) => {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[email-gateway] traceEvent failed: ${message}`);
+  });
 }

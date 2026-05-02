@@ -32,9 +32,7 @@ router.post("/send", async (req: Request, res: Response) => {
     const cached = idempotencyStore.get(body.idempotencyKey);
     if (cached) {
       console.log(`[email-gateway] idempotency hit key=${body.idempotencyKey} to=${body.to}`);
-      if (ctx.runId) {
-        traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-idempotency-hit", detail: `key=${body.idempotencyKey}, to=${body.to}` }, req.headers).catch(() => {});
-      }
+      traceEvent(ctx, "send.idempotency-hit", `key=${body.idempotencyKey} to=${body.to}`);
       res.status(cached.statusCode).json({ ...cached.response, deduplicated: true });
       return;
     }
@@ -46,9 +44,7 @@ router.post("/send", async (req: Request, res: Response) => {
 
   console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${ctx.runId} workflow=${effectiveWorkflowName}`);
 
-  if (ctx.runId) {
-    traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-start", detail: `type=${body.type}, to=${body.to}, campaign=${effectiveCampaignId ?? "none"}` }, req.headers).catch(() => {});
-  }
+  traceEvent(ctx, "send.start", `type=${body.type} to=${body.to} campaign=${effectiveCampaignId ?? "none"}`);
 
   try {
     if (body.type === "transactional") {
@@ -72,9 +68,7 @@ router.post("/send", async (req: Request, res: Response) => {
       }, ctx);
 
       console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
-      if (ctx.runId) {
-        traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-transactional-done", detail: `messageId=${result.messageId}, to=${body.to}` }, req.headers).catch(() => {});
-      }
+      traceEvent(ctx, "send.transactional.ok", `messageId=${result.messageId} to=${body.to}`);
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
       if (body.idempotencyKey) {
         idempotencyStore.set(body.idempotencyKey, 200, response);
@@ -96,9 +90,7 @@ router.post("/send", async (req: Request, res: Response) => {
       }, ctx);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
-      if (ctx.runId) {
-        traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-broadcast-done", detail: `campaignId=${result.campaignId}, leadId=${result.leadId}, added=${result.added}` }, req.headers).catch(() => {});
-      }
+      traceEvent(ctx, "send.broadcast.ok", `campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
 
       if (result.added === 0) {
         const response = {
@@ -129,9 +121,7 @@ router.post("/send", async (req: Request, res: Response) => {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Failed: ${message}`);
-    if (ctx.runId) {
-      traceEvent(ctx.runId, { service: "email-gateway-service", event: "send-error", detail: message, level: "error" }, req.headers).catch(() => {});
-    }
+    traceEvent(ctx, "send.error", `type=${body.type} to=${body.to} error=${message}`);
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
