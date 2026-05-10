@@ -215,6 +215,19 @@
               "from": {
                 "type": "string",
                 "description": "Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the downstream provider resolves its own default."
+              },
+              "inReplyTo": {
+                "type": "string",
+                "pattern": "^<[^<>\\s]+@[^<>\\s]+>$",
+                "description": "RFC 5322 In-Reply-To header — Message-ID of the email being replied to, including angle brackets"
+              },
+              "references": {
+                "type": "string",
+                "description": "RFC 5322 References header — space-separated list of Message-IDs (each enclosed in angle brackets) representing the thread chain"
+              },
+              "messageStream": {
+                "type": "string",
+                "description": "Postmark message stream ID. If omitted, postmark-service uses its configured default."
               }
             },
             "required": [
@@ -1734,7 +1747,7 @@
           "Webhooks"
         ],
         "summary": "Forward Postmark webhook events",
-        "description": "Receives Postmark webhook events and forwards them to the upstream postmark service",
+        "description": "Receives Postmark webhook events and forwards them to the upstream postmark service.\n\n**Inbound forwarding (Postmark `RecordType=Inbound` only):** after the postmark-service forward succeeds, the raw inbound payload is also routed to any consumer whose alias rule matches the recipient(s). Consumers are configured via the `INBOUND_FORWARDING_RULES` env var. Forwarding is idempotent on the inbound `MessageID`. Consumer failures are logged but do not affect the 200 response back to Postmark.\n\nHeaders sent to consumer: `x-api-key`, `x-service-name=email-gateway-service`, `x-postmark-message-id`, `Content-Type: application/json`. Body is the raw Postmark inbound payload, untransformed.",
         "responses": {
           "200": {
             "description": "Webhook forwarded"

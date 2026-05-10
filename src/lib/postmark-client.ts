@@ -65,6 +65,9 @@ export async function sendEmail(body: {
   replyTo?: string;
   tag?: string;
   metadata?: Record<string, string>;
+  inReplyTo?: string;
+  references?: string;
+  messageStream?: string;
 }, ctx?: OrgContext) {
   return request<{
     success: boolean;
