@@ -58,12 +58,27 @@ export const SequenceStepSchema = z
 
 export type SequenceStep = z.infer<typeof SequenceStepSchema>;
 
+const messageIdRegex = /^<[^<>\s]+@[^<>\s]+>$/;
+
 const TransactionalSendSchema = SendBaseSchema.extend({
   type: z.literal("transactional").describe("Transactional email channel"),
   subject: z.string().describe("Email subject line"),
   htmlBody: z.string().optional().describe("HTML email body"),
   textBody: z.string().optional().describe("Plain text email body"),
   from: z.string().optional().describe("Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the downstream provider resolves its own default."),
+  inReplyTo: z
+    .string()
+    .regex(messageIdRegex, "inReplyTo must be a RFC 5322 Message-ID enclosed in angle brackets, e.g. <id@host>")
+    .optional()
+    .describe("RFC 5322 In-Reply-To header — Message-ID of the email being replied to, including angle brackets"),
+  references: z
+    .string()
+    .optional()
+    .describe("RFC 5322 References header — space-separated list of Message-IDs (each enclosed in angle brackets) representing the thread chain"),
+  messageStream: z
+    .string()
+    .optional()
+    .describe("Postmark message stream ID. If omitted, postmark-service uses its configured default."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({
@@ -647,7 +662,13 @@ registry.registerPath({
   path: "/webhooks/postmark",
   tags: ["Webhooks"],
   summary: "Forward Postmark webhook events",
-  description: "Receives Postmark webhook events and forwards them to the upstream postmark service",
+  description: [
+    "Receives Postmark webhook events and forwards them to the upstream postmark service.",
+    "",
+    "**Inbound forwarding (Postmark `RecordType=Inbound` only):** after the postmark-service forward succeeds, the raw inbound payload is also routed to any consumer whose alias rule matches the recipient(s). Consumers are configured via the `INBOUND_FORWARDING_RULES` env var. Forwarding is idempotent on the inbound `MessageID`. Consumer failures are logged but do not affect the 200 response back to Postmark.",
+    "",
+    "Headers sent to consumer: `x-api-key`, `x-service-name=email-gateway-service`, `x-postmark-message-id`, `Content-Type: application/json`. Body is the raw Postmark inbound payload, untransformed.",
+  ].join("\n"),
   responses: {
     200: { description: "Webhook forwarded" },
     502: { description: "Upstream service error", content: errorContent },
