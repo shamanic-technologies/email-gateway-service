@@ -278,10 +278,10 @@ const GlobalStatusSchema = z
 
 const ProviderStatusSchema = z
   .object({
-    byCampaign: z.record(z.string(), StatusScopeSchema).nullable().describe("Per-campaign breakdown (present in brand mode, null in campaign mode)"),
-    campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (present in campaign mode, null in brand mode)"),
-    brand: StatusScopeSchema.nullable().describe("Aggregated status across all campaigns for this brand (present in brand mode, null in campaign mode)"),
-    global: GlobalStatusSchema.describe("Global signals across all brands and campaigns"),
+    byCampaign: z.record(z.string(), StatusScopeSchema).nullable().describe("Per-campaign breakdown (present in brand mode, null in campaign and org modes)"),
+    campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (present in campaign mode, null in brand and org modes)"),
+    brand: StatusScopeSchema.nullable().describe("Aggregated status across all campaigns for this brand (present in brand mode, null in campaign and org modes)"),
+    global: GlobalStatusSchema.describe("Global signals across all brands and campaigns (always present)"),
   })
   .openapi("ProviderStatus");
 
@@ -299,14 +299,10 @@ export const StatusItemSchema = z.object({
 
 export const StatusRequestSchema = z
   .object({
-    brandId: z.string().optional().describe("Brand ID — if present without campaignId, activates brand mode: returns per-campaign breakdown (byCampaign) + aggregated brand status. If both brandId and campaignId are provided, campaign mode takes precedence and brandId is ignored."),
-    campaignId: z.string().optional().describe("Campaign ID — if present, activates campaign mode: returns status scoped to this specific campaign. Takes precedence over brandId."),
+    brandId: z.string().optional().describe("Brand ID — if present without campaignId, activates brand mode: returns per-campaign breakdown (byCampaign) + aggregated brand status. If both brandId and campaignId are provided, campaign mode takes precedence and brandId is ignored. Omit both brandId and campaignId for org mode (global signals only)."),
+    campaignId: z.string().optional().describe("Campaign ID — if present, activates campaign mode: returns status scoped to this specific campaign. Takes precedence over brandId. Omit both brandId and campaignId for org mode (global signals only)."),
     items: z.array(StatusItemSchema).min(1).describe("List of emails to check status for"),
   })
-  .refine(
-    (data) => data.brandId !== undefined || data.campaignId !== undefined,
-    { message: "At least one of brandId or campaignId is required" }
-  )
   .openapi("StatusRequest");
 
 export type StatusRequest = z.infer<typeof StatusRequestSchema>;
@@ -513,20 +509,22 @@ registry.registerPath({
   tags: ["Status"],
   summary: "Get delivery status for emails",
   description: [
-    "Batch lookup of delivery status for a list of emails. Requires at least one of `brandId` or `campaignId` in the body.",
+    "Batch lookup of delivery status for a list of emails. `brandId` and `campaignId` are both optional — pass either, both, or neither.",
     "",
-    "**Two modes:**",
+    "**Three modes:**",
     "",
     "| `brandId` | `campaignId` | Mode | Active fields |",
     "|-----------|-------------|------|---------------|",
     "| present | absent | Brand | `byCampaign` + `brand` + `global` |",
     "| absent | present | Campaign | `campaign` + `global` |",
     "| present | present | Campaign | `campaign` + `global` (brandId ignored) |",
-    "| absent | absent | — | 400 error |",
+    "| absent | absent | Org | `global` only |",
     "",
     "**Brand mode** (`brandId` without `campaignId`): returns a `byCampaign` object mapping each campaignId to its `StatusScope`, plus an aggregated `brand` scope (BOOL_OR across campaigns, `replyClassification` from most recent, `lastDeliveredAt` = MAX).",
     "",
     "**Campaign mode** (`campaignId` present): returns a single `campaign` scope for that campaign.",
+    "",
+    "**Org mode** (neither `brandId` nor `campaignId`): returns only the `global` block — org-wide bounce/unsubscribe signals. Useful for cross-brand, cross-campaign delivery checks (e.g. dashboards aggregating across all brands of an org).",
     "",
     "Non-applicable fields are always present but set to `null`.",
     "",
@@ -558,6 +556,15 @@ registry.registerPath({
                 brandId: "c58bd21c-69dd-4483-b678-1f13c3d4e590",
                 items: [
                   { email: "alice@media.com" },
+                ],
+              },
+            },
+            orgMode: {
+              summary: "Org mode — global signals only (no brandId, no campaignId)",
+              value: {
+                items: [
+                  { email: "alice@media.com" },
+                  { email: "bob@press.org" },
                 ],
               },
             },
@@ -620,11 +627,31 @@ registry.registerPath({
                 }],
               },
             },
+            orgMode: {
+              summary: "Org mode response — only global signals populated",
+              value: {
+                results: [{
+                  email: "alice@media.com",
+                  broadcast: {
+                    byCampaign: null,
+                    campaign: null,
+                    brand: null,
+                    global: { email: { bounced: false, unsubscribed: false } },
+                  },
+                  transactional: {
+                    byCampaign: null,
+                    campaign: null,
+                    brand: null,
+                    global: { email: { bounced: false, unsubscribed: false } },
+                  },
+                }],
+              },
+            },
           },
         },
       },
     },
-    400: { description: "Invalid request — missing brandId and campaignId, empty items, or invalid email", content: errorContent },
+    400: { description: "Invalid request — empty items or invalid email", content: errorContent },
     401: { description: "Unauthorized — missing or invalid X-API-Key", content: errorContent },
     502: { description: "Upstream service error — both providers failed", content: errorContent },
   },

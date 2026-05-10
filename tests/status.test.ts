@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { app } from "../src/index";
+import { StatusRequestSchema } from "../src/schemas";
 
 vi.mock("../src/lib/register-providers", () => ({
   registerProviderRequirements: vi.fn().mockResolvedValue(undefined),
@@ -99,11 +100,16 @@ describe("POST /orgs/status", () => {
     expect(res.body.error).toContain("x-org-id");
   });
 
-  it("returns 400 when neither brandId nor campaignId is provided", async () => {
+  it("org mode: returns 200 when neither brandId nor campaignId is provided", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
     const res = await authedPost("/orgs/status")
       .send({ items: [{ email: "john@acme.com" }] });
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
   });
 
   it("returns 400 for empty items array", async () => {
@@ -463,6 +469,73 @@ describe("POST /orgs/status", () => {
     expect(res.status).toBe(200);
   });
 
+  // --- Org mode (no brandId, no campaignId) ---
+
+  it("org mode: forwards body without brandId/campaignId to both providers", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ results: [] }),
+    });
+
+    await authedPost("/orgs/status")
+      .send({ items: [{ email: "john@acme.com" }] });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+
+    for (const call of mockFetch.mock.calls) {
+      const body = JSON.parse(call[1].body);
+      expect(body.brandId).toBeUndefined();
+      expect(body.campaignId).toBeUndefined();
+      expect(body.items).toEqual([{ email: "john@acme.com" }]);
+    }
+  });
+
+  it("org mode: broadcast.global populated; brand/campaign/byCampaign null", async () => {
+    const orgGlobal = { email: { bounced: true, unsubscribed: false } };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: null, brand: null, global: orgGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.global).toEqual(orgGlobal);
+    expect(broadcast.brand).toBeNull();
+    expect(broadcast.campaign).toBeNull();
+    expect(broadcast.byCampaign).toBeNull();
+  });
+
+  it("org mode: transactional.global populated; brand/campaign/byCampaign null", async () => {
+    const orgGlobal = { email: { bounced: false, unsubscribed: true } };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3010")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: null, brand: null, global: orgGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const transactional = res.body.results[0].transactional;
+    expect(transactional.global).toEqual(orgGlobal);
+    expect(transactional.brand).toBeNull();
+    expect(transactional.campaign).toBeNull();
+    expect(transactional.byCampaign).toBeNull();
+  });
+
   // --- No data for email ---
 
   it("returns email with no provider data when not found", async () => {
@@ -479,5 +552,51 @@ describe("POST /orgs/status", () => {
     expect(res.body.results[0].broadcast).toBeUndefined();
     expect(res.body.results[0].transactional).toBeUndefined();
     expect(res.body.results[0]).not.toHaveProperty("leadId");
+  });
+});
+
+describe("StatusRequestSchema", () => {
+  it("accepts request with neither brandId nor campaignId", () => {
+    const result = StatusRequestSchema.safeParse({
+      items: [{ email: "john@acme.com" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts request with only brandId", () => {
+    const result = StatusRequestSchema.safeParse({
+      brandId: "brand_1",
+      items: [{ email: "john@acme.com" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts request with only campaignId", () => {
+    const result = StatusRequestSchema.safeParse({
+      campaignId: "camp_1",
+      items: [{ email: "john@acme.com" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts request with both brandId and campaignId", () => {
+    const result = StatusRequestSchema.safeParse({
+      brandId: "brand_1",
+      campaignId: "camp_1",
+      items: [{ email: "john@acme.com" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty items array", () => {
+    const result = StatusRequestSchema.safeParse({ items: [] });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid email", () => {
+    const result = StatusRequestSchema.safeParse({
+      items: [{ email: "not-an-email" }],
+    });
+    expect(result.success).toBe(false);
   });
 });

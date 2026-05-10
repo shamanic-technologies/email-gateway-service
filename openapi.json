@@ -740,7 +740,7 @@
         "required": [
           "email"
         ],
-        "description": "Global signals across all brands and campaigns",
+        "description": "Global signals across all brands and campaigns (always present)",
         "example": {
           "email": {
             "bounced": false,
@@ -757,7 +757,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/StatusScope"
             },
-            "description": "Per-campaign breakdown (present in brand mode, null in campaign mode)"
+            "description": "Per-campaign breakdown (present in brand mode, null in campaign and org modes)"
           },
           "campaign": {
             "allOf": [
@@ -766,7 +766,7 @@
               },
               {
                 "nullable": true,
-                "description": "Status scoped to the given campaign (present in campaign mode, null in brand mode)"
+                "description": "Status scoped to the given campaign (present in campaign mode, null in brand and org modes)"
               }
             ]
           },
@@ -777,7 +777,7 @@
               },
               {
                 "nullable": true,
-                "description": "Aggregated status across all campaigns for this brand (present in brand mode, null in campaign mode)"
+                "description": "Aggregated status across all campaigns for this brand (present in brand mode, null in campaign and org modes)"
               }
             ]
           },
@@ -838,11 +838,11 @@
         "properties": {
           "brandId": {
             "type": "string",
-            "description": "Brand ID — if present without campaignId, activates brand mode: returns per-campaign breakdown (byCampaign) + aggregated brand status. If both brandId and campaignId are provided, campaign mode takes precedence and brandId is ignored."
+            "description": "Brand ID — if present without campaignId, activates brand mode: returns per-campaign breakdown (byCampaign) + aggregated brand status. If both brandId and campaignId are provided, campaign mode takes precedence and brandId is ignored. Omit both brandId and campaignId for org mode (global signals only)."
           },
           "campaignId": {
             "type": "string",
-            "description": "Campaign ID — if present, activates campaign mode: returns status scoped to this specific campaign. Takes precedence over brandId."
+            "description": "Campaign ID — if present, activates campaign mode: returns status scoped to this specific campaign. Takes precedence over brandId. Omit both brandId and campaignId for org mode (global signals only)."
           },
           "items": {
             "type": "array",
@@ -1492,7 +1492,7 @@
           "Status"
         ],
         "summary": "Get delivery status for emails",
-        "description": "Batch lookup of delivery status for a list of emails. Requires at least one of `brandId` or `campaignId` in the body.\n\n**Two modes:**\n\n| `brandId` | `campaignId` | Mode | Active fields |\n|-----------|-------------|------|---------------|\n| present | absent | Brand | `byCampaign` + `brand` + `global` |\n| absent | present | Campaign | `campaign` + `global` |\n| present | present | Campaign | `campaign` + `global` (brandId ignored) |\n| absent | absent | — | 400 error |\n\n**Brand mode** (`brandId` without `campaignId`): returns a `byCampaign` object mapping each campaignId to its `StatusScope`, plus an aggregated `brand` scope (BOOL_OR across campaigns, `replyClassification` from most recent, `lastDeliveredAt` = MAX).\n\n**Campaign mode** (`campaignId` present): returns a single `campaign` scope for that campaign.\n\nNon-applicable fields are always present but set to `null`.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers. If one provider fails, the other's results are still returned. If both fail, returns 502.\n\n**Headers** (`x-brand-id`, `x-campaign-id`, etc.) are tracing/logging only — they are forwarded to downstream services but do NOT influence filtering logic. Filtering is driven exclusively by body fields.",
+        "description": "Batch lookup of delivery status for a list of emails. `brandId` and `campaignId` are both optional — pass either, both, or neither.\n\n**Three modes:**\n\n| `brandId` | `campaignId` | Mode | Active fields |\n|-----------|-------------|------|---------------|\n| present | absent | Brand | `byCampaign` + `brand` + `global` |\n| absent | present | Campaign | `campaign` + `global` |\n| present | present | Campaign | `campaign` + `global` (brandId ignored) |\n| absent | absent | Org | `global` only |\n\n**Brand mode** (`brandId` without `campaignId`): returns a `byCampaign` object mapping each campaignId to its `StatusScope`, plus an aggregated `brand` scope (BOOL_OR across campaigns, `replyClassification` from most recent, `lastDeliveredAt` = MAX).\n\n**Campaign mode** (`campaignId` present): returns a single `campaign` scope for that campaign.\n\n**Org mode** (neither `brandId` nor `campaignId`): returns only the `global` block — org-wide bounce/unsubscribe signals. Useful for cross-brand, cross-campaign delivery checks (e.g. dashboards aggregating across all brands of an org).\n\nNon-applicable fields are always present but set to `null`.\n\nReturns status from both broadcast (Instantly) and transactional (Postmark) providers. If one provider fails, the other's results are still returned. If both fail, returns 502.\n\n**Headers** (`x-brand-id`, `x-campaign-id`, etc.) are tracing/logging only — they are forwarded to downstream services but do NOT influence filtering logic. Filtering is driven exclusively by body fields.",
         "security": [
           {
             "apiKey": []
@@ -1601,6 +1601,19 @@
                       }
                     ]
                   }
+                },
+                "orgMode": {
+                  "summary": "Org mode — global signals only (no brandId, no campaignId)",
+                  "value": {
+                    "items": [
+                      {
+                        "email": "alice@media.com"
+                      },
+                      {
+                        "email": "bob@press.org"
+                      }
+                    ]
+                  }
                 }
               }
             }
@@ -1703,13 +1716,45 @@
                         }
                       ]
                     }
+                  },
+                  "orgMode": {
+                    "summary": "Org mode response — only global signals populated",
+                    "value": {
+                      "results": [
+                        {
+                          "email": "alice@media.com",
+                          "broadcast": {
+                            "byCampaign": null,
+                            "campaign": null,
+                            "brand": null,
+                            "global": {
+                              "email": {
+                                "bounced": false,
+                                "unsubscribed": false
+                              }
+                            }
+                          },
+                          "transactional": {
+                            "byCampaign": null,
+                            "campaign": null,
+                            "brand": null,
+                            "global": {
+                              "email": {
+                                "bounced": false,
+                                "unsubscribed": false
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
                   }
                 }
               }
             }
           },
           "400": {
-            "description": "Invalid request — missing brandId and campaignId, empty items, or invalid email",
+            "description": "Invalid request — empty items or invalid email",
             "content": {
               "application/json": {
                 "schema": {
