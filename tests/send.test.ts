@@ -351,6 +351,67 @@ describe("POST /orgs/send", () => {
       expect(postmarkHeaders["x-user-id"]).toBe("user_1");
       expect(postmarkHeaders["x-run-id"]).toBe("run_1");
     });
+
+    describe("threading fields (inReplyTo, references, messageStream)", () => {
+      it("forwards inReplyTo, references, and messageStream to postmark-service when provided", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_thread" }),
+        });
+
+        await authedPost("/orgs/send").send(
+          buildTransactionalBody({
+            inReplyTo: "<original-message-id@haro.com>",
+            references: "<root@haro.com> <original-message-id@haro.com>",
+            messageStream: "outbound-replies",
+          })
+        );
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.inReplyTo).toBe("<original-message-id@haro.com>");
+        expect(body.references).toBe("<root@haro.com> <original-message-id@haro.com>");
+        expect(body.messageStream).toBe("outbound-replies");
+      });
+
+      it("does not include threading fields in body when absent (existing behavior)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_nothread" }),
+        });
+
+        await authedPost("/orgs/send").send(buildTransactionalBody());
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.inReplyTo).toBeUndefined();
+        expect(body.references).toBeUndefined();
+        expect(body.messageStream).toBeUndefined();
+      });
+
+      it("accepts inReplyTo / references / messageStream as optional strings (schema)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_partial" }),
+        });
+
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ inReplyTo: "<just-this@x.com>" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.inReplyTo).toBe("<just-this@x.com>");
+      });
+
+      it("rejects malformed inReplyTo (must look like a Message-ID with angle brackets)", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ inReplyTo: "no-angle-brackets" })
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Invalid request");
+        expect(res.body.details.fieldErrors.inReplyTo[0]).toMatch(/Message-ID/i);
+      });
+    });
   });
 
   describe("idempotency", () => {

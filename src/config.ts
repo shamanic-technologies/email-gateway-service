@@ -1,9 +1,20 @@
 import * as dotenv from "dotenv";
+import { parseRules, type ForwardingRule } from "./lib/inbound-forwarder";
+
 dotenv.config();
 
 const apiKey = process.env.EMAIL_GATEWAY_SERVICE_API_KEY;
 if (!apiKey) {
   console.error("[email-gateway] FATAL: EMAIL_GATEWAY_SERVICE_API_KEY env var is missing");
+  process.exit(1);
+}
+
+let inboundForwardingRules: ForwardingRule[] = [];
+try {
+  inboundForwardingRules = parseRules(process.env.INBOUND_FORWARDING_RULES);
+} catch (err: unknown) {
+  const msg = err instanceof Error ? err.message : String(err);
+  console.error(`[email-gateway] FATAL: INBOUND_FORWARDING_RULES env var is invalid: ${msg}`);
   process.exit(1);
 }
 
@@ -38,5 +49,8 @@ export const config = {
   runs: {
     url: process.env.RUNS_SERVICE_URL || "",
     apiKey: process.env.RUNS_SERVICE_API_KEY || "",
+  },
+  inboundForwarding: {
+    rules: inboundForwardingRules,
   },
 } as const;

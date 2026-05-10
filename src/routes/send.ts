@@ -65,6 +65,9 @@ router.post("/send", async (req: Request, res: Response) => {
         replyTo: body.replyTo,
         tag: body.tag,
         metadata: body.metadata,
+        inReplyTo: body.inReplyTo,
+        references: body.references,
+        messageStream: body.messageStream,
       }, ctx);
 
       console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
