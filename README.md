@@ -22,7 +22,7 @@ Configure with `EMAIL_GATEWAY_SUBSCRIPTIONS` (JSON array). Each entry:
 {
   "name": "journalists-quotes-service:inbound",
   "filter": { "aliasPattern": "*@inbox.example.com" },
-  "endpoint_url": "https://consumer.example/webhooks/email-gateway/inbound",
+  "endpoint_url": "https://consumer.example/webhooks/inbound-email",
   "hmac_secret_env": "JQS_INBOUND_HMAC_SECRET"
 }
 ```

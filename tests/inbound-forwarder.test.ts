@@ -205,7 +205,7 @@ describe("deliverToSubscriber", () => {
   const sub: ResolvedSubscription = {
     name: "jqs",
     filter: { aliasPattern: "*@inbox.example.com" },
-    endpoint_url: "https://jq.example/webhooks/email-gateway/inbound",
+    endpoint_url: "https://jq.example/webhooks/inbound-email",
     hmac_secret: "test-secret",
   };
 
@@ -215,7 +215,7 @@ describe("deliverToSubscriber", () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://jq.example/webhooks/email-gateway/inbound");
+    expect(url).toBe("https://jq.example/webhooks/inbound-email");
     expect(opts.method).toBe("POST");
     expect(opts.headers["content-type"]).toBe("application/json");
     expect(opts.headers["idempotency-key"]).toBe("msg-1");

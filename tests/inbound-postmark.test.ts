@@ -21,7 +21,7 @@ vi.mock("../src/config", () => ({
       {
         name: "journalists-quotes-service:inbound",
         filter: { aliasPattern: "*@inbox.example.com" },
-        endpoint_url: "https://jq.example/webhooks/email-gateway/inbound",
+        endpoint_url: "https://jq.example/webhooks/inbound-email",
         hmac_secret: "jqs-shared-secret",
       },
     ],
@@ -81,7 +81,7 @@ describe("POST /inbound/postmark", () => {
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
     const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://jq.example/webhooks/email-gateway/inbound");
+    expect(url).toBe("https://jq.example/webhooks/inbound-email");
     expect(opts.method).toBe("POST");
     expect(opts.headers["content-type"]).toBe("application/json");
     expect(opts.headers["idempotency-key"]).toBe("pm-inbound-1");
