@@ -661,17 +661,39 @@ registry.registerPath({
   method: "post",
   path: "/webhooks/postmark",
   tags: ["Webhooks"],
-  summary: "Forward Postmark webhook events",
-  description: [
-    "Receives Postmark webhook events and forwards them to the upstream postmark service.",
-    "",
-    "**Inbound forwarding (Postmark `RecordType=Inbound` only):** after the postmark-service forward succeeds, the raw inbound payload is also routed to any consumer whose alias rule matches the recipient(s). Consumers are configured via the `INBOUND_FORWARDING_RULES` env var. Forwarding is idempotent on the inbound `MessageID`. Consumer failures are logged but do not affect the 200 response back to Postmark.",
-    "",
-    "Headers sent to consumer: `x-api-key`, `x-service-name=email-gateway-service`, `x-postmark-message-id`, `Content-Type: application/json`. Body is the raw Postmark inbound payload, untransformed.",
-  ].join("\n"),
+  summary: "Forward Postmark webhook events to upstream postmark-service",
+  description: "Legacy passthrough. Forwards the body to the upstream postmark-service. Inbound (`RecordType=Inbound`) routing now happens via `POST /inbound/postmark` after postmark-service handles Postmark webhooks directly.",
   responses: {
     200: { description: "Webhook forwarded" },
     502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/inbound/postmark",
+  tags: ["Inbound"],
+  summary: "Receive Postmark inbound payload from postmark-service and fan out to subscribers",
+  description: [
+    "Internal service-to-service endpoint. Called by postmark-service when Postmark delivers an inbound email (`RecordType=Inbound`). The body is the raw Postmark inbound payload, untransformed.",
+    "",
+    "**Fan-out:** matches the payload's recipients against `EMAIL_GATEWAY_SUBSCRIPTIONS` (env JSON). Every matching subscription receives a signed HTTP POST to its `endpoint_url`.",
+    "",
+    "**Headers sent to each subscriber:**",
+    "- `content-type: application/json`",
+    "- `x-eg-signature: t=<unix>,v1=<hex sha256(t.body, secret)>` — HMAC-SHA256 over `${unix_seconds}.${body}` with the subscription's shared secret",
+    "- `idempotency-key: <Postmark MessageID>` — consumer must dedupe on this",
+    "",
+    "**Fail loud:** if any subscriber returns non-2xx or the network call errors, this endpoint returns 502. The caller (postmark-service) propagates the 5xx to Postmark, whose 45-minute retry window then re-delivers the event.",
+    "",
+    "**Auth:** `x-api-key` (shared service key, same one used across internal services).",
+  ].join("\n"),
+  security: [{ apiKey: [] }],
+  responses: {
+    200: { description: "Inbound payload dispatched to all matching subscribers (or no subscriber matched)" },
+    401: { description: "Unauthorized", content: errorContent },
+    500: { description: "Internal error (e.g. missing MessageID)", content: errorContent },
+    502: { description: "Subscriber delivery failed", content: errorContent },
   },
 });
 
