@@ -8,6 +8,7 @@ import sendRoutes from "./routes/send";
 import statusRoutes from "./routes/status";
 import statsRoutes, { publicStatsRouter } from "./routes/stats";
 import webhooksRoutes from "./routes/webhooks";
+import inboundRoutes from "./routes/inbound";
 import { registerProviderRequirements } from "./lib/register-providers";
 
 const app = express();
@@ -18,6 +19,9 @@ app.use(express.json({ limit: "10mb" }));
 // Public routes (no auth)
 app.use(healthRoutes);
 app.use("/webhooks", webhooksRoutes);
+
+// Internal routes (apiKeyAuth) — service-to-service inbound from postmark-service etc.
+app.use("/inbound", apiKeyAuth, inboundRoutes);
 
 // Public routes with apiKeyAuth only (no identity headers required)
 app.use("/public", apiKeyAuth, publicStatsRouter);
