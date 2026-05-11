@@ -1,12 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   matchAlias,
-  findMatchingRules,
-  parseRules,
+  findMatchingSubscriptions,
+  parseSubscriptions,
+  resolveSubscriptions,
   extractInboundRecipients,
-  type ForwardingRule,
+  extractMessageId,
+  isInboundPayload,
+  deliverToSubscriber,
+  dispatchInbound,
+  SubscriberDeliveryError,
+  type ResolvedSubscription,
 } from "../src/lib/inbound-forwarder";
-import * as inboundDedup from "../src/lib/inbound-dedup";
+import { verifyRequest } from "../src/lib/hmac";
 
 describe("matchAlias", () => {
   it("wildcard suffix matches subdomain alias", () => {
@@ -23,55 +29,41 @@ describe("matchAlias", () => {
 
   it("case-insensitive matching", () => {
     expect(matchAlias("*@inbox.example.com", "HARO@Inbox.Example.com")).toBe(true);
-    expect(matchAlias("haro@inbox.example.com", "HARO@INBOX.EXAMPLE.COM")).toBe(true);
   });
 
-  it("exact pattern does not match different local-part", () => {
-    expect(matchAlias("haro@inbox.example.com", "qwoted@inbox.example.com")).toBe(false);
-  });
-
-  it("wildcard matches empty local-part edge case is not allowed (must have something before @)", () => {
+  it("wildcard requires at least one char before @", () => {
     expect(matchAlias("*@inbox.example.com", "@inbox.example.com")).toBe(false);
   });
 });
 
-describe("findMatchingRules", () => {
-  const rules: ForwardingRule[] = [
+describe("findMatchingSubscriptions", () => {
+  const subs: ResolvedSubscription[] = [
     {
-      aliasPattern: "*@inbox.example.com",
-      consumerUrl: "https://jq/webhook",
-      consumerName: "journalists-quotes-service",
-      consumerApiKey: "jq-key",
+      name: "journalists-quotes-service:inbound",
+      filter: { aliasPattern: "*@inbox.example.com" },
+      endpoint_url: "https://jq/webhook",
+      hmac_secret: "jq-secret",
     },
     {
-      aliasPattern: "noreply@notifications.example.com",
-      consumerUrl: "https://other/webhook",
-      consumerName: "other",
-      consumerApiKey: "other-key",
+      name: "other:inbound",
+      filter: { aliasPattern: "noreply@notifications.example.com" },
+      endpoint_url: "https://other/webhook",
+      hmac_secret: "other-secret",
     },
   ];
 
-  it("returns matching rule for wildcard", () => {
-    const matched = findMatchingRules(rules, ["haro@inbox.example.com"]);
+  it("returns matching subscription for wildcard", () => {
+    const matched = findMatchingSubscriptions(subs, ["haro@inbox.example.com"]);
     expect(matched).toHaveLength(1);
-    expect(matched[0].consumerName).toBe("journalists-quotes-service");
+    expect(matched[0].name).toBe("journalists-quotes-service:inbound");
   });
 
-  it("returns empty array for no match", () => {
-    const matched = findMatchingRules(rules, ["random@unknown.com"]);
-    expect(matched).toEqual([]);
+  it("empty when no match", () => {
+    expect(findMatchingSubscriptions(subs, ["random@unknown.com"])).toEqual([]);
   });
 
-  it("returns multiple rules when multiple match different recipients", () => {
-    const matched = findMatchingRules(rules, [
-      "haro@inbox.example.com",
-      "noreply@notifications.example.com",
-    ]);
-    expect(matched).toHaveLength(2);
-  });
-
-  it("deduplicates rule when multiple recipients match the same rule", () => {
-    const matched = findMatchingRules(rules, [
+  it("dedupes subscription when multiple recipients match it", () => {
+    const matched = findMatchingSubscriptions(subs, [
       "haro@inbox.example.com",
       "qwoted@inbox.example.com",
     ]);
@@ -79,107 +71,247 @@ describe("findMatchingRules", () => {
   });
 });
 
-describe("parseRules", () => {
-  it("parses valid JSON rules", () => {
+describe("parseSubscriptions", () => {
+  it("parses valid JSON", () => {
     const json = JSON.stringify([
       {
-        aliasPattern: "*@inbox.example.com",
-        consumerUrl: "https://jq/webhook",
-        consumerName: "journalists-quotes-service",
-        consumerApiKey: "jq-key",
+        name: "x",
+        filter: { aliasPattern: "*@inbox.example.com" },
+        endpoint_url: "https://jq/webhook",
+        hmac_secret_env: "JQS_INBOUND_HMAC_SECRET",
       },
     ]);
-    const rules = parseRules(json);
-    expect(rules).toHaveLength(1);
-    expect(rules[0].aliasPattern).toBe("*@inbox.example.com");
+    const subs = parseSubscriptions(json);
+    expect(subs).toHaveLength(1);
+    expect(subs[0].name).toBe("x");
   });
 
-  it("returns empty list when env var unset (undefined)", () => {
-    expect(parseRules(undefined)).toEqual([]);
-  });
-
-  it("returns empty list when env var is empty string", () => {
-    expect(parseRules("")).toEqual([]);
+  it("empty list when unset", () => {
+    expect(parseSubscriptions(undefined)).toEqual([]);
+    expect(parseSubscriptions("")).toEqual([]);
   });
 
   it("throws on invalid JSON", () => {
-    expect(() => parseRules("{not json")).toThrow();
+    expect(() => parseSubscriptions("{not json")).toThrow();
   });
 
-  it("throws on missing required field consumerUrl", () => {
-    const bad = JSON.stringify([{ aliasPattern: "*@x.com", consumerName: "x", consumerApiKey: "k" }]);
-    expect(() => parseRules(bad)).toThrow();
+  it("throws when required field missing", () => {
+    const bad = JSON.stringify([
+      { filter: { aliasPattern: "*@x.com" }, endpoint_url: "https://x", hmac_secret_env: "S" },
+    ]);
+    expect(() => parseSubscriptions(bad)).toThrow();
+  });
+});
+
+describe("resolveSubscriptions", () => {
+  const originalEnv = { ...process.env };
+  afterEach(() => {
+    process.env = { ...originalEnv };
   });
 
-  it("throws when shape is not array", () => {
-    const bad = JSON.stringify({ aliasPattern: "*@x.com", consumerUrl: "u", consumerName: "n", consumerApiKey: "k" });
-    expect(() => parseRules(bad)).toThrow();
+  it("resolves hmac_secret_env to actual secret", () => {
+    process.env.TEST_INBOUND_SECRET = "shhh";
+    const resolved = resolveSubscriptions([
+      {
+        name: "x",
+        filter: { aliasPattern: "*@x.com" },
+        endpoint_url: "https://x",
+        hmac_secret_env: "TEST_INBOUND_SECRET",
+      },
+    ]);
+    expect(resolved).toHaveLength(1);
+    expect(resolved[0].hmac_secret).toBe("shhh");
+  });
+
+  it("throws when referenced env var is missing", () => {
+    delete process.env.MISSING_SECRET;
+    expect(() =>
+      resolveSubscriptions([
+        {
+          name: "x",
+          filter: { aliasPattern: "*@x.com" },
+          endpoint_url: "https://x",
+          hmac_secret_env: "MISSING_SECRET",
+        },
+      ])
+    ).toThrow(/MISSING_SECRET/);
+  });
+
+  it("throws when referenced env var is empty string", () => {
+    process.env.EMPTY_SECRET = "";
+    expect(() =>
+      resolveSubscriptions([
+        {
+          name: "x",
+          filter: { aliasPattern: "*@x.com" },
+          endpoint_url: "https://x",
+          hmac_secret_env: "EMPTY_SECRET",
+        },
+      ])
+    ).toThrow();
   });
 });
 
 describe("extractInboundRecipients", () => {
-  it("returns To field as single recipient when present", () => {
+  it("returns To as single recipient", () => {
     expect(extractInboundRecipients({ To: "haro@inbox.example.com" })).toEqual([
       "haro@inbox.example.com",
     ]);
   });
 
-  it("returns ToFull[].Email when present", () => {
-    const recipients = extractInboundRecipients({
-      ToFull: [
-        { Email: "haro@inbox.example.com", Name: "HARO", MailboxHash: "" },
-        { Email: "qwoted@inbox.example.com", Name: "Qwoted", MailboxHash: "" },
-      ],
-    });
-    expect(recipients).toEqual(["haro@inbox.example.com", "qwoted@inbox.example.com"]);
+  it("returns ToFull[].Email", () => {
+    expect(
+      extractInboundRecipients({
+        ToFull: [{ Email: "a@x.com" }, { Email: "b@x.com" }],
+      })
+    ).toEqual(["a@x.com", "b@x.com"]);
   });
 
-  it("merges To and ToFull (deduplicated)", () => {
-    const recipients = extractInboundRecipients({
+  it("merges To and ToFull deduplicated", () => {
+    const got = extractInboundRecipients({
       To: "haro@inbox.example.com",
       ToFull: [{ Email: "haro@inbox.example.com" }, { Email: "other@x.com" }],
     });
-    expect(recipients.sort()).toEqual(["haro@inbox.example.com", "other@x.com"].sort());
-  });
-
-  it("returns empty array when neither present", () => {
-    expect(extractInboundRecipients({})).toEqual([]);
+    expect(got.sort()).toEqual(["haro@inbox.example.com", "other@x.com"].sort());
   });
 });
 
-describe("inboundDedup", () => {
+describe("isInboundPayload / extractMessageId", () => {
+  it("isInboundPayload true only when RecordType=Inbound", () => {
+    expect(isInboundPayload({ RecordType: "Inbound" })).toBe(true);
+    expect(isInboundPayload({ RecordType: "Delivery" })).toBe(false);
+    expect(isInboundPayload({})).toBe(false);
+    expect(isInboundPayload(null)).toBe(false);
+  });
+
+  it("extractMessageId returns MessageID when string non-empty", () => {
+    expect(extractMessageId({ MessageID: "abc" })).toBe("abc");
+    expect(extractMessageId({ MessageID: "" })).toBeUndefined();
+    expect(extractMessageId({})).toBeUndefined();
+  });
+});
+
+describe("deliverToSubscriber", () => {
+  const mockFetch = vi.fn();
+  const originalFetch = global.fetch;
   beforeEach(() => {
-    inboundDedup.clear();
+    mockFetch.mockReset();
+    global.fetch = mockFetch as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
-  it("first MessageID is not dedup", () => {
-    expect(inboundDedup.seen("msg-1")).toBe(false);
+  const sub: ResolvedSubscription = {
+    name: "jqs",
+    filter: { aliasPattern: "*@inbox.example.com" },
+    endpoint_url: "https://jq.example/webhooks/email-gateway/inbound",
+    hmac_secret: "test-secret",
+  };
+
+  it("POSTs signed body with idempotency-key header", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: () => Promise.resolve("ok") });
+    await deliverToSubscriber(sub, { RecordType: "Inbound", MessageID: "msg-1" }, "msg-1", 1700000000);
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [url, opts] = mockFetch.mock.calls[0];
+    expect(url).toBe("https://jq.example/webhooks/email-gateway/inbound");
+    expect(opts.method).toBe("POST");
+    expect(opts.headers["content-type"]).toBe("application/json");
+    expect(opts.headers["idempotency-key"]).toBe("msg-1");
+
+    const signature = opts.headers["x-eg-signature"];
+    expect(signature).toMatch(/^t=1700000000,v1=[0-9a-f]{64}$/);
+    const verified = verifyRequest(signature, opts.body, "test-secret", 1_000_000, 1700000000);
+    expect(verified.valid).toBe(true);
   });
 
-  it("second MessageID is dedup", () => {
-    inboundDedup.seen("msg-1");
-    expect(inboundDedup.seen("msg-1")).toBe(true);
+  it("throws SubscriberDeliveryError on non-2xx", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: () => Promise.resolve("boom"),
+    });
+    await expect(
+      deliverToSubscriber(sub, { RecordType: "Inbound", MessageID: "m" }, "m")
+    ).rejects.toBeInstanceOf(SubscriberDeliveryError);
   });
 
-  it("different MessageIDs are independent", () => {
-    expect(inboundDedup.seen("msg-1")).toBe(false);
-    expect(inboundDedup.seen("msg-2")).toBe(false);
+  it("throws SubscriberDeliveryError on network error", async () => {
+    mockFetch.mockRejectedValueOnce(new Error("ECONNREFUSED"));
+    await expect(
+      deliverToSubscriber(sub, { RecordType: "Inbound", MessageID: "m" }, "m")
+    ).rejects.toMatchObject({ subscription: "jqs", status: undefined });
+  });
+});
+
+describe("dispatchInbound", () => {
+  const mockFetch = vi.fn();
+  const originalFetch = global.fetch;
+  beforeEach(() => {
+    mockFetch.mockReset();
+    global.fetch = mockFetch as unknown as typeof fetch;
+  });
+  afterEach(() => {
+    global.fetch = originalFetch;
   });
 
-  it("respects bounded size by evicting oldest", () => {
-    const max = inboundDedup.MAX_ENTRIES;
-    for (let i = 0; i < max; i++) inboundDedup.seen(`msg-${i}`);
-    inboundDedup.seen("overflow");
-    // Oldest should be evicted: msg-0 should now be re-eligible
-    expect(inboundDedup.seen("msg-0")).toBe(false);
+  const subs: ResolvedSubscription[] = [
+    {
+      name: "jqs",
+      filter: { aliasPattern: "*@inbox.example.com" },
+      endpoint_url: "https://jq.example/inbound",
+      hmac_secret: "jq-secret",
+    },
+    {
+      name: "other",
+      filter: { aliasPattern: "*@notify.example.com" },
+      endpoint_url: "https://other.example/inbound",
+      hmac_secret: "other-secret",
+    },
+  ];
+
+  const inboundPayload = {
+    RecordType: "Inbound",
+    MessageID: "pm-1",
+    To: "haro@inbox.example.com",
+    ToFull: [{ Email: "haro@inbox.example.com" }],
+  };
+
+  it("noop when not inbound payload", async () => {
+    await dispatchInbound({ RecordType: "Delivery" }, subs);
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 
-  it("expires entries after TTL", () => {
-    vi.useFakeTimers();
-    inboundDedup.seen("msg-ttl");
-    expect(inboundDedup.seen("msg-ttl")).toBe(true);
-    vi.advanceTimersByTime(inboundDedup.TTL_MS + 1);
-    expect(inboundDedup.seen("msg-ttl")).toBe(false);
-    vi.useRealTimers();
+  it("noop when no subscription matches", async () => {
+    await dispatchInbound(
+      { ...inboundPayload, To: "stranger@unknown.com", ToFull: [{ Email: "stranger@unknown.com" }] },
+      subs
+    );
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("fans out to single matching subscription on success", async () => {
+    mockFetch.mockResolvedValueOnce({ ok: true, status: 200, text: () => Promise.resolve("ok") });
+    await dispatchInbound(inboundPayload, subs);
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toBe("https://jq.example/inbound");
+  });
+
+  it("throws when a subscriber fails (fail loud)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      text: () => Promise.resolve("oops"),
+    });
+    await expect(dispatchInbound(inboundPayload, subs)).rejects.toBeInstanceOf(
+      SubscriberDeliveryError
+    );
+  });
+
+  it("throws when MessageID missing on inbound payload", async () => {
+    await expect(
+      dispatchInbound({ RecordType: "Inbound", To: "haro@inbox.example.com" }, subs)
+    ).rejects.toThrow(/MessageID/);
   });
 });

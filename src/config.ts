@@ -1,5 +1,9 @@
 import * as dotenv from "dotenv";
-import { parseRules, type ForwardingRule } from "./lib/inbound-forwarder";
+import {
+  parseSubscriptions,
+  resolveSubscriptions,
+  type ResolvedSubscription,
+} from "./lib/inbound-forwarder";
 
 dotenv.config();
 
@@ -9,12 +13,13 @@ if (!apiKey) {
   process.exit(1);
 }
 
-let inboundForwardingRules: ForwardingRule[] = [];
+let inboundSubscriptions: ResolvedSubscription[] = [];
 try {
-  inboundForwardingRules = parseRules(process.env.INBOUND_FORWARDING_RULES);
+  const parsed = parseSubscriptions(process.env.EMAIL_GATEWAY_SUBSCRIPTIONS);
+  inboundSubscriptions = resolveSubscriptions(parsed);
 } catch (err: unknown) {
   const msg = err instanceof Error ? err.message : String(err);
-  console.error(`[email-gateway] FATAL: INBOUND_FORWARDING_RULES env var is invalid: ${msg}`);
+  console.error(`[email-gateway] FATAL: EMAIL_GATEWAY_SUBSCRIPTIONS env var is invalid: ${msg}`);
   process.exit(1);
 }
 
@@ -50,7 +55,5 @@ export const config = {
     url: process.env.RUNS_SERVICE_URL || "",
     apiKey: process.env.RUNS_SERVICE_API_KEY || "",
   },
-  inboundForwarding: {
-    rules: inboundForwardingRules,
-  },
+  inboundSubscriptions,
 } as const;
