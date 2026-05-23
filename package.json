@@ -12,11 +12,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@asteasolutions/zod-to-openapi": "^7.3.0",
+    "@asteasolutions/zod-to-openapi": "^8.4.0",
+    "@shamanic-technologies/email-domain-contract": "^1.0.1",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.2",
-    "zod": "^3.24.2"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

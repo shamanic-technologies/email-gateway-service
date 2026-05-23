@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { z } from "zod";
 import { SendRequestSchema } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 
@@ -13,7 +14,7 @@ const router = Router();
 router.post("/send", async (req: Request, res: Response) => {
   const parsed = SendRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    const flat = parsed.error.flatten();
+    const flat = z.flattenError(parsed.error);
     const missingFields = Object.keys(flat.fieldErrors);
     console.error(
       `[email-gateway] Validation failed: missing/invalid fields=[${missingFields.join(", ")}]` +

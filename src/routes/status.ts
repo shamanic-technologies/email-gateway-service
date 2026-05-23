@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { z } from "zod";
 import { StatusRequestSchema } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
@@ -10,7 +11,7 @@ const router = Router();
 router.post("/status", async (req: Request, res: Response) => {
   const parsed = StatusRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request", details: parsed.error.flatten() });
+    res.status(400).json({ error: "Invalid request", details: z.flattenError(parsed.error) });
     return;
   }
 
