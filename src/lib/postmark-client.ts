@@ -1,6 +1,10 @@
 import { config } from "../config";
 import { buildServiceHeaders } from "./service-headers";
 import type { OrgContext } from "../middleware/requireOrgId";
+import type {
+  StatusScope,
+  GlobalStatus,
+} from "@shamanic-technologies/email-domain-contract";
 
 const { url, apiKey } = config.postmark;
 
@@ -111,23 +115,15 @@ export async function getStats(filters: {
   return request<ProviderStatsResult>(path, { ctx });
 }
 
-export interface StatusScope {
-  contacted: boolean;
-  delivered: boolean;
-  opened: boolean;
-  replied: boolean;
-  replyClassification: "positive" | "negative" | "neutral" | null;
-  bounced: boolean;
-  unsubscribed: boolean;
-  lastDeliveredAt: string | null;
-}
+// StatusScope re-exported from shared contract.
+export type { StatusScope } from "@shamanic-technologies/email-domain-contract";
 
 export interface StatusResult {
   email: string;
   byCampaign: Record<string, StatusScope> | null;
   campaign: StatusScope | null;
   brand: StatusScope | null;
-  global: { email: { bounced: boolean; unsubscribed: boolean } };
+  global: GlobalStatus;
 }
 
 export async function getStatus(body: {
