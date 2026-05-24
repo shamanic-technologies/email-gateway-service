@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import { z } from "zod";
 import { StatsQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import { extractOrgContext } from "../middleware/requireOrgId";
@@ -90,7 +91,7 @@ function addChannelStats(a: ChannelStats, b: ChannelStats): ChannelStats {
 
 function parseStatsInput(req: Request): { success: true; type?: string; filters: Record<string, unknown> } | { success: false; error: unknown } {
   const parsed = StatsQuerySchema.safeParse(req.query);
-  if (!parsed.success) return { success: false, error: parsed.error.flatten() };
+  if (!parsed.success) return { success: false, error: z.flattenError(parsed.error) };
   const { type, runIds, workflowSlugs, featureSlugs, ...rest } = parsed.data;
   const filters: Record<string, unknown> = { ...rest };
   if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());

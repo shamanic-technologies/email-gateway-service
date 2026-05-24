@@ -1,10 +1,25 @@
-import { z } from "zod";
-import {
-  OpenAPIRegistry,
-  extendZodWithOpenApi,
-} from "@asteasolutions/zod-to-openapi";
+// Side-effect import — extends Zod with `.openapi()` so subsequent local schema
+// declarations (`z.object({...}).openapi("Name")`) work. Imported contract
+// schemas are re-exported as-is without `.openapi(name)`: zod-to-openapi v8's
+// `.openapi(name)` requires the schema instance to be created AFTER the
+// extension (Zod 4 attaches prototype methods at construction time). The
+// OpenAPI generator inlines contract shapes where they're referenced; trade-off
+// accepted to keep a single source of truth in the contract package.
+import "./zod-setup";
 
-extendZodWithOpenApi(z);
+import { z } from "zod";
+import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
+import {
+  ReplyClassificationSchema as RawReplyClassification,
+  RepliesDetailSchema as RawRepliesDetail,
+  RecipientStatsSchema as RawRecipientStats,
+  StepStatsSchema as RawStepStats,
+  EmailStatsSchema as RawEmailStats,
+  ChannelStatsSchema as RawChannelStats,
+  StatusScopeSchema as RawStatusScope,
+  GlobalStatusSchema as RawGlobalStatus,
+  ProviderStatusSchema as RawProviderStatus,
+} from "@shamanic-technologies/email-domain-contract";
 
 export const registry = new OpenAPIRegistry();
 
@@ -26,7 +41,41 @@ export const ErrorResponseSchema = z
   })
   .openapi("ErrorResponse");
 
-// --- Enums ---
+// --- Shared cross-provider schemas (imported from email-domain-contract) ---
+// Re-exported as-is. The OpenAPI generator inlines them where they're referenced
+// (no $ref name) because zod-to-openapi v8's `.openapi(name)` cannot be applied
+// to pre-existing Zod 4 schema instances without the consumer creating them
+// fresh. Trade-off accepted for v1: slightly more verbose OpenAPI output, but
+// the schemas remain a single source of truth in the contract package.
+
+export const ReplyClassificationSchema = RawReplyClassification;
+export type ReplyClassification = z.infer<typeof ReplyClassificationSchema>;
+
+export const RepliesDetailSchema = RawRepliesDetail;
+export type RepliesDetail = z.infer<typeof RepliesDetailSchema>;
+
+export const RecipientStatsSchema = RawRecipientStats;
+export type RecipientStats = z.infer<typeof RecipientStatsSchema>;
+
+export const StepStatsSchema = RawStepStats;
+export type StepStats = z.infer<typeof StepStatsSchema>;
+
+export const EmailStatsSchema = RawEmailStats;
+export type EmailStats = z.infer<typeof EmailStatsSchema>;
+
+export const ChannelStatsSchema = RawChannelStats;
+export type ChannelStats = z.infer<typeof ChannelStatsSchema>;
+
+export const StatusScopeSchema = RawStatusScope;
+export type StatusScope = z.infer<typeof StatusScopeSchema>;
+
+export const GlobalStatusSchema = RawGlobalStatus;
+export type GlobalStatus = z.infer<typeof GlobalStatusSchema>;
+
+export const ProviderStatusSchema = RawProviderStatus;
+export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
+
+// --- Enums (email-gateway-only) ---
 
 export const EmailTypeSchema = z.enum(["transactional", "broadcast"]);
 export type EmailType = z.infer<typeof EmailTypeSchema>;
@@ -37,10 +86,10 @@ const SendBaseSchema = z.object({
   campaignId: z.string().optional().describe("Campaign ID for tracking and stats grouping"),
   leadId: z.string().optional().describe("Lead ID for end-to-end tracking. When provided: logged on receipt, forwarded to the downstream provider (Postmark/Instantly), and returned as `messageId` in the response for broadcast sends. Omitting it means email stats cannot be correlated back to the lead."),
   workflowSlug: z.string().optional().describe("Workflow slug for tracking and grouping"),
-  to: z.string({ required_error: "to (recipient email) is required — the lead has no email address", invalid_type_error: "to (recipient email) must be a string, got null — the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
-  recipientFirstName: z.string({ required_error: "recipientFirstName is required", invalid_type_error: "recipientFirstName must be a string" }).describe("Recipient first name"),
-  recipientLastName: z.string({ required_error: "recipientLastName is required", invalid_type_error: "recipientLastName must be a string" }).describe("Recipient last name"),
-  recipientCompany: z.string({ required_error: "recipientCompany is required", invalid_type_error: "recipientCompany must be a string" }).describe("Recipient company name"),
+  to: z.string({ error: "the lead has no email address" }).email("to must be a valid email address").describe("Recipient email address"),
+  recipientFirstName: z.string({ error: "recipientFirstName is required" }).describe("Recipient first name"),
+  recipientLastName: z.string({ error: "recipientLastName is required" }).describe("Recipient last name"),
+  recipientCompany: z.string({ error: "recipientCompany is required" }).describe("Recipient company name"),
   replyTo: z.string().email().optional().describe("Reply-to email address"),
   tag: z.string().optional().describe("Email tag for categorization"),
   metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
@@ -127,83 +176,6 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
-export const RepliesDetailSchema = z
-  .object({
-    interested: z.number().describe("lead_interested events"),
-    meetingBooked: z.number().describe("lead_meeting_booked events"),
-    closed: z.number().describe("lead_closed events"),
-    notInterested: z.number().describe("lead_not_interested events"),
-    wrongPerson: z.number().describe("lead_wrong_person events"),
-    unsubscribe: z.number().describe("lead_unsubscribed events"),
-    neutral: z.number().describe("lead_neutral events"),
-    autoReply: z.number().describe("auto_reply_received events"),
-    outOfOffice: z.number().describe("lead_out_of_office events"),
-  })
-  .openapi("RepliesDetail");
-
-export type RepliesDetail = z.infer<typeof RepliesDetailSchema>;
-
-export const RecipientStatsSchema = z
-  .object({
-    contacted: z.number().describe("Leads added to a campaign / send attempted"),
-    sent: z.number().describe("Leads with at least 1 email sent (COUNT DISTINCT lead)"),
-    delivered: z.number().describe("Leads delivered (sent - bounced)"),
-    opened: z.number().describe("Leads who opened at least 1 email"),
-    bounced: z.number().describe("Leads with at least 1 bounce"),
-    clicked: z.number().describe("Leads who clicked at least 1 link"),
-    unsubscribed: z.number().describe("Leads who unsubscribed"),
-    repliesPositive: z.number().describe("interested + meetingBooked + closed"),
-    repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
-    repliesNeutral: z.number().describe("neutral (lead_neutral events only)"),
-    repliesAutoReply: z.number().describe("autoReply + outOfOffice"),
-    repliesDetail: RepliesDetailSchema.describe("Granular reply breakdown by classification"),
-  })
-  .openapi("RecipientStats");
-
-export type RecipientStats = z.infer<typeof RecipientStatsSchema>;
-
-export const StepStatsSchema = z
-  .object({
-    step: z.number().describe("Step number"),
-    sent: z.number().describe("Emails sent for this step"),
-    delivered: z.number().describe("Emails delivered for this step"),
-    opened: z.number().describe("Emails opened for this step"),
-    clicked: z.number().describe("Link clicks for this step"),
-    bounced: z.number().describe("Bounces for this step"),
-    unsubscribed: z.number().describe("Unsubscribes for this step"),
-    repliesPositive: z.number().describe("interested + meetingBooked + closed"),
-    repliesNegative: z.number().describe("notInterested + wrongPerson + unsubscribe"),
-    repliesNeutral: z.number().describe("neutral (lead_neutral events only)"),
-    repliesAutoReply: z.number().describe("autoReply + outOfOffice"),
-    repliesDetail: RepliesDetailSchema.describe("Granular reply breakdown by classification"),
-  })
-  .openapi("StepStats");
-
-export type StepStats = z.infer<typeof StepStatsSchema>;
-
-export const EmailStatsSchema = z
-  .object({
-    sent: z.number().describe("Total emails sent (COUNT *, all steps)"),
-    delivered: z.number().describe("Total emails delivered (sent - bounced)"),
-    opened: z.number().describe("Unique emails opened at least once (COUNT DISTINCT)"),
-    clicked: z.number().describe("Unique emails with at least 1 click (COUNT DISTINCT)"),
-    bounced: z.number().describe("Total emails bounced"),
-    unsubscribed: z.number().describe("Total unsubscribe events"),
-    stepStats: z.array(StepStatsSchema).optional().describe("Per-step breakdown"),
-  })
-  .openapi("EmailStats");
-
-export type EmailStats = z.infer<typeof EmailStatsSchema>;
-
-export const ChannelStatsSchema = z
-  .object({
-    recipientStats: RecipientStatsSchema.describe("Recipient-level stats (COUNT DISTINCT lead)"),
-    emailStats: EmailStatsSchema.describe("Email-level stats (COUNT *)"),
-  })
-  .openapi("ChannelStats");
-
-export type ChannelStats = z.infer<typeof ChannelStatsSchema>;
-
 export const StatsResponseSchema = z
   .object({
     transactional: ChannelStatsSchema.optional().describe("Stats for transactional emails"),
@@ -234,56 +206,6 @@ export const GroupedStatsResponseSchema = z
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
 // --- POST /orgs/status ---
-
-export const ReplyClassificationSchema = z.enum(["positive", "negative", "neutral"]).openapi("ReplyClassification");
-
-const StatusScopeSchema = z
-  .object({
-    contacted: z.boolean().describe("Whether this email has been contacted in this scope"),
-    sent: z.boolean().describe("Whether an email was sent in this scope"),
-    delivered: z.boolean().describe("Whether an email was delivered in this scope"),
-    opened: z.boolean().describe("Whether the recipient opened any email in this scope"),
-    clicked: z.boolean().describe("Whether the recipient clicked any link in this scope"),
-    replied: z.boolean().describe("Whether the recipient replied in this scope"),
-    replyClassification: ReplyClassificationSchema.nullable().describe("Classification of the most recent reply: positive, negative, neutral, or null if no reply"),
-    bounced: z.boolean().describe("Whether an email bounced in this scope"),
-    unsubscribed: z.boolean().describe("Whether the recipient unsubscribed in this scope"),
-    lastDeliveredAt: z.string().nullable().describe("ISO timestamp of last delivery in this scope"),
-  })
-  .openapi("StatusScope", {
-    example: {
-      contacted: true,
-      sent: true,
-      delivered: true,
-      opened: true,
-      clicked: false,
-      replied: true,
-      replyClassification: "positive",
-      bounced: false,
-      unsubscribed: false,
-      lastDeliveredAt: "2026-03-02T12:00:00.000Z",
-    },
-  });
-
-const GlobalStatusSchema = z
-  .object({
-    email: z.object({
-      bounced: z.boolean().describe("Whether this email has bounced anywhere"),
-      unsubscribed: z.boolean().describe("Whether this email has unsubscribed anywhere"),
-    }).describe("Global email signals (technical/legal)"),
-  })
-  .openapi("GlobalStatus", {
-    example: { email: { bounced: false, unsubscribed: false } },
-  });
-
-const ProviderStatusSchema = z
-  .object({
-    byCampaign: z.record(z.string(), StatusScopeSchema).nullable().describe("Per-campaign breakdown (present in brand mode, null in campaign and org modes)"),
-    campaign: StatusScopeSchema.nullable().describe("Status scoped to the given campaign (present in campaign mode, null in brand and org modes)"),
-    brand: StatusScopeSchema.nullable().describe("Aggregated status across all campaigns for this brand (present in brand mode, null in campaign and org modes)"),
-    global: GlobalStatusSchema.describe("Global signals across all brands and campaigns (always present)"),
-  })
-  .openapi("ProviderStatus");
 
 const StatusResultSchema = z
   .object({

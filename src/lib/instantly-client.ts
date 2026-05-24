@@ -1,6 +1,14 @@
 import { config } from "../config";
 import { buildServiceHeaders } from "./service-headers";
 import type { OrgContext } from "../middleware/requireOrgId";
+import type {
+  RecipientStats,
+  EmailStats,
+  StepStats,
+  ChannelStats,
+  StatusScope,
+  GlobalStatus,
+} from "@shamanic-technologies/email-domain-contract";
 
 const { url, apiKey } = config.instantly;
 
@@ -75,68 +83,19 @@ export async function atomicSend(body: {
   return request<AtomicSendResponse>("/orgs/send", { method: "POST", body, ctx });
 }
 
-export interface ProviderRepliesDetail {
-  interested: number;
-  meetingBooked: number;
-  closed: number;
-  notInterested: number;
-  wrongPerson: number;
-  unsubscribe: number;
-  neutral: number;
-  autoReply: number;
-  outOfOffice: number;
-}
-
-export interface ProviderRecipientStats {
-  contacted: number;
-  sent: number;
-  delivered: number;
-  opened: number;
-  bounced: number;
-  clicked: number;
-  unsubscribed: number;
-  repliesPositive: number;
-  repliesNegative: number;
-  repliesNeutral: number;
-  repliesAutoReply: number;
-  repliesDetail: ProviderRepliesDetail;
-}
-
-export interface ProviderStepStats {
-  step: number;
-  sent: number;
-  delivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  unsubscribed: number;
-  repliesPositive: number;
-  repliesNegative: number;
-  repliesNeutral: number;
-  repliesAutoReply: number;
-  repliesDetail: ProviderRepliesDetail;
-}
-
-export interface ProviderEmailStats {
-  sent: number;
-  delivered: number;
-  opened: number;
-  clicked: number;
-  bounced: number;
-  unsubscribed: number;
-  stepStats?: ProviderStepStats[];
-}
-
-export interface ProviderStatsFlat {
-  recipientStats: ProviderRecipientStats;
-  emailStats: ProviderEmailStats;
-}
+// Stats payload shapes — defined by the shared contract.
+// Aliases preserved for backward compatibility with existing imports.
+export type ProviderRepliesDetail = RecipientStats["repliesDetail"];
+export type ProviderRecipientStats = RecipientStats;
+export type ProviderStepStats = StepStats;
+export type ProviderEmailStats = EmailStats;
+export type ProviderStatsFlat = ChannelStats;
 
 export interface ProviderStatsGrouped {
   groups: Array<{
     key: string;
-    recipientStats: ProviderRecipientStats;
-    emailStats: ProviderEmailStats;
+    recipientStats: RecipientStats;
+    emailStats: EmailStats;
   }>;
 }
 
@@ -171,23 +130,15 @@ export async function getStats(filters: {
   return request<ProviderStatsResult>(path, { ctx });
 }
 
-export interface StatusScope {
-  contacted: boolean;
-  delivered: boolean;
-  opened: boolean;
-  replied: boolean;
-  replyClassification: "positive" | "negative" | "neutral" | null;
-  bounced: boolean;
-  unsubscribed: boolean;
-  lastDeliveredAt: string | null;
-}
+// StatusScope re-exported from shared contract.
+export type { StatusScope } from "@shamanic-technologies/email-domain-contract";
 
 export interface StatusResult {
   email: string;
   byCampaign: Record<string, StatusScope> | null;
   campaign: StatusScope | null;
   brand: StatusScope | null;
-  global: { email: { bounced: boolean; unsubscribed: boolean } };
+  global: GlobalStatus;
 }
 
 export async function getStatus(body: {
