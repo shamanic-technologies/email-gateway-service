@@ -25,6 +25,18 @@
       "description": "Email delivery statistics"
     },
     {
+      "name": "Status",
+      "description": "Email delivery status batch lookup"
+    },
+    {
+      "name": "Inbound",
+      "description": "Inbound email fan-out to subscribers"
+    },
+    {
+      "name": "Manual Qualifications",
+      "description": "Manual reply classification proxy to instantly-service"
+    },
+    {
       "name": "Webhooks",
       "description": "Provider webhook forwarding"
     }
@@ -2098,6 +2110,123 @@
         "required": [
           "items"
         ]
+      },
+      "PostManualQualificationResponse": {
+        "type": "object",
+        "properties": {
+          "idempotent": {
+            "type": "boolean",
+            "description": "True if the latest existing row already matched the requested status — no new bronze row was inserted, no side effects fired"
+          },
+          "qualification": {
+            "$ref": "#/components/schemas/ManualQualification"
+          }
+        },
+        "required": [
+          "idempotent",
+          "qualification"
+        ]
+      },
+      "ManualQualification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "orgId": {
+            "type": "string"
+          },
+          "campaignId": {
+            "type": "string"
+          },
+          "instantlyCampaignId": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ManualQualificationStatus"
+          },
+          "qualifiedBy": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "qualifiedAt": {
+            "type": "string",
+            "description": "ISO 8601 timestamp"
+          }
+        },
+        "required": [
+          "id",
+          "orgId",
+          "campaignId",
+          "instantlyCampaignId",
+          "email",
+          "status",
+          "qualifiedBy",
+          "notes",
+          "qualifiedAt"
+        ]
+      },
+      "ManualQualificationStatus": {
+        "type": "string",
+        "enum": [
+          "lead_interested",
+          "lead_meeting_booked",
+          "lead_closed",
+          "lead_not_interested",
+          "lead_wrong_person",
+          "lead_neutral",
+          "lead_out_of_office",
+          "auto_reply_received"
+        ],
+        "description": "Manual reply qualification status — mirrors Instantly webhook reply event_type values exactly. Set by a human via the dashboard when Instantly fails to detect a reply (e.g. reply received on a non-leurre email account)."
+      },
+      "PostManualQualificationRequest": {
+        "type": "object",
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Logical campaign id (groups sub-campaigns for the same workflow run)"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "Lead email address"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ManualQualificationStatus"
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional free-text human note for audit"
+          }
+        },
+        "required": [
+          "campaign_id",
+          "email",
+          "status"
+        ]
+      },
+      "GetManualQualificationsResponse": {
+        "type": "object",
+        "properties": {
+          "qualifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ManualQualification"
+            }
+          }
+        },
+        "required": [
+          "qualifications"
+        ]
       }
     },
     "parameters": {}
@@ -3007,6 +3136,324 @@
           },
           "502": {
             "description": "Upstream service error — both providers failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orgs/manual-qualifications": {
+      "post": {
+        "tags": [
+          "Manual Qualifications"
+        ],
+        "summary": "Set a manual reply qualification for a (campaign, lead) pair",
+        "description": "Proxy to instantly-service `POST /orgs/manual-qualifications`. Records a human-set reply classification for a lead in a campaign — used when Instantly's automatic webhook reply classification fails to detect a reply (e.g. the reply was sent to a non-leurre account).\n\nThe gateway validates the body locally and forwards it byte-identical to instantly-service. Identity headers (`x-org-id`, `x-user-id`, `x-run-id`, etc.) are propagated. Upstream 4xx responses are round-tripped to the caller byte-equal; network failures and upstream 5xx surface as 502.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": false,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": false,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Campaign ID injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Campaign ID injected by workflow-service (optional, used for tracking)",
+            "name": "x-campaign-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
+            },
+            "required": false,
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
+            "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workflow slug injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Workflow slug injected by workflow-service (optional, used for tracking)",
+            "name": "x-workflow-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug for tracking (optional, propagated through the chain)"
+            },
+            "required": false,
+            "description": "Feature slug for tracking (optional, propagated through the chain)",
+            "name": "x-feature-slug",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostManualQualificationRequest"
+              },
+              "examples": {
+                "interested": {
+                  "summary": "Mark a lead as interested after a manual reply check",
+                  "value": {
+                    "campaign_id": "c1a2b3c4-0000-0000-0000-000000000001",
+                    "email": "alice@media.com",
+                    "status": "lead_interested",
+                    "notes": "Reply received on Gmail — Instantly missed it"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Manual qualification recorded (or idempotent no-op)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostManualQualificationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body or missing identity header",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Campaign not found in this org for the given email",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Manual Qualifications"
+        ],
+        "summary": "List manual reply qualifications (org-scoped audit history)",
+        "description": "Proxy to instantly-service `GET /orgs/manual-qualifications`. Returns the org's manual qualification history, sorted by `qualifiedAt` DESC. Optionally filter by `campaign_id` and/or `email`. Cross-org reads are blocked by instantly-service.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Filter by logical campaign id"
+            },
+            "required": false,
+            "description": "Filter by logical campaign id",
+            "name": "campaign_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "email",
+              "description": "Filter by lead email"
+            },
+            "required": false,
+            "description": "Filter by lead email",
+            "name": "email",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Max rows to return (default 200, max 500)"
+            },
+            "required": false,
+            "description": "Max rows to return (default 200, max 500)",
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": false,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": false,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Campaign ID injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Campaign ID injected by workflow-service (optional, used for tracking)",
+            "name": "x-campaign-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
+            },
+            "required": false,
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
+            "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workflow slug injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Workflow slug injected by workflow-service (optional, used for tracking)",
+            "name": "x-workflow-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug for tracking (optional, propagated through the chain)"
+            },
+            "required": false,
+            "description": "Feature slug for tracking (optional, propagated through the chain)",
+            "name": "x-feature-slug",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of manual qualifications",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetManualQualificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
             "content": {
               "application/json": {
                 "schema": {
