@@ -237,6 +237,93 @@ export const StatusResponseSchema = z
 
 export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 
+// --- POST /orgs/manual-qualifications ---
+
+export const ManualQualificationStatusSchema = z
+  .enum([
+    "lead_interested",
+    "lead_meeting_booked",
+    "lead_closed",
+    "lead_not_interested",
+    "lead_wrong_person",
+    "lead_neutral",
+    "lead_out_of_office",
+    "auto_reply_received",
+  ])
+  .openapi("ManualQualificationStatus", {
+    description:
+      "Manual reply qualification status — mirrors Instantly webhook reply event_type values exactly. Set by a human via the dashboard when Instantly fails to detect a reply (e.g. reply received on a non-leurre email account).",
+  });
+
+export type ManualQualificationStatus = z.infer<typeof ManualQualificationStatusSchema>;
+
+export const ManualQualificationSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    campaignId: z.string(),
+    instantlyCampaignId: z.string(),
+    email: z.string(),
+    status: ManualQualificationStatusSchema,
+    qualifiedBy: z.string(),
+    notes: z.string().nullable(),
+    qualifiedAt: z.string().describe("ISO 8601 timestamp"),
+  })
+  .openapi("ManualQualification");
+
+export type ManualQualification = z.infer<typeof ManualQualificationSchema>;
+
+export const PostManualQualificationRequestSchema = z
+  .object({
+    campaign_id: z
+      .string()
+      .min(1)
+      .describe("Logical campaign id (groups sub-campaigns for the same workflow run)"),
+    email: z.string().email().describe("Lead email address"),
+    status: ManualQualificationStatusSchema,
+    notes: z.string().max(2000).optional().describe("Optional free-text human note for audit"),
+  })
+  .openapi("PostManualQualificationRequest");
+
+export type PostManualQualificationRequest = z.infer<typeof PostManualQualificationRequestSchema>;
+
+export const PostManualQualificationResponseSchema = z
+  .object({
+    idempotent: z
+      .boolean()
+      .describe(
+        "True if the latest existing row already matched the requested status — no new bronze row was inserted, no side effects fired",
+      ),
+    qualification: ManualQualificationSchema,
+  })
+  .openapi("PostManualQualificationResponse");
+
+export type PostManualQualificationResponse = z.infer<typeof PostManualQualificationResponseSchema>;
+
+export const GetManualQualificationsQuerySchema = z
+  .object({
+    campaign_id: z.string().min(1).optional().describe("Filter by logical campaign id"),
+    email: z.string().email().optional().describe("Filter by lead email"),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe("Max rows to return (default 200, max 500)"),
+  })
+  .openapi("GetManualQualificationsQuery");
+
+export type GetManualQualificationsQuery = z.infer<typeof GetManualQualificationsQuerySchema>;
+
+export const GetManualQualificationsResponseSchema = z
+  .object({
+    qualifications: z.array(ManualQualificationSchema),
+  })
+  .openapi("GetManualQualificationsResponse");
+
+export type GetManualQualificationsResponse = z.infer<typeof GetManualQualificationsResponseSchema>;
+
 // --- Health ---
 
 export const HealthResponseSchema = z
@@ -576,6 +663,73 @@ registry.registerPath({
     400: { description: "Invalid request — empty items or invalid email", content: errorContent },
     401: { description: "Unauthorized — missing or invalid X-API-Key", content: errorContent },
     502: { description: "Upstream service error — both providers failed", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/orgs/manual-qualifications",
+  tags: ["Manual Qualifications"],
+  summary: "Set a manual reply qualification for a (campaign, lead) pair",
+  description: [
+    "Proxy to instantly-service `POST /orgs/manual-qualifications`. Records a human-set reply classification for a lead in a campaign — used when Instantly's automatic webhook reply classification fails to detect a reply (e.g. the reply was sent to a non-leurre account).",
+    "",
+    "The gateway validates the body locally and forwards it byte-identical to instantly-service. Identity headers (`x-org-id`, `x-user-id`, `x-run-id`, etc.) are propagated. Upstream 4xx responses are round-tripped to the caller byte-equal; network failures and upstream 5xx surface as 502.",
+  ].join("\n"),
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: PostManualQualificationRequestSchema,
+          examples: {
+            interested: {
+              summary: "Mark a lead as interested after a manual reply check",
+              value: {
+                campaign_id: "c1a2b3c4-0000-0000-0000-000000000001",
+                email: "alice@media.com",
+                status: "lead_interested",
+                notes: "Reply received on Gmail — Instantly missed it",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Manual qualification recorded (or idempotent no-op)",
+      content: { "application/json": { schema: PostManualQualificationResponseSchema } },
+    },
+    400: { description: "Invalid body or missing identity header", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    404: { description: "Campaign not found in this org for the given email", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/orgs/manual-qualifications",
+  tags: ["Manual Qualifications"],
+  summary: "List manual reply qualifications (org-scoped audit history)",
+  description:
+    "Proxy to instantly-service `GET /orgs/manual-qualifications`. Returns the org's manual qualification history, sorted by `qualifiedAt` DESC. Optionally filter by `campaign_id` and/or `email`. Cross-org reads are blocked by instantly-service.",
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    query: GetManualQualificationsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "List of manual qualifications",
+      content: { "application/json": { schema: GetManualQualificationsResponseSchema } },
+    },
+    400: { description: "Invalid query parameters", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
   },
 });
 
