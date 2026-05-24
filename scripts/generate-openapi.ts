@@ -19,6 +19,9 @@ const document = generator.generateDocument({
     { name: "Health", description: "Health check endpoints" },
     { name: "Email Routing", description: "Route emails to transactional or broadcast providers" },
     { name: "Stats", description: "Email delivery statistics" },
+    { name: "Status", description: "Email delivery status batch lookup" },
+    { name: "Inbound", description: "Inbound email fan-out to subscribers" },
+    { name: "Manual Qualifications", description: "Manual reply classification proxy to instantly-service" },
     { name: "Webhooks", description: "Provider webhook forwarding" },
   ],
 });

@@ -9,6 +9,7 @@ import statusRoutes from "./routes/status";
 import statsRoutes, { publicStatsRouter } from "./routes/stats";
 import webhooksRoutes from "./routes/webhooks";
 import inboundRoutes from "./routes/inbound";
+import manualQualificationsRoutes from "./routes/manual-qualifications";
 import { registerProviderRequirements } from "./lib/register-providers";
 
 const app = express();
@@ -30,6 +31,7 @@ app.use("/public", apiKeyAuth, publicStatsRouter);
 app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, statsRoutes);
+app.use("/orgs", apiKeyAuth, requireOrgId, manualQualificationsRoutes);
 
 app.listen(config.port, () => {
   console.log(`[email-gateway] running on port ${config.port}`);
