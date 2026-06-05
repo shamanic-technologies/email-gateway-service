@@ -1622,6 +1622,46 @@
                       "type": "string",
                       "nullable": true,
                       "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                    },
+                    "firstContactedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a contacted event in this scope; null if it never happened in scope"
+                    },
+                    "firstSentAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a sent event in this scope; null if it never happened in scope"
+                    },
+                    "firstDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a delivered event in this scope; null if it never happened in scope"
+                    },
+                    "firstOpenedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of an opened event in this scope; null if it never happened in scope"
+                    },
+                    "firstClickedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a clicked event in this scope; null if it never happened in scope"
+                    },
+                    "firstRepliedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a replied event in this scope; null if it never happened in scope (always null for postmark — no reply tracking)"
+                    },
+                    "firstBouncedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a bounced event in this scope; null if it never happened in scope"
+                    },
+                    "firstUnsubscribedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
                     }
                   },
                   "required": [
@@ -1694,6 +1734,46 @@
                     "type": "string",
                     "nullable": true,
                     "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                  },
+                  "firstContactedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a contacted event in this scope; null if it never happened in scope"
+                  },
+                  "firstSentAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a sent event in this scope; null if it never happened in scope"
+                  },
+                  "firstDeliveredAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a delivered event in this scope; null if it never happened in scope"
+                  },
+                  "firstOpenedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an opened event in this scope; null if it never happened in scope"
+                  },
+                  "firstClickedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a clicked event in this scope; null if it never happened in scope"
+                  },
+                  "firstRepliedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a replied event in this scope; null if it never happened in scope (always null for postmark — no reply tracking)"
+                  },
+                  "firstBouncedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a bounced event in this scope; null if it never happened in scope"
+                  },
+                  "firstUnsubscribedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
                   }
                 },
                 "required": [
@@ -1765,6 +1845,46 @@
                     "type": "string",
                     "nullable": true,
                     "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                  },
+                  "firstContactedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a contacted event in this scope; null if it never happened in scope"
+                  },
+                  "firstSentAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a sent event in this scope; null if it never happened in scope"
+                  },
+                  "firstDeliveredAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a delivered event in this scope; null if it never happened in scope"
+                  },
+                  "firstOpenedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an opened event in this scope; null if it never happened in scope"
+                  },
+                  "firstClickedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a clicked event in this scope; null if it never happened in scope"
+                  },
+                  "firstRepliedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a replied event in this scope; null if it never happened in scope (always null for postmark — no reply tracking)"
+                  },
+                  "firstBouncedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a bounced event in this scope; null if it never happened in scope"
+                  },
+                  "firstUnsubscribedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
                   }
                 },
                 "required": [
@@ -1877,6 +1997,46 @@
                       "type": "string",
                       "nullable": true,
                       "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                    },
+                    "firstContactedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a contacted event in this scope; null if it never happened in scope"
+                    },
+                    "firstSentAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a sent event in this scope; null if it never happened in scope"
+                    },
+                    "firstDeliveredAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a delivered event in this scope; null if it never happened in scope"
+                    },
+                    "firstOpenedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of an opened event in this scope; null if it never happened in scope"
+                    },
+                    "firstClickedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a clicked event in this scope; null if it never happened in scope"
+                    },
+                    "firstRepliedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a replied event in this scope; null if it never happened in scope (always null for postmark — no reply tracking)"
+                    },
+                    "firstBouncedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of a bounced event in this scope; null if it never happened in scope"
+                    },
+                    "firstUnsubscribedAt": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
                     }
                   },
                   "required": [
@@ -1949,6 +2109,46 @@
                     "type": "string",
                     "nullable": true,
                     "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                  },
+                  "firstContactedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a contacted event in this scope; null if it never happened in scope"
+                  },
+                  "firstSentAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a sent event in this scope; null if it never happened in scope"
+                  },
+                  "firstDeliveredAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a delivered event in this scope; null if it never happened in scope"
+                  },
+                  "firstOpenedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an opened event in this scope; null if it never happened in scope"
+                  },
+                  "firstClickedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a clicked event in this scope; null if it never happened in scope"
+                  },
+                  "firstRepliedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a replied event in this scope; null if it never happened in scope (always null for postmark — no reply tracking)"
+                  },
+                  "firstBouncedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a bounced event in this scope; null if it never happened in scope"
+                  },
+                  "firstUnsubscribedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
                   }
                 },
                 "required": [
@@ -2020,6 +2220,46 @@
                     "type": "string",
                     "nullable": true,
                     "description": "ISO 8601 timestamp of last delivery in this scope; null if none"
+                  },
+                  "firstContactedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a contacted event in this scope; null if it never happened in scope"
+                  },
+                  "firstSentAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a sent event in this scope; null if it never happened in scope"
+                  },
+                  "firstDeliveredAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a delivered event in this scope; null if it never happened in scope"
+                  },
+                  "firstOpenedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an opened event in this scope; null if it never happened in scope"
+                  },
+                  "firstClickedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a clicked event in this scope; null if it never happened in scope"
+                  },
+                  "firstRepliedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a replied event in this scope; null if it never happened in scope (always null for postmark — no reply tracking)"
+                  },
+                  "firstBouncedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of a bounced event in this scope; null if it never happened in scope"
+                  },
+                  "firstUnsubscribedAt": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "First-occurrence (MIN) ISO 8601 timestamp of an unsubscribed event in this scope; null if it never happened in scope"
                   }
                 },
                 "required": [
@@ -3001,13 +3241,21 @@
                               "contacted": true,
                               "sent": true,
                               "delivered": true,
-                              "opened": false,
-                              "clicked": false,
+                              "opened": true,
+                              "clicked": true,
                               "replied": false,
                               "replyClassification": null,
                               "bounced": false,
                               "unsubscribed": false,
-                              "lastDeliveredAt": "2026-02-20T14:30:00.000Z"
+                              "lastDeliveredAt": "2026-02-20T14:30:00.000Z",
+                              "firstContactedAt": "2026-02-20T14:29:00.000Z",
+                              "firstSentAt": "2026-02-20T14:29:30.000Z",
+                              "firstDeliveredAt": "2026-02-20T14:30:00.000Z",
+                              "firstOpenedAt": "2026-02-21T09:15:00.000Z",
+                              "firstClickedAt": "2026-02-22T11:40:00.000Z",
+                              "firstRepliedAt": null,
+                              "firstBouncedAt": null,
+                              "firstUnsubscribedAt": null
                             },
                             "brand": null,
                             "global": {
@@ -3039,7 +3287,15 @@
                                 "replyClassification": null,
                                 "bounced": false,
                                 "unsubscribed": false,
-                                "lastDeliveredAt": "2026-03-01T10:00:00.000Z"
+                                "lastDeliveredAt": "2026-03-01T10:00:00.000Z",
+                                "firstContactedAt": "2026-03-01T09:59:00.000Z",
+                                "firstSentAt": "2026-03-01T09:59:30.000Z",
+                                "firstDeliveredAt": "2026-03-01T10:00:00.000Z",
+                                "firstOpenedAt": null,
+                                "firstClickedAt": null,
+                                "firstRepliedAt": null,
+                                "firstBouncedAt": null,
+                                "firstUnsubscribedAt": null
                               },
                               "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
                                 "contacted": true,
@@ -3051,7 +3307,15 @@
                                 "replyClassification": "positive",
                                 "bounced": false,
                                 "unsubscribed": false,
-                                "lastDeliveredAt": "2026-03-02T12:00:00.000Z"
+                                "lastDeliveredAt": "2026-03-02T12:00:00.000Z",
+                                "firstContactedAt": "2026-03-02T11:59:00.000Z",
+                                "firstSentAt": "2026-03-02T11:59:30.000Z",
+                                "firstDeliveredAt": "2026-03-02T12:00:00.000Z",
+                                "firstOpenedAt": "2026-03-02T13:10:00.000Z",
+                                "firstClickedAt": "2026-03-02T15:45:00.000Z",
+                                "firstRepliedAt": "2026-03-03T08:20:00.000Z",
+                                "firstBouncedAt": null,
+                                "firstUnsubscribedAt": null
                               }
                             },
                             "campaign": null,
@@ -3065,7 +3329,15 @@
                               "replyClassification": "positive",
                               "bounced": false,
                               "unsubscribed": false,
-                              "lastDeliveredAt": "2026-03-02T12:00:00.000Z"
+                              "lastDeliveredAt": "2026-03-02T12:00:00.000Z",
+                              "firstContactedAt": "2026-03-01T09:59:00.000Z",
+                              "firstSentAt": "2026-03-01T09:59:30.000Z",
+                              "firstDeliveredAt": "2026-03-01T10:00:00.000Z",
+                              "firstOpenedAt": "2026-03-02T13:10:00.000Z",
+                              "firstClickedAt": "2026-03-02T15:45:00.000Z",
+                              "firstRepliedAt": "2026-03-03T08:20:00.000Z",
+                              "firstBouncedAt": null,
+                              "firstUnsubscribedAt": null
                             },
                             "global": {
                               "email": {
