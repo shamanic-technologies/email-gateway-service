@@ -450,6 +450,127 @@ describe("POST /orgs/status", () => {
     expect(res.body.results[0].broadcast.campaign.replyClassification).toBeNull();
   });
 
+  // --- first*At engagement-event timestamp passthrough ---
+
+  it("passes through first*At engagement timestamps, distinguishable by event type", async () => {
+    const T1_OPEN = "2026-03-01T10:00:00.000Z";
+    const T2_CLICK = "2026-03-03T14:30:00.000Z"; // strictly after open
+    const engagedScope = {
+      ...deliveredScope,
+      opened: true,
+      clicked: true,
+      firstContactedAt: "2026-02-28T09:00:00.000Z",
+      firstSentAt: "2026-02-28T09:00:01.000Z",
+      firstDeliveredAt: "2026-02-28T09:05:00.000Z",
+      firstOpenedAt: T1_OPEN,
+      firstClickedAt: T2_CLICK,
+      firstRepliedAt: null,
+      firstBouncedAt: null,
+      firstUnsubscribedAt: null,
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: engagedScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const scope = res.body.results[0].broadcast.campaign;
+    expect(scope.firstOpenedAt).toBe(T1_OPEN);
+    expect(scope.firstClickedAt).toBe(T2_CLICK);
+    // open precedes click — the consumer can order the funnel chronologically
+    expect(new Date(scope.firstOpenedAt).getTime()).toBeLessThan(new Date(scope.firstClickedAt).getTime());
+    expect(scope.firstRepliedAt).toBeNull();
+  });
+
+  it("passes through null first*At for an un-engaged recipient", async () => {
+    const noEngagementScope = {
+      ...deliveredScope,
+      firstContactedAt: "2026-02-28T09:00:00.000Z",
+      firstSentAt: "2026-02-28T09:00:01.000Z",
+      firstDeliveredAt: "2026-02-28T09:05:00.000Z",
+      firstOpenedAt: null,
+      firstClickedAt: null,
+      firstRepliedAt: null,
+      firstBouncedAt: null,
+      firstUnsubscribedAt: null,
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: noEngagementScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const scope = res.body.results[0].broadcast.campaign;
+    expect(scope.firstOpenedAt).toBeNull();
+    expect(scope.firstClickedAt).toBeNull();
+    expect(scope.firstDeliveredAt).toBe("2026-02-28T09:05:00.000Z");
+  });
+
+  it("passes through first*At on brand + byCampaign scopes (brand mode)", async () => {
+    const campOne = {
+      ...deliveredScope,
+      opened: true,
+      firstOpenedAt: "2026-03-01T10:00:00.000Z",
+      firstClickedAt: null,
+    };
+    const campTwo = {
+      ...deliveredScope,
+      opened: true,
+      clicked: true,
+      firstOpenedAt: "2026-02-20T08:00:00.000Z",
+      firstClickedAt: "2026-02-21T08:00:00.000Z",
+    };
+    const brandAgg = {
+      ...deliveredScope,
+      opened: true,
+      clicked: true,
+      firstOpenedAt: "2026-02-20T08:00:00.000Z", // MIN across campaigns
+      firstClickedAt: "2026-02-21T08:00:00.000Z",
+    };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          {
+            email: "john@acme.com",
+            byCampaign: { "camp-uuid-1": campOne, "camp-uuid-2": campTwo },
+            campaign: null,
+            brand: brandAgg,
+            global: emptyGlobal,
+          },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ brandId: "brand_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.byCampaign["camp-uuid-1"].firstOpenedAt).toBe("2026-03-01T10:00:00.000Z");
+    expect(broadcast.byCampaign["camp-uuid-1"].firstClickedAt).toBeNull();
+    expect(broadcast.byCampaign["camp-uuid-2"].firstClickedAt).toBe("2026-02-21T08:00:00.000Z");
+    expect(broadcast.brand.firstOpenedAt).toBe("2026-02-20T08:00:00.000Z");
+    expect(broadcast.brand.firstClickedAt).toBe("2026-02-21T08:00:00.000Z");
+  });
+
   // --- Large payloads ---
 
   it("accepts large payloads without 413 error", async () => {
