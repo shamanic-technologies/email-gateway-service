@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { StatsQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
+import { StatsQuerySchema, PublicEngagementLatencyQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import { extractOrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
@@ -98,6 +98,40 @@ function parseStatsInput(req: Request): { success: true; type?: string; filters:
   if (workflowSlugs) filters.workflowSlugs = workflowSlugs.split(",").map((s) => s.trim()).join(",");
   if (featureSlugs) filters.featureSlugs = featureSlugs.split(",").map((s) => s.trim()).join(",");
   return { success: true, type, filters };
+}
+
+function parseCommaSeparatedSlugs(raw: string): string[] {
+  return Array.from(new Set(raw.split(",").map((s) => s.trim()).filter(Boolean)));
+}
+
+function parsePublicEngagementLatencyInput(req: Request):
+  | { success: true; featureSlugs: string[] }
+  | { success: false; status: number; error: string; details?: unknown } {
+  const parsed = PublicEngagementLatencyQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    return { success: false, status: 400, error: "Invalid request", details: z.flattenError(parsed.error) };
+  }
+
+  if (parsed.data.groupBy !== "workflowSlug") {
+    return {
+      success: false,
+      status: 400,
+      error: "Unsupported groupBy",
+      details: "Only groupBy=workflowSlug is supported",
+    };
+  }
+
+  const featureSlugs = parseCommaSeparatedSlugs(parsed.data.featureSlugs);
+  if (featureSlugs.length === 0) {
+    return {
+      success: false,
+      status: 400,
+      error: "Invalid request",
+      details: "featureSlugs must include at least one slug",
+    };
+  }
+
+  return { success: true, featureSlugs };
 }
 
 /** Resolve dynasty slugs into versioned slug arrays and rewrite filters for downstream providers */
@@ -224,6 +258,49 @@ async function statsHandler(req: Request, res: Response) {
 
 router.get("/stats", statsHandler);
 internalRouter.get("/stats", statsHandler);
+internalRouter.get("/stats/engagement-latency", publicEngagementLatencyHandler);
+
+async function publicEngagementLatencyHandler(req: Request, res: Response) {
+  const input = parsePublicEngagementLatencyInput(req);
+  if (!input.success) {
+    res.status(input.status).json(input.details === undefined ? { error: input.error } : { error: input.error, details: input.details });
+    return;
+  }
+
+  try {
+    const groupedStats = await instantlyClient.getStats({
+      featureSlugs: input.featureSlugs.join(","),
+      groupBy: "workflowSlug",
+    });
+
+    if (!isGrouped(groupedStats)) {
+      throw new Error("instantly-service public stats did not return grouped workflowSlug stats");
+    }
+
+    const workflowSlugs = Array.from(new Set(groupedStats.groups.map((group) => group.key).filter(Boolean)));
+    if (workflowSlugs.length === 0) {
+      res.json({ groups: [] });
+      return;
+    }
+
+    const groups = Object.fromEntries(
+      workflowSlugs.map((workflowSlug) => [workflowSlug, { workflowSlugs: [workflowSlug] }]),
+    );
+    const latency = await instantlyClient.getPublicEngagementLatencyGroups(groups);
+
+    res.json({
+      groups: latency.groups.map((group) => ({
+        key: group.key,
+        timeToFirstLinkClick: group.timeToFirstLinkClick,
+        timeToFirstPositiveReply: group.timeToFirstPositiveReply,
+      })),
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[email-gateway] Public engagement latency failed: ${message}`);
+    res.status(502).json({ error: "Failed to fetch engagement latency", details: message });
+  }
+}
 
 async function handleFlat(
   res: Response,

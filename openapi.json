@@ -1540,6 +1540,65 @@
           "key"
         ]
       },
+      "PublicEngagementLatencyResponse": {
+        "type": "object",
+        "properties": {
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicEngagementLatencyGroup"
+            },
+            "description": "One public-safe latency aggregate per workflow slug."
+          }
+        },
+        "required": [
+          "groups"
+        ]
+      },
+      "PublicEngagementLatencyGroup": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Workflow slug for this public-safe aggregate group."
+          },
+          "timeToFirstLinkClick": {
+            "$ref": "#/components/schemas/EngagementLatencyMetric"
+          },
+          "timeToFirstPositiveReply": {
+            "$ref": "#/components/schemas/EngagementLatencyMetric"
+          }
+        },
+        "required": [
+          "key",
+          "timeToFirstLinkClick",
+          "timeToFirstPositiveReply"
+        ]
+      },
+      "EngagementLatencyMetric": {
+        "type": "object",
+        "properties": {
+          "averageMs": {
+            "type": "number",
+            "nullable": true,
+            "description": "Average elapsed time in milliseconds. Null when sampleSize is 0."
+          },
+          "medianMs": {
+            "type": "number",
+            "nullable": true,
+            "description": "Median elapsed time in milliseconds. Null when sampleSize is 0."
+          },
+          "sampleSize": {
+            "type": "integer",
+            "description": "Number of recipients included in the aggregate."
+          }
+        },
+        "required": [
+          "averageMs",
+          "medianMs",
+          "sampleSize"
+        ]
+      },
       "StatusResponse": {
         "type": "object",
         "properties": {
@@ -3060,6 +3119,84 @@
                       "$ref": "#/components/schemas/GroupedStatsResponse"
                     }
                   ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/stats/engagement-latency": {
+      "get": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Get public-safe engagement latency by workflow slug",
+        "description": "Returns public-safe sales outreach engagement latency aggregates grouped by workflow slug for the supplied feature slugs. The gateway delegates average/median timing math to the broadcast provider's dated email event aggregate and returns only averageMs, medianMs, and sampleSize. No lead emails, recipient IDs, campaign IDs or names, org details, message bodies, or message internals are exposed. Only `groupBy=workflowSlug` is supported.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated feature slugs to filter by"
+            },
+            "required": true,
+            "description": "Comma-separated feature slugs to filter by",
+            "name": "featureSlugs",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Only workflowSlug is supported"
+            },
+            "required": true,
+            "description": "Only workflowSlug is supported",
+            "name": "groupBy",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Public-safe engagement latency aggregates by workflow slug.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicEngagementLatencyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request or unsupported grouping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
