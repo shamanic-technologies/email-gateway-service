@@ -101,6 +101,23 @@ export interface ProviderStatsGrouped {
 
 export type ProviderStatsResult = ProviderStatsFlat | ProviderStatsGrouped;
 
+export interface EngagementLatencyMetric {
+  averageMs: number | null;
+  medianMs: number | null;
+  sampleSize: number;
+}
+
+export interface ProviderEngagementLatencyGroup {
+  key: string;
+  workflowSlugs: string[];
+  timeToFirstLinkClick: EngagementLatencyMetric;
+  timeToFirstPositiveReply: EngagementLatencyMetric;
+}
+
+export interface ProviderEngagementLatencyGroupedResponse {
+  groups: ProviderEngagementLatencyGroup[];
+}
+
 function buildStatsQuery(filters: Record<string, unknown>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(filters)) {
@@ -128,6 +145,13 @@ export async function getStats(filters: {
   const basePath = ctx?.orgId ? "/orgs/stats" : "/public/stats";
   const path = basePath + buildStatsQuery(filters);
   return request<ProviderStatsResult>(path, { ctx });
+}
+
+export async function getPublicEngagementLatencyGroups(groups: Record<string, { workflowSlugs: string[] }>) {
+  return request<ProviderEngagementLatencyGroupedResponse>("/public/stats/engagement-latency/grouped", {
+    method: "POST",
+    body: { groups },
+  });
 }
 
 // StatusScope re-exported from shared contract.

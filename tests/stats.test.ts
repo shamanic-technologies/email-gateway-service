@@ -125,6 +125,28 @@ function mockGroupedInstantly(groups: Array<{ key: string; recipientOverrides?: 
   };
 }
 
+function mockEngagementLatencyGroups(groups: Array<{
+  key: string;
+  workflowSlugs?: string[];
+  timeToFirstLinkClick: { averageMs: number | null; medianMs: number | null; sampleSize: number };
+  timeToFirstPositiveReply: { averageMs: number | null; medianMs: number | null; sampleSize: number };
+  extra?: Record<string, unknown>;
+}>) {
+  return {
+    ok: true,
+    json: () =>
+      Promise.resolve({
+        groups: groups.map((group) => ({
+          key: group.key,
+          workflowSlugs: group.workflowSlugs ?? [group.key],
+          timeToFirstLinkClick: group.timeToFirstLinkClick,
+          timeToFirstPositiveReply: group.timeToFirstPositiveReply,
+          ...group.extra,
+        })),
+      }),
+  };
+}
+
 describe("GET /orgs/stats", () => {
   beforeEach(() => {
     mockFetch.mockReset();
@@ -1139,6 +1161,20 @@ describe("GET /public/stats", () => {
     expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
   });
 
+  it("keeps existing public stats count behavior backward-compatible", async () => {
+    mockFetch.mockResolvedValueOnce(mockGroupedInstantly([{ key: "wf_1" }]));
+
+    const res = await serviceAuthGet("/public/stats?type=broadcast&featureSlugs=sales-cold-email&groupBy=workflowSlug");
+
+    expect(res.status).toBe(200);
+    expect(res.body.groups).toHaveLength(1);
+    expect(res.body.groups[0].key).toBe("wf_1");
+    expect(res.body.groups[0].broadcast.recipientStats.sent).toBe(35);
+    expect(res.body.groups[0].timeToFirstLinkClick).toBeUndefined();
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(mockFetch.mock.calls[0][0]).toContain("http://localhost:3011/public/stats");
+  });
+
   it("calls downstream /stats (not /stats/public) and forwards headers when caller provides identity headers", async () => {
     mockFetch.mockResolvedValueOnce(mockInstantlyStats());
 
@@ -1193,5 +1229,137 @@ describe("GET /public/stats", () => {
     expect(headers["x-brand-id"]).toBe("brand_pub");
     expect(headers["x-workflow-slug"]).toBe("wf_pub");
     expect(headers["x-feature-slug"]).toBe("feat_pub");
+  });
+
+  describe("GET /public/stats/engagement-latency", () => {
+    it("returns workflow-grouped public engagement latency from the producer aggregate", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("/public/stats/engagement-latency/grouped")) {
+          return Promise.resolve(mockEngagementLatencyGroups([
+            {
+              key: "workflow-a",
+              timeToFirstLinkClick: { averageMs: 86_400_000, medianMs: 43_200_000, sampleSize: 4 },
+              timeToFirstPositiveReply: { averageMs: 172_800_000, medianMs: 129_600_000, sampleSize: 3 },
+            },
+            {
+              key: "workflow-b",
+              timeToFirstLinkClick: { averageMs: 10_000, medianMs: 10_000, sampleSize: 1 },
+              timeToFirstPositiveReply: { averageMs: null, medianMs: null, sampleSize: 0 },
+            },
+          ]));
+        }
+        if (url.includes("/public/stats")) {
+          return Promise.resolve(mockGroupedInstantly([{ key: "workflow-a" }, { key: "workflow-b" }]));
+        }
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await serviceAuthGet("/public/stats/engagement-latency?featureSlugs=sales-cold-email&groupBy=workflowSlug");
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        groups: [
+          {
+            key: "workflow-a",
+            timeToFirstLinkClick: { averageMs: 86_400_000, medianMs: 43_200_000, sampleSize: 4 },
+            timeToFirstPositiveReply: { averageMs: 172_800_000, medianMs: 129_600_000, sampleSize: 3 },
+          },
+          {
+            key: "workflow-b",
+            timeToFirstLinkClick: { averageMs: 10_000, medianMs: 10_000, sampleSize: 1 },
+            timeToFirstPositiveReply: { averageMs: null, medianMs: null, sampleSize: 0 },
+          },
+        ],
+      });
+
+      const discoveryUrl = new URL(mockFetch.mock.calls[0][0]);
+      expect(discoveryUrl.pathname).toBe("/public/stats");
+      expect(discoveryUrl.searchParams.get("featureSlugs")).toBe("sales-cold-email");
+      expect(discoveryUrl.searchParams.get("groupBy")).toBe("workflowSlug");
+
+      const [latencyUrl, latencyOptions] = mockFetch.mock.calls[1];
+      expect(latencyUrl).toBe("http://localhost:3011/public/stats/engagement-latency/grouped");
+      expect(latencyOptions.method).toBe("POST");
+      expect(JSON.parse(latencyOptions.body)).toEqual({
+        groups: {
+          "workflow-a": { workflowSlugs: ["workflow-a"] },
+          "workflow-b": { workflowSlugs: ["workflow-b"] },
+        },
+      });
+      expect(latencyOptions.headers["x-org-id"]).toBeUndefined();
+      expect(latencyOptions.headers["x-user-id"]).toBeUndefined();
+      expect(latencyOptions.headers["x-run-id"]).toBeUndefined();
+    });
+
+    it("preserves null average and median semantics when sample size is zero", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("/public/stats/engagement-latency/grouped")) {
+          return Promise.resolve(mockEngagementLatencyGroups([
+            {
+              key: "workflow-empty",
+              timeToFirstLinkClick: { averageMs: null, medianMs: null, sampleSize: 0 },
+              timeToFirstPositiveReply: { averageMs: null, medianMs: null, sampleSize: 0 },
+            },
+          ]));
+        }
+        if (url.includes("/public/stats")) {
+          return Promise.resolve(mockGroupedInstantly([{ key: "workflow-empty" }]));
+        }
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await serviceAuthGet("/public/stats/engagement-latency?featureSlugs=sales-cold-email&groupBy=workflowSlug");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups[0].timeToFirstLinkClick).toEqual({ averageMs: null, medianMs: null, sampleSize: 0 });
+      expect(res.body.groups[0].timeToFirstPositiveReply).toEqual({ averageMs: null, medianMs: null, sampleSize: 0 });
+    });
+
+    it("fails loudly for unsupported groupings", async () => {
+      const res = await serviceAuthGet("/public/stats/engagement-latency?featureSlugs=sales-cold-email&groupBy=recipientEmail");
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Unsupported groupBy");
+      expect(res.body.details).toBe("Only groupBy=workflowSlug is supported");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("returns no PII or campaign internals from producer responses", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("/public/stats/engagement-latency/grouped")) {
+          return Promise.resolve(mockEngagementLatencyGroups([
+            {
+              key: "workflow-safe",
+              timeToFirstLinkClick: { averageMs: 1, medianMs: 1, sampleSize: 1 },
+              timeToFirstPositiveReply: { averageMs: 2, medianMs: 2, sampleSize: 1 },
+              extra: {
+                leadEmail: "lead@example.com",
+                recipientId: "recipient_1",
+                campaignId: "campaign_1",
+                campaignName: "Campaign Name",
+                orgId: "org_1",
+                messageBody: "private",
+              },
+            },
+          ]));
+        }
+        if (url.includes("/public/stats")) {
+          return Promise.resolve(mockGroupedInstantly([{ key: "workflow-safe" }]));
+        }
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await serviceAuthGet("/public/stats/engagement-latency?featureSlugs=sales-cold-email&groupBy=workflowSlug");
+
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.groups[0])).toEqual([
+        "key",
+        "timeToFirstLinkClick",
+        "timeToFirstPositiveReply",
+      ]);
+      expect(JSON.stringify(res.body)).not.toContain("lead@example.com");
+      expect(JSON.stringify(res.body)).not.toContain("campaign_1");
+      expect(JSON.stringify(res.body)).not.toContain("private");
+    });
   });
 });
