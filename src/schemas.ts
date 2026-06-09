@@ -205,6 +205,43 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
+export const PublicEngagementLatencyQuerySchema = z
+  .object({
+    featureSlugs: z.string().describe("Comma-separated feature slugs to filter by"),
+    groupBy: z.string().describe("Only workflowSlug is supported"),
+  })
+  .openapi("PublicEngagementLatencyQuery");
+
+export type PublicEngagementLatencyQuery = z.infer<typeof PublicEngagementLatencyQuerySchema>;
+
+export const EngagementLatencyMetricSchema = z
+  .object({
+    averageMs: z.number().nullable().describe("Average elapsed time in milliseconds. Null when sampleSize is 0."),
+    medianMs: z.number().nullable().describe("Median elapsed time in milliseconds. Null when sampleSize is 0."),
+    sampleSize: z.number().int().describe("Number of recipients included in the aggregate."),
+  })
+  .openapi("EngagementLatencyMetric");
+
+export type EngagementLatencyMetric = z.infer<typeof EngagementLatencyMetricSchema>;
+
+export const PublicEngagementLatencyGroupSchema = z
+  .object({
+    key: z.string().describe("Workflow slug for this public-safe aggregate group."),
+    timeToFirstLinkClick: EngagementLatencyMetricSchema,
+    timeToFirstPositiveReply: EngagementLatencyMetricSchema,
+  })
+  .openapi("PublicEngagementLatencyGroup");
+
+export type PublicEngagementLatencyGroup = z.infer<typeof PublicEngagementLatencyGroupSchema>;
+
+export const PublicEngagementLatencyResponseSchema = z
+  .object({
+    groups: z.array(PublicEngagementLatencyGroupSchema).describe("One public-safe latency aggregate per workflow slug."),
+  })
+  .openapi("PublicEngagementLatencyResponse");
+
+export type PublicEngagementLatencyResponse = z.infer<typeof PublicEngagementLatencyResponseSchema>;
+
 // --- POST /orgs/status ---
 
 const StatusResultSchema = z
@@ -507,6 +544,34 @@ registry.registerPath({
         },
       },
     },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/public/stats/engagement-latency",
+  tags: ["Stats"],
+  summary: "Get public-safe engagement latency by workflow slug",
+  description:
+    "Returns public-safe sales outreach engagement latency aggregates grouped by workflow slug for the supplied feature slugs. " +
+    "The gateway delegates average/median timing math to the broadcast provider's dated email event aggregate and returns only averageMs, medianMs, and sampleSize. " +
+    "No lead emails, recipient IDs, campaign IDs or names, org details, message bodies, or message internals are exposed. Only `groupBy=workflowSlug` is supported.",
+  security: [{ apiKey: [] }],
+  request: {
+    query: PublicEngagementLatencyQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "Public-safe engagement latency aggregates by workflow slug.",
+      content: {
+        "application/json": {
+          schema: PublicEngagementLatencyResponseSchema,
+        },
+      },
+    },
+    400: { description: "Invalid request or unsupported grouping", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
     502: { description: "Upstream service error", content: errorContent },
   },
