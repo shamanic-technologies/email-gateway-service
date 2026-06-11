@@ -412,6 +412,35 @@ describe("POST /orgs/send", () => {
         expect(res.body.details.fieldErrors.inReplyTo[0]).toMatch(/Message-ID/i);
       });
     });
+
+    describe("bcc forwarding", () => {
+      it("forwards bcc to postmark-service when provided", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_bcc" }),
+        });
+
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ bcc: "a@x.com,b@y.com" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.bcc).toBe("a@x.com,b@y.com");
+      });
+
+      it("does not include bcc in body when absent (existing behavior)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_nobcc" }),
+        });
+
+        await authedPost("/orgs/send").send(buildTransactionalBody());
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.bcc).toBeUndefined();
+      });
+    });
   });
 
   describe("idempotency", () => {
