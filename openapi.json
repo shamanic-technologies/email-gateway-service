@@ -200,6 +200,10 @@
                 "type": "string",
                 "description": "Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the downstream provider resolves its own default."
               },
+              "bcc": {
+                "type": "string",
+                "description": "Blind-carbon-copy recipients as a comma-separated email list. Forwarded to postmark-service, which sets Postmark's Bcc header. Transactional only."
+              },
               "inReplyTo": {
                 "type": "string",
                 "pattern": "^<[^<>\\s]+@[^<>\\s]+>$",

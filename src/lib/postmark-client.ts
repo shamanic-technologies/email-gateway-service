@@ -63,6 +63,7 @@ export async function sendEmail(body: {
   campaignId?: string;
   from?: string;
   to: string;
+  bcc?: string;
   subject: string;
   htmlBody?: string;
   textBody?: string;

@@ -60,6 +60,7 @@ router.post("/send", async (req: Request, res: Response) => {
         campaignId: effectiveCampaignId,
         from: body.from,
         to: body.to,
+        bcc: body.bcc,
         subject: body.subject,
         htmlBody: htmlWithSignature,
         textBody: body.textBody,
