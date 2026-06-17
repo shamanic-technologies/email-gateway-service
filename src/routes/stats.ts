@@ -176,8 +176,12 @@ function isDayGroupBy(filters: Record<string, unknown>): boolean {
   return filters.groupBy === "day";
 }
 
+function hasBroadcastOnlyAttributionFilters(filters: Record<string, unknown>): boolean {
+  return filters.goal !== undefined || filters.brandProfileId !== undefined;
+}
+
 function withoutBroadcastOnlyFilters(filters: Record<string, unknown>): Record<string, unknown> {
-  const { timezone, ...rest } = filters;
+  const { timezone, goal, brandProfileId, ...rest } = filters;
   return rest;
 }
 
@@ -205,8 +209,12 @@ function extractPartialContext(req: Request): OrgContext | undefined {
   const brandId = typeof req.headers["x-brand-id"] === "string" ? req.headers["x-brand-id"] : undefined;
   const workflowSlug = typeof req.headers["x-workflow-slug"] === "string" ? req.headers["x-workflow-slug"] : undefined;
   const featureSlug = typeof req.headers["x-feature-slug"] === "string" ? req.headers["x-feature-slug"] : undefined;
+  const goal = typeof req.headers["x-goal"] === "string" ? req.headers["x-goal"] : undefined;
+  const brandProfileId = typeof req.headers["x-brand-profile-id"] === "string" ? req.headers["x-brand-profile-id"] : undefined;
+  const customerPersonaId = typeof req.headers["x-customer-persona-id"] === "string" ? req.headers["x-customer-persona-id"] : undefined;
+  const customerProfileId = typeof req.headers["x-customer-profile-id"] === "string" ? req.headers["x-customer-profile-id"] : undefined;
 
-  const hasAny = orgId || userId || runId || campaignId || brandId || workflowSlug || featureSlug;
+  const hasAny = orgId || userId || runId || campaignId || brandId || workflowSlug || featureSlug || goal || brandProfileId || customerPersonaId || customerProfileId;
   if (!hasAny) return undefined;
 
   return {
@@ -217,6 +225,10 @@ function extractPartialContext(req: Request): OrgContext | undefined {
     brandId,
     workflowSlug,
     featureSlug,
+    goal,
+    brandProfileId,
+    customerPersonaId,
+    customerProfileId,
   };
 }
 
@@ -249,6 +261,14 @@ async function statsHandler(req: Request, res: Response) {
     }
 
     const filters: Record<string, unknown> = { ...resolvedFilters, ...(ctx?.orgId && { orgId: ctx.orgId }), ...(ctx?.userId && { userId: ctx.userId }) };
+
+    if (hasBroadcastOnlyAttributionFilters(filters) && type !== "broadcast") {
+      res.status(400).json({
+        error: "Unsupported stats filters",
+        details: "goal and brandProfileId filters require type=broadcast",
+      });
+      return;
+    }
 
     if (filters.groupBy) {
       if (isDynastyGroupBy(input.filters.groupBy)) {

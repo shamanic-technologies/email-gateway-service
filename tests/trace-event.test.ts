@@ -38,6 +38,10 @@ const fullCtx: OrgContext = {
   campaignId: "camp_def",
   workflowSlug: "onboarding-v2",
   featureSlug: "welcome-email",
+  goal: "signup",
+  brandProfileId: "brand_profile_123",
+  customerPersonaId: "persona_abc",
+  customerProfileId: "profile_def",
 };
 
 describe("traceEvent", () => {
@@ -54,7 +58,7 @@ describe("traceEvent", () => {
     });
   });
 
-  it("forwards all 6 identity headers from OrgContext", () => {
+  it("forwards identity and attribution headers from OrgContext", () => {
     traceEvent(fullCtx, "email.sent", "detail");
 
     const [, opts] = mockFetch.mock.calls[0];
@@ -64,6 +68,10 @@ describe("traceEvent", () => {
     expect(opts.headers["x-campaign-id"]).toBe("camp_def");
     expect(opts.headers["x-workflow-slug"]).toBe("onboarding-v2");
     expect(opts.headers["x-feature-slug"]).toBe("welcome-email");
+    expect(opts.headers["x-goal"]).toBe("signup");
+    expect(opts.headers["x-brand-profile-id"]).toBe("brand_profile_123");
+    expect(opts.headers["x-customer-persona-id"]).toBe("persona_abc");
+    expect(opts.headers["x-customer-profile-id"]).toBe("profile_def");
   });
 
   it("sends API key as X-API-Key header", () => {

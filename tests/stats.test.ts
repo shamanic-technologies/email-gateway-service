@@ -414,7 +414,11 @@ describe("GET /orgs/stats", () => {
         .set("x-campaign-id", "camp_hdr")
         .set("x-brand-id", "brand_hdr")
         .set("x-workflow-slug", "wf_hdr")
-        .set("x-feature-slug", "feat_hdr");
+        .set("x-feature-slug", "feat_hdr")
+        .set("x-goal", "signup")
+        .set("x-brand-profile-id", "brand_profile_hdr")
+        .set("x-customer-persona-id", "persona_hdr")
+        .set("x-customer-profile-id", "profile_hdr");
 
       for (const call of mockFetch.mock.calls) {
         const headers = call[1].headers;
@@ -422,6 +426,10 @@ describe("GET /orgs/stats", () => {
         expect(headers["x-brand-id"]).toBe("brand_hdr");
         expect(headers["x-workflow-slug"]).toBe("wf_hdr");
         expect(headers["x-feature-slug"]).toBe("feat_hdr");
+        expect(headers["x-goal"]).toBe("signup");
+        expect(headers["x-brand-profile-id"]).toBe("brand_profile_hdr");
+        expect(headers["x-customer-persona-id"]).toBe("persona_hdr");
+        expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
       }
     });
 
@@ -549,6 +557,31 @@ describe("GET /orgs/stats", () => {
         expect(params.get("featureSlugs")).toBe("feat_1");
       }
     });
+
+    it("forwards goal and brand profile filters only when broadcast is explicit", async () => {
+      mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+
+      const res = await authedGet(
+        "/orgs/stats?type=broadcast&goal=signup&brandProfileId=brand_profile_1&customerProfileId=profile_1&brandId=brand_1&featureSlugs=feat_1"
+      );
+
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("goal")).toBe("signup");
+      expect(params.get("brandProfileId")).toBe("brand_profile_1");
+      expect(params.get("customerProfileId")).toBe("profile_1");
+      expect(params.get("brandId")).toBe("brand_1");
+      expect(params.get("featureSlugs")).toBe("feat_1");
+    });
+
+    it("rejects goal/profile scoped stats when the provider type is ambiguous", async () => {
+      const res = await authedGet("/orgs/stats?goal=signup&brandProfileId=brand_profile_1&brandId=brand_1");
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("Unsupported stats filters");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
   });
 
   describe("groupBy", () => {
@@ -660,7 +693,9 @@ describe("GET /orgs/stats", () => {
         ])
       );
 
-      const res = await authedGet("/orgs/stats?type=broadcast&brandId=brand_1&featureSlugs=active_goal_feature&groupBy=customerPersonaId");
+      const res = await authedGet(
+        "/orgs/stats?type=broadcast&goal=signup&brandProfileId=brand_profile_1&brandId=brand_1&featureSlugs=active_goal_feature&groupBy=customerPersonaId"
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.groups).toHaveLength(2);
@@ -674,6 +709,8 @@ describe("GET /orgs/stats", () => {
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("groupBy")).toBe("customerPersonaId");
+      expect(params.get("goal")).toBe("signup");
+      expect(params.get("brandProfileId")).toBe("brand_profile_1");
       expect(params.get("brandId")).toBe("brand_1");
       expect(params.get("featureSlugs")).toBe("active_goal_feature");
     });

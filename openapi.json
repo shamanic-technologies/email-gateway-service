@@ -173,6 +173,14 @@
                 },
                 "description": "Custom metadata key-value pairs"
               },
+              "goal": {
+                "type": "string",
+                "description": "Explicit active goal for attribution. Forwarded as provider metadata/variables when present; omitted values stay unattributed."
+              },
+              "brandProfileId": {
+                "type": "string",
+                "description": "Explicit brand profile ID for attribution. Forwarded as provider metadata/variables when present; omitted values stay unattributed."
+              },
               "customerPersonaId": {
                 "type": "string",
                 "description": "Explicit customer persona ID for attribution. Forwarded as provider metadata/variables when present; omitted values stay unattributed."
@@ -282,6 +290,14 @@
                   "type": "string"
                 },
                 "description": "Custom metadata key-value pairs"
+              },
+              "goal": {
+                "type": "string",
+                "description": "Explicit active goal for attribution. Forwarded as provider metadata/variables when present; omitted values stay unattributed."
+              },
+              "brandProfileId": {
+                "type": "string",
+                "description": "Explicit brand profile ID for attribution. Forwarded as provider metadata/variables when present; omitted values stay unattributed."
               },
               "customerPersonaId": {
                 "type": "string",
@@ -2586,7 +2602,7 @@
           "Email Routing"
         ],
         "summary": "Send an email",
-        "description": "Send a transactional or broadcast email via the appropriate provider. When `customerPersonaId` or `customerProfileId` is supplied in the body or matching attribution headers, the gateway forwards those exact values as provider metadata/variables. Missing attribution stays missing and is never inferred from recipient email, campaign, brand, or hashes.",
+        "description": "Send a transactional or broadcast email via the appropriate provider. When `goal`, `brandProfileId`, `customerPersonaId`, or `customerProfileId` is supplied in the body or matching attribution headers, the gateway forwards those exact values as provider metadata/variables. Missing attribution stays missing and is never inferred from recipient email, campaign, brand, or hashes.",
         "security": [
           {
             "apiKey": []
@@ -2661,6 +2677,26 @@
             "required": false,
             "description": "Feature slug for tracking (optional, propagated through the chain)",
             "name": "x-feature-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit active goal for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit active goal for attribution. Forwarded only when present; never inferred.",
+            "name": "x-goal",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred.",
+            "name": "x-brand-profile-id",
             "in": "header"
           },
           {
@@ -2814,7 +2850,7 @@
           "Stats"
         ],
         "summary": "Get aggregated email stats",
-        "description": "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\n`groupBy=customerPersonaId` and `groupBy=customerProfileId` expose only provider rows that already carry explicit attribution from send metadata/variables or provider events. Untagged outcomes remain unattributed and do not create a persona/profile row.\n\n`groupBy=day` is broadcast-only and delegates local-calendar grouping to instantly-service; pass `timezone` as an IANA timezone when needed. Transactional stats do not produce day groups, so day groups contain only `broadcast` data.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
+        "description": "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\n`groupBy=customerPersonaId` and `groupBy=customerProfileId` expose only provider rows that already carry explicit attribution from send metadata/variables or provider events. Untagged outcomes remain unattributed and do not create a persona/profile row.\n\n`goal` and `brandProfileId` are broadcast-only attribution filters and require `type=broadcast`; the gateway rejects ambiguous all-provider requests instead of mixing scoped broadcast stats with unscoped transactional stats.\n\n`groupBy=day` is broadcast-only and delegates local-calendar grouping to instantly-service; pass `timezone` as an IANA timezone when needed. Transactional stats do not produce day groups, so day groups contain only `broadcast` data.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
         "security": [
           {
             "apiKey": []
@@ -2863,6 +2899,26 @@
             "required": false,
             "description": "Filter by campaign ID",
             "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter to broadcast sends/events with this explicit active-goal attribution. Requires type=broadcast."
+            },
+            "required": false,
+            "description": "Filter to broadcast sends/events with this explicit active-goal attribution. Requires type=broadcast.",
+            "name": "goal",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter to broadcast sends/events with this explicit brand-profile attribution. Requires type=broadcast."
+            },
+            "required": false,
+            "description": "Filter to broadcast sends/events with this explicit brand-profile attribution. Requires type=broadcast.",
+            "name": "brandProfileId",
             "in": "query"
           },
           {
@@ -3030,6 +3086,26 @@
           {
             "schema": {
               "type": "string",
+              "description": "Explicit active goal for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit active goal for attribution. Forwarded only when present; never inferred.",
+            "name": "x-goal",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred.",
+            "name": "x-brand-profile-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Explicit customer persona ID for attribution. Forwarded only when present; never inferred."
             },
             "required": false,
@@ -3095,7 +3171,7 @@
           "Stats"
         ],
         "summary": "Get aggregated email stats (public, no identity headers required)",
-        "description": "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`). `groupBy=customerPersonaId` and `groupBy=customerProfileId` return only explicitly attributed provider rows; untagged outcomes remain absent. `groupBy=day` is broadcast-only, accepts optional IANA `timezone`, and returns groups with only `broadcast` populated.",
+        "description": "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`). `groupBy=customerPersonaId` and `groupBy=customerProfileId` return only explicitly attributed provider rows; untagged outcomes remain absent. `goal` and `brandProfileId` require `type=broadcast`. `groupBy=day` is broadcast-only, accepts optional IANA `timezone`, and returns groups with only `broadcast` populated.",
         "security": [
           {
             "apiKey": []
@@ -3144,6 +3220,26 @@
             "required": false,
             "description": "Filter by campaign ID",
             "name": "campaignId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter to broadcast sends/events with this explicit active-goal attribution. Requires type=broadcast."
+            },
+            "required": false,
+            "description": "Filter to broadcast sends/events with this explicit active-goal attribution. Requires type=broadcast.",
+            "name": "goal",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Filter to broadcast sends/events with this explicit brand-profile attribution. Requires type=broadcast."
+            },
+            "required": false,
+            "description": "Filter to broadcast sends/events with this explicit brand-profile attribution. Requires type=broadcast.",
+            "name": "brandProfileId",
             "in": "query"
           },
           {
@@ -3439,6 +3535,26 @@
             "required": false,
             "description": "Feature slug for tracking (optional, propagated through the chain)",
             "name": "x-feature-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit active goal for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit active goal for attribution. Forwarded only when present; never inferred.",
+            "name": "x-goal",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred.",
+            "name": "x-brand-profile-id",
             "in": "header"
           },
           {
@@ -3796,6 +3912,26 @@
           {
             "schema": {
               "type": "string",
+              "description": "Explicit active goal for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit active goal for attribution. Forwarded only when present; never inferred.",
+            "name": "x-goal",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred.",
+            "name": "x-brand-profile-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
               "description": "Explicit customer persona ID for attribution. Forwarded only when present; never inferred."
             },
             "required": false,
@@ -4001,6 +4137,26 @@
             "required": false,
             "description": "Feature slug for tracking (optional, propagated through the chain)",
             "name": "x-feature-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit active goal for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit active goal for attribution. Forwarded only when present; never inferred.",
+            "name": "x-goal",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred."
+            },
+            "required": false,
+            "description": "Explicit brand profile ID for attribution. Forwarded only when present; never inferred.",
+            "name": "x-brand-profile-id",
             "in": "header"
           },
           {

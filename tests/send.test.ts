@@ -223,6 +223,8 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(
         buildBroadcastBody({
+          goal: "signup",
+          brandProfileId: "brand_profile_a",
           customerPersonaId: "persona_a",
           customerProfileId: "profile_a",
           metadata: { source: "campaign-builder" },
@@ -232,6 +234,8 @@ describe("POST /orgs/send", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.variables).toEqual({
         source: "campaign-builder",
+        goal: "signup",
+        brandProfileId: "brand_profile_a",
         customerPersonaId: "persona_a",
         customerProfileId: "profile_a",
       });
@@ -245,16 +249,22 @@ describe("POST /orgs/send", () => {
       });
 
       await authedPost("/orgs/send")
+        .set("x-goal", "meetingBooked")
+        .set("x-brand-profile-id", "brand_profile_hdr")
         .set("x-customer-persona-id", "persona_hdr")
         .set("x-customer-profile-id", "profile_hdr")
         .send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.variables).toEqual({
+        goal: "meetingBooked",
+        brandProfileId: "brand_profile_hdr",
         customerPersonaId: "persona_hdr",
         customerProfileId: "profile_hdr",
       });
       const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-goal"]).toBe("meetingBooked");
+      expect(headers["x-brand-profile-id"]).toBe("brand_profile_hdr");
       expect(headers["x-customer-persona-id"]).toBe("persona_hdr");
       expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
     });
@@ -401,6 +411,8 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(
         buildTransactionalBody({
+          goal: "signup",
+          brandProfileId: "brand_profile_a",
           customerPersonaId: "persona_a",
           customerProfileId: "profile_a",
           metadata: { source: "campaign-builder" },
@@ -410,6 +422,8 @@ describe("POST /orgs/send", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.metadata).toEqual({
         source: "campaign-builder",
+        goal: "signup",
+        brandProfileId: "brand_profile_a",
         customerPersonaId: "persona_a",
         customerProfileId: "profile_a",
       });
@@ -422,16 +436,22 @@ describe("POST /orgs/send", () => {
       });
 
       await authedPost("/orgs/send")
+        .set("x-goal", "meetingBooked")
+        .set("x-brand-profile-id", "brand_profile_hdr")
         .set("x-customer-persona-id", "persona_hdr")
         .set("x-customer-profile-id", "profile_hdr")
         .send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.metadata).toEqual({
+        goal: "meetingBooked",
+        brandProfileId: "brand_profile_hdr",
         customerPersonaId: "persona_hdr",
         customerProfileId: "profile_hdr",
       });
       const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-goal"]).toBe("meetingBooked");
+      expect(headers["x-brand-profile-id"]).toBe("brand_profile_hdr");
       expect(headers["x-customer-persona-id"]).toBe("persona_hdr");
       expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
     });
@@ -863,7 +883,9 @@ describe("POST /orgs/send", () => {
         .set("x-campaign-id", "hdr_campaign")
         .set("x-brand-id", "hdr_brand")
         .set("x-workflow-slug", "hdr_workflow")
-        .set("x-feature-slug", "hdr_feature");
+        .set("x-feature-slug", "hdr_feature")
+        .set("x-goal", "hdr_goal")
+        .set("x-brand-profile-id", "hdr_brand_profile");
     }
 
     it("forwards tracking headers to instantly-service for broadcast", async () => {
@@ -880,6 +902,8 @@ describe("POST /orgs/send", () => {
       expect(headers["x-brand-id"]).toBe("hdr_brand");
       expect(headers["x-workflow-slug"]).toBe("hdr_workflow");
       expect(headers["x-feature-slug"]).toBe("hdr_feature");
+      expect(headers["x-goal"]).toBe("hdr_goal");
+      expect(headers["x-brand-profile-id"]).toBe("hdr_brand_profile");
     });
 
     it("forwards tracking headers to postmark-service for transactional", async () => {
@@ -895,6 +919,8 @@ describe("POST /orgs/send", () => {
       expect(postmarkHeaders["x-brand-id"]).toBe("hdr_brand");
       expect(postmarkHeaders["x-workflow-slug"]).toBe("hdr_workflow");
       expect(postmarkHeaders["x-feature-slug"]).toBe("hdr_feature");
+      expect(postmarkHeaders["x-goal"]).toBe("hdr_goal");
+      expect(postmarkHeaders["x-brand-profile-id"]).toBe("hdr_brand_profile");
     });
 
     it("does not include brandId/campaignId/workflowSlug in body for broadcast (headers only)", async () => {

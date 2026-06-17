@@ -9,6 +9,8 @@ export interface OrgContext {
   brandId?: string;
   workflowSlug?: string;
   featureSlug?: string;
+  goal?: string;
+  brandProfileId?: string;
   customerPersonaId?: string;
   customerProfileId?: string;
 }
@@ -31,6 +33,8 @@ export function extractOrgContext(req: Request): OrgContext | null {
     brandId,
     workflowSlug: optionalString(req.headers["x-workflow-slug"]),
     featureSlug: optionalString(req.headers["x-feature-slug"]),
+    goal: optionalString(req.headers["x-goal"]),
+    brandProfileId: optionalString(req.headers["x-brand-profile-id"]),
     customerPersonaId: optionalString(req.headers["x-customer-persona-id"]),
     customerProfileId: optionalString(req.headers["x-customer-profile-id"]),
   };
