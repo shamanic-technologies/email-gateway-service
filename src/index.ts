@@ -33,12 +33,14 @@ app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, statsRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, manualQualificationsRoutes);
 
-app.listen(config.port, () => {
-  console.log(`[email-gateway] running on port ${config.port}`);
-  registerProviderRequirements().catch((err) => {
-    console.error("[email-gateway] Provider registration failed:", err.message);
-    process.exit(1);
+if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
+  app.listen(config.port, () => {
+    console.log(`[email-gateway] running on port ${config.port}`);
+    registerProviderRequirements().catch((err) => {
+      console.error("[email-gateway] Provider registration failed:", err.message);
+      process.exit(1);
+    });
   });
-});
+}
 
 export { app };

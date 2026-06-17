@@ -11,6 +11,28 @@ import { traceEvent } from "../lib/trace-event";
 
 const router = Router();
 
+type AttributionContext = {
+  customerPersonaId?: string;
+  customerProfileId?: string;
+};
+
+function resolveAttribution(body: { customerPersonaId?: string; customerProfileId?: string }, ctx: OrgContext): AttributionContext {
+  return {
+    customerPersonaId: body.customerPersonaId ?? ctx.customerPersonaId,
+    customerProfileId: body.customerProfileId ?? ctx.customerProfileId,
+  };
+}
+
+function mergeAttributionMetadata(
+  metadata: Record<string, string> | undefined,
+  attribution: AttributionContext,
+): Record<string, string> | undefined {
+  const merged: Record<string, string> = { ...(metadata ?? {}) };
+  if (attribution.customerPersonaId) merged.customerPersonaId = attribution.customerPersonaId;
+  if (attribution.customerProfileId) merged.customerProfileId = attribution.customerProfileId;
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
 router.post("/send", async (req: Request, res: Response) => {
   const parsed = SendRequestSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -42,6 +64,8 @@ router.post("/send", async (req: Request, res: Response) => {
   // Use context headers as fallbacks for body fields the LLM may have omitted
   const effectiveCampaignId = body.campaignId ?? ctx.campaignId;
   const effectiveWorkflowName = body.workflowSlug ?? ctx.workflowSlug;
+  const attribution = resolveAttribution(body, ctx);
+  const metadataWithAttribution = mergeAttributionMetadata(body.metadata, attribution);
 
   console.log(`[email-gateway] type=${body.type} to=${body.to} campaign=${effectiveCampaignId} runId=${ctx.runId} workflow=${effectiveWorkflowName}`);
 
@@ -66,7 +90,7 @@ router.post("/send", async (req: Request, res: Response) => {
         textBody: body.textBody,
         replyTo: body.replyTo,
         tag: body.tag,
-        metadata: body.metadata,
+        metadata: metadataWithAttribution,
         inReplyTo: body.inReplyTo,
         references: body.references,
         messageStream: body.messageStream,
@@ -89,7 +113,7 @@ router.post("/send", async (req: Request, res: Response) => {
         firstName: body.recipientFirstName,
         lastName: body.recipientLastName,
         company: body.recipientCompany,
-        variables: body.metadata,
+        variables: metadataWithAttribution,
         subject: body.subject,
         sequence: body.sequence,
       }, ctx);
