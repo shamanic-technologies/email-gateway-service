@@ -141,6 +141,7 @@ export async function getStats(filters: {
   workflowSlugs?: string;
   featureSlugs?: string;
   groupBy?: string;
+  timezone?: string;
 }, ctx?: OrgContext) {
   const basePath = ctx?.orgId ? "/orgs/stats" : "/public/stats";
   const path = basePath + buildStatsQuery(filters);

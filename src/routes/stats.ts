@@ -172,6 +172,15 @@ function rewriteGroupByForProvider(groupBy: string): string {
   return groupBy;
 }
 
+function isDayGroupBy(filters: Record<string, unknown>): boolean {
+  return filters.groupBy === "day";
+}
+
+function withoutBroadcastOnlyFilters(filters: Record<string, unknown>): Record<string, unknown> {
+  const { timezone, ...rest } = filters;
+  return rest;
+}
+
 function regroupByDynasty(
   groups: ProviderStatsGrouped["groups"],
   slugToDynastyMap: Map<string, string>,
@@ -309,7 +318,7 @@ async function handleFlat(
   ctx?: OrgContext,
 ) {
   if (type === "transactional") {
-    const raw = await postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], ctx);
+    const raw = await postmarkClient.getStats(withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0], ctx);
     res.json({ transactional: toChannelStats(raw as ProviderStatsFlat) });
     return;
   }
@@ -322,7 +331,7 @@ async function handleFlat(
 
   // No type specified: aggregate both
   const [postmarkResult, instantlyResult] = await Promise.allSettled([
-    postmarkClient.getStats(filters as Parameters<typeof postmarkClient.getStats>[0], ctx),
+    postmarkClient.getStats(withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0], ctx),
     instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx),
   ]);
 
@@ -351,10 +360,15 @@ async function handleGrouped(
   filters: Record<string, unknown>,
   ctx?: OrgContext,
 ) {
-  const castFilters = filters as Parameters<typeof postmarkClient.getStats>[0];
+  if (isDayGroupBy(filters)) {
+    return await handleDayGrouped(res, type, filters, ctx);
+  }
+
+  const postmarkFilters = withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0];
+  const instantlyFilters = filters as Parameters<typeof instantlyClient.getStats>[0];
 
   if (type === "transactional") {
-    const raw = await postmarkClient.getStats(castFilters, ctx);
+    const raw = await postmarkClient.getStats(postmarkFilters, ctx);
     if (!isGrouped(raw)) {
       res.json({ groups: [] });
       return;
@@ -368,7 +382,7 @@ async function handleGrouped(
   }
 
   if (type === "broadcast") {
-    const raw = await instantlyClient.getStats(castFilters, ctx);
+    const raw = await instantlyClient.getStats(instantlyFilters, ctx);
     if (!isGrouped(raw)) {
       res.json({ groups: [] });
       return;
@@ -383,8 +397,8 @@ async function handleGrouped(
 
   // No type: merge groups from both providers by key
   const [postmarkResult, instantlyResult] = await Promise.allSettled([
-    postmarkClient.getStats(castFilters, ctx),
-    instantlyClient.getStats(castFilters, ctx),
+    postmarkClient.getStats(postmarkFilters, ctx),
+    instantlyClient.getStats(instantlyFilters, ctx),
   ]);
 
   const merged = new Map<string, { transactional?: ChannelStats; broadcast?: ChannelStats }>();
@@ -417,6 +431,30 @@ async function handleGrouped(
   res.json({ groups });
 }
 
+async function handleDayGrouped(
+  res: Response,
+  type: string | undefined,
+  filters: Record<string, unknown>,
+  ctx?: OrgContext,
+) {
+  if (type === "transactional") {
+    res.json({ groups: [] });
+    return;
+  }
+
+  const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx);
+  if (!isGrouped(raw)) {
+    res.json({ groups: [] });
+    return;
+  }
+
+  const groups = raw.groups.map((g) => ({
+    key: g.key,
+    broadcast: { recipientStats: g.recipientStats, emailStats: g.emailStats } as ChannelStats,
+  }));
+  res.json({ groups });
+}
+
 async function handleDynastyGrouped(
   res: Response,
   type: string | undefined,
@@ -427,7 +465,8 @@ async function handleDynastyGrouped(
   // Rewrite groupBy for downstream providers
   const providerGroupBy = rewriteGroupByForProvider(dynastyGroupBy);
   const providerFilters = { ...filters, groupBy: providerGroupBy };
-  const castFilters = providerFilters as Parameters<typeof postmarkClient.getStats>[0];
+  const postmarkFilters = withoutBroadcastOnlyFilters(providerFilters) as Parameters<typeof postmarkClient.getStats>[0];
+  const instantlyFilters = providerFilters as Parameters<typeof instantlyClient.getStats>[0];
 
   // Fetch the dynasty map
   const fetchDynasties = dynastyGroupBy === "workflowDynastySlug"
@@ -438,7 +477,7 @@ async function handleDynastyGrouped(
 
   if (type === "transactional") {
     const [raw, dynasties] = await Promise.all([
-      postmarkClient.getStats(castFilters, ctx),
+      postmarkClient.getStats(postmarkFilters, ctx),
       fetchDynasties(identityHeaders),
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
@@ -453,7 +492,7 @@ async function handleDynastyGrouped(
 
   if (type === "broadcast") {
     const [raw, dynasties] = await Promise.all([
-      instantlyClient.getStats(castFilters, ctx),
+      instantlyClient.getStats(instantlyFilters, ctx),
       fetchDynasties(identityHeaders),
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
@@ -468,8 +507,8 @@ async function handleDynastyGrouped(
 
   // No type: merge both providers
   const [postmarkResult, instantlyResult, dynasties] = await Promise.all([
-    postmarkClient.getStats(castFilters, ctx).catch((e: Error) => e),
-    instantlyClient.getStats(castFilters, ctx).catch((e: Error) => e),
+    postmarkClient.getStats(postmarkFilters, ctx).catch((e: Error) => e),
+    instantlyClient.getStats(instantlyFilters, ctx).catch((e: Error) => e),
     fetchDynasties(identityHeaders),
   ]);
 
