@@ -626,6 +626,56 @@ describe("GET /orgs/stats", () => {
       }
     });
 
+    it("forwards day grouping and timezone to Instantly for broadcast stats", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockGroupedInstantly([
+          { key: "2026-06-10", emailOverrides: { sent: 12 } },
+          { key: "2026-06-11", emailOverrides: { sent: 28 } },
+        ])
+      );
+
+      const res = await authedGet(
+        "/orgs/stats?type=broadcast&groupBy=day&brandId=brand_1&campaignId=camp_1&workflowSlugs=wf1,wf2&featureSlugs=feat1,feat2&timezone=Asia/Kuala_Lumpur"
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toHaveLength(2);
+      expect(res.body.groups[0].key).toBe("2026-06-10");
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(12);
+      expect(res.body.groups[0].transactional).toBeUndefined();
+
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("groupBy")).toBe("day");
+      expect(params.get("timezone")).toBe("Asia/Kuala_Lumpur");
+      expect(params.get("brandId")).toBe("brand_1");
+      expect(params.get("campaignId")).toBe("camp_1");
+      expect(params.get("workflowSlugs")).toBe("wf1,wf2");
+      expect(params.get("featureSlugs")).toBe("feat1,feat2");
+    });
+
+    it("returns broadcast-only groups for day grouping when type is omitted", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockGroupedInstantly([{ key: "2026-06-12" }])
+      );
+
+      const res = await authedGet("/orgs/stats?groupBy=day&brandId=brand_1&timezone=Europe/Paris");
+
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain("http://localhost:3011/orgs/stats");
+      expect(res.body.groups).toHaveLength(1);
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+      expect(res.body.groups[0].transactional).toBeUndefined();
+    });
+
+    it("does not query transactional provider or fabricate buckets for transactional day grouping", async () => {
+      const res = await authedGet("/orgs/stats?type=transactional&groupBy=day&timezone=Europe/Paris");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toEqual([]);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("returns groups from successful provider when other fails (grouped mode)", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010"))
@@ -1159,6 +1209,31 @@ describe("GET /public/stats", () => {
     expect(res.body.groups).toHaveLength(2);
     expect(res.body.groups[0].key).toBe("brand_1");
     expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+  });
+
+  it("forwards public day grouping and timezone to Instantly", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockGroupedInstantly([{ key: "2026-06-10" }])
+    );
+
+    const res = await serviceAuthGet(
+      "/public/stats?type=broadcast&groupBy=day&brandId=brand_1&campaignId=camp_1&workflowSlugs=wf1&featureSlugs=feat1&timezone=America/New_York"
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.groups[0].key).toBe("2026-06-10");
+    expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+
+    const [fetchUrl, options] = mockFetch.mock.calls[0];
+    expect(fetchUrl).toContain("http://localhost:3011/public/stats?");
+    const params = new URL(fetchUrl).searchParams;
+    expect(params.get("groupBy")).toBe("day");
+    expect(params.get("timezone")).toBe("America/New_York");
+    expect(params.get("brandId")).toBe("brand_1");
+    expect(params.get("campaignId")).toBe("camp_1");
+    expect(params.get("workflowSlugs")).toBe("wf1");
+    expect(params.get("featureSlugs")).toBe("feat1");
+    expect(options.headers["x-org-id"]).toBeUndefined();
   });
 
   it("keeps existing public stats count behavior backward-compatible", async () => {
