@@ -12,13 +12,11 @@ import { traceEvent } from "../lib/trace-event";
 const router = Router();
 
 type AttributionContext = {
-  customerPersonaId?: string;
   customerProfileId?: string;
 };
 
-function resolveAttribution(body: { customerPersonaId?: string; customerProfileId?: string }, ctx: OrgContext): AttributionContext {
+function resolveAttribution(body: { customerProfileId?: string }, ctx: OrgContext): AttributionContext {
   return {
-    customerPersonaId: body.customerPersonaId ?? ctx.customerPersonaId,
     customerProfileId: body.customerProfileId ?? ctx.customerProfileId,
   };
 }
@@ -28,7 +26,6 @@ function mergeAttributionMetadata(
   attribution: AttributionContext,
 ): Record<string, string> | undefined {
   const merged: Record<string, string> = { ...(metadata ?? {}) };
-  if (attribution.customerPersonaId) merged.customerPersonaId = attribution.customerPersonaId;
   if (attribution.customerProfileId) merged.customerProfileId = attribution.customerProfileId;
   return Object.keys(merged).length > 0 ? merged : undefined;
 }

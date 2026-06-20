@@ -223,7 +223,6 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(
         buildBroadcastBody({
-          customerPersonaId: "persona_a",
           customerProfileId: "profile_a",
           metadata: { source: "campaign-builder" },
         })
@@ -232,7 +231,6 @@ describe("POST /orgs/send", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.variables).toEqual({
         source: "campaign-builder",
-        customerPersonaId: "persona_a",
         customerProfileId: "profile_a",
       });
     });
@@ -245,17 +243,14 @@ describe("POST /orgs/send", () => {
       });
 
       await authedPost("/orgs/send")
-        .set("x-customer-persona-id", "persona_hdr")
         .set("x-customer-profile-id", "profile_hdr")
         .send(buildBroadcastBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.variables).toEqual({
-        customerPersonaId: "persona_hdr",
         customerProfileId: "profile_hdr",
       });
       const headers = mockFetch.mock.calls[0][1].headers;
-      expect(headers["x-customer-persona-id"]).toBe("persona_hdr");
       expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
     });
 
@@ -401,7 +396,6 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(
         buildTransactionalBody({
-          customerPersonaId: "persona_a",
           customerProfileId: "profile_a",
           metadata: { source: "campaign-builder" },
         })
@@ -410,7 +404,6 @@ describe("POST /orgs/send", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.metadata).toEqual({
         source: "campaign-builder",
-        customerPersonaId: "persona_a",
         customerProfileId: "profile_a",
       });
     });
@@ -422,17 +415,14 @@ describe("POST /orgs/send", () => {
       });
 
       await authedPost("/orgs/send")
-        .set("x-customer-persona-id", "persona_hdr")
         .set("x-customer-profile-id", "profile_hdr")
         .send(buildTransactionalBody());
 
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.metadata).toEqual({
-        customerPersonaId: "persona_hdr",
         customerProfileId: "profile_hdr",
       });
       const headers = mockFetch.mock.calls[0][1].headers;
-      expect(headers["x-customer-persona-id"]).toBe("persona_hdr");
       expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
     });
 
