@@ -531,6 +531,23 @@ describe("GET /orgs/stats", () => {
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("runIds")).toBe("run_a,run_b,run_c");
     });
+
+    it("forwards explicit customer profile filters to providers", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      await authedGet("/orgs/stats?customerProfileId=profile_1&brandId=brand_1&featureSlugs=feat_1");
+
+      for (const call of mockFetch.mock.calls) {
+        const params = new URL(call[0]).searchParams;
+        expect(params.get("customerProfileId")).toBe("profile_1");
+        expect(params.get("brandId")).toBe("brand_1");
+        expect(params.get("featureSlugs")).toBe("feat_1");
+      }
+    });
   });
 
   describe("groupBy", () => {
@@ -624,6 +641,49 @@ describe("GET /orgs/stats", () => {
         const params = new URL(call[0]).searchParams;
         expect(params.get("groupBy")).toBe("workflowSlug");
       }
+    });
+
+    it("passes through distinct customer profile groups without changing provider counts", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockGroupedInstantly([
+          {
+            key: "profile_a",
+            recipientOverrides: { clicked: 4, repliesPositive: 2, repliesDetail: { ...ZERO_DETAIL, interested: 2 } },
+            emailOverrides: { clicked: 5 },
+          },
+          {
+            key: "profile_b",
+            recipientOverrides: { clicked: 1, repliesPositive: 0, repliesDetail: { ...ZERO_DETAIL } },
+            emailOverrides: { clicked: 1 },
+          },
+        ])
+      );
+
+      const res = await authedGet("/orgs/stats?type=broadcast&brandId=brand_1&featureSlugs=active_goal_feature&groupBy=customerProfileId");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toHaveLength(2);
+
+      const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
+      expect(byKey.get("profile_a").broadcast.recipientStats.clicked).toBe(4);
+      expect(byKey.get("profile_a").broadcast.recipientStats.repliesPositive).toBe(2);
+      expect(byKey.get("profile_a").broadcast.emailStats.clicked).toBe(5);
+      expect(byKey.get("profile_b").broadcast.recipientStats.clicked).toBe(1);
+      expect(byKey.get("profile_b").broadcast.recipientStats.repliesPositive).toBe(0);
+
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("groupBy")).toBe("customerProfileId");
+      expect(params.get("brandId")).toBe("brand_1");
+      expect(params.get("featureSlugs")).toBe("active_goal_feature");
+    });
+
+    it("keeps untagged customer profile outcomes unattributed instead of creating a fallback row", async () => {
+      mockFetch.mockResolvedValueOnce(mockGroupedInstantly([]));
+
+      const res = await authedGet("/orgs/stats?type=broadcast&brandId=brand_1&featureSlugs=active_goal_feature&groupBy=customerProfileId");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toEqual([]);
     });
 
     it("forwards day grouping and timezone to Instantly for broadcast stats", async () => {

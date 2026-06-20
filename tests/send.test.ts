@@ -214,6 +214,59 @@ describe("POST /orgs/send", () => {
       expect(body.parentRunId).toBeUndefined();
     });
 
+    it("adds explicit customer attribution to Instantly variables when provided in body", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(
+        buildBroadcastBody({
+          customerProfileId: "profile_a",
+          metadata: { source: "campaign-builder" },
+        })
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.variables).toEqual({
+        source: "campaign-builder",
+        customerProfileId: "profile_a",
+      });
+    });
+
+    it("uses customer attribution headers as fallback for Instantly variables", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send")
+        .set("x-customer-profile-id", "profile_hdr")
+        .send(buildBroadcastBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.variables).toEqual({
+        customerProfileId: "profile_hdr",
+      });
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
+    });
+
+    it("does not create Instantly attribution variables when no real attribution is supplied", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.variables).toBeUndefined();
+    });
+
     it("forwards identity headers to instantly-service", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -333,6 +386,56 @@ describe("POST /orgs/send", () => {
       expect(body.orgId).toBe("org_1");
       expect(body.appId).toBeUndefined();
       expect(body.parentRunId).toBeUndefined();
+    });
+
+    it("adds explicit customer attribution to Postmark metadata when provided in body", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_attr" }),
+      });
+
+      await authedPost("/orgs/send").send(
+        buildTransactionalBody({
+          customerProfileId: "profile_a",
+          metadata: { source: "campaign-builder" },
+        })
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.metadata).toEqual({
+        source: "campaign-builder",
+        customerProfileId: "profile_a",
+      });
+    });
+
+    it("uses customer attribution headers as fallback for Postmark metadata", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_attr_hdr" }),
+      });
+
+      await authedPost("/orgs/send")
+        .set("x-customer-profile-id", "profile_hdr")
+        .send(buildTransactionalBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.metadata).toEqual({
+        customerProfileId: "profile_hdr",
+      });
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
+    });
+
+    it("does not create Postmark attribution metadata when no real attribution is supplied", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, messageId: "pm_no_attr" }),
+      });
+
+      await authedPost("/orgs/send").send(buildTransactionalBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.metadata).toBeUndefined();
     });
 
     it("forwards identity headers to postmark-service when present", async () => {
