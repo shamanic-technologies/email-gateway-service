@@ -214,7 +214,7 @@ describe("POST /orgs/send", () => {
       expect(body.parentRunId).toBeUndefined();
     });
 
-    it("adds explicit customer attribution to Instantly variables when provided in body", async () => {
+    it("forwards metadata to Instantly variables when provided in body", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -223,7 +223,6 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(
         buildBroadcastBody({
-          customerProfileId: "profile_a",
           metadata: { source: "campaign-builder" },
         })
       );
@@ -231,30 +230,10 @@ describe("POST /orgs/send", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.variables).toEqual({
         source: "campaign-builder",
-        customerProfileId: "profile_a",
       });
     });
 
-    it("uses customer attribution headers as fallback for Instantly variables", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () =>
-          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
-      });
-
-      await authedPost("/orgs/send")
-        .set("x-customer-profile-id", "profile_hdr")
-        .send(buildBroadcastBody());
-
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.variables).toEqual({
-        customerProfileId: "profile_hdr",
-      });
-      const headers = mockFetch.mock.calls[0][1].headers;
-      expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
-    });
-
-    it("does not create Instantly attribution variables when no real attribution is supplied", async () => {
+    it("does not create Instantly variables when no metadata is supplied", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -388,7 +367,7 @@ describe("POST /orgs/send", () => {
       expect(body.parentRunId).toBeUndefined();
     });
 
-    it("adds explicit customer attribution to Postmark metadata when provided in body", async () => {
+    it("forwards metadata to Postmark when provided in body", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_attr" }),
@@ -396,7 +375,6 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(
         buildTransactionalBody({
-          customerProfileId: "profile_a",
           metadata: { source: "campaign-builder" },
         })
       );
@@ -404,29 +382,10 @@ describe("POST /orgs/send", () => {
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.metadata).toEqual({
         source: "campaign-builder",
-        customerProfileId: "profile_a",
       });
     });
 
-    it("uses customer attribution headers as fallback for Postmark metadata", async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, messageId: "pm_attr_hdr" }),
-      });
-
-      await authedPost("/orgs/send")
-        .set("x-customer-profile-id", "profile_hdr")
-        .send(buildTransactionalBody());
-
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-      expect(body.metadata).toEqual({
-        customerProfileId: "profile_hdr",
-      });
-      const headers = mockFetch.mock.calls[0][1].headers;
-      expect(headers["x-customer-profile-id"]).toBe("profile_hdr");
-    });
-
-    it("does not create Postmark attribution metadata when no real attribution is supplied", async () => {
+    it("does not create Postmark metadata when none is supplied", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve({ success: true, messageId: "pm_no_attr" }),

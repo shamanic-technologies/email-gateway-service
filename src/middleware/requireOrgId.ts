@@ -9,7 +9,6 @@ export interface OrgContext {
   brandId?: string;
   workflowSlug?: string;
   featureSlug?: string;
-  customerProfileId?: string;
 }
 
 function optionalString(value: string | string[] | undefined): string | undefined {
@@ -30,7 +29,6 @@ export function extractOrgContext(req: Request): OrgContext | null {
     brandId,
     workflowSlug: optionalString(req.headers["x-workflow-slug"]),
     featureSlug: optionalString(req.headers["x-feature-slug"]),
-    customerProfileId: optionalString(req.headers["x-customer-profile-id"]),
   };
 }
 

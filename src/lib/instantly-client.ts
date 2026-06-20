@@ -138,7 +138,6 @@ export async function getStats(filters: {
   userId?: string;
   brandId?: string;
   campaignId?: string;
-  customerProfileId?: string;
   workflowSlugs?: string;
   featureSlugs?: string;
   groupBy?: string;
