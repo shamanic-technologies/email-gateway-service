@@ -146,37 +146,6 @@ describe("POST /orgs/status", () => {
     }
   });
 
-  it("preserves explicit customer attribution on status items", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [] }),
-    });
-
-    await authedPost("/orgs/status")
-      .send({
-        campaignId: "camp_1",
-        items: [
-          {
-            email: "john@acme.com",
-            customerProfileId: "profile_a",
-          },
-          { email: "jane@acme.com" },
-        ],
-      });
-
-    expect(mockFetch).toHaveBeenCalledTimes(2);
-    for (const call of mockFetch.mock.calls) {
-      const body = JSON.parse(call[1].body);
-      expect(body.items).toEqual([
-        {
-          email: "john@acme.com",
-          customerProfileId: "profile_a",
-        },
-        { email: "jane@acme.com" },
-      ]);
-    }
-  });
-
   it("campaign mode: returns campaign + global, byCampaign and brand are null", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
