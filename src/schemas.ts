@@ -93,7 +93,6 @@ const SendBaseSchema = z.object({
   replyTo: z.string().email().optional().describe("Reply-to email address"),
   tag: z.string().optional().describe("Email tag for categorization"),
   metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
-  customerProfileId: z.string().optional().describe("Explicit customer profile ID for attribution. Forwarded as provider metadata/variables when present; omitted values stay unattributed."),
   idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."),
 });
 
@@ -159,7 +158,7 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 // --- Stats ---
 
-export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "customerProfileId", "workflowDynastySlug", "featureDynastySlug", "day"]);
+export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "workflowDynastySlug", "featureDynastySlug", "day"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
 export const StatsQuerySchema = z
@@ -168,7 +167,6 @@ export const StatsQuerySchema = z
     runIds: z.string().optional().describe("Comma-separated run IDs"),
     brandId: z.string().optional().describe("Comma-separated brand IDs to filter by"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
-    customerProfileId: z.string().optional().describe("Filter to sends/events with this explicit customer profile attribution"),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by"),
     featureSlugs: z.string().optional().describe("Comma-separated feature slugs to filter by"),
     workflowDynastySlug: z.string().optional().describe("Filter by workflow dynasty slug (resolved to all versioned slugs)"),
@@ -258,7 +256,6 @@ const StatusResultSchema = z
 
 export const StatusItemSchema = z.object({
   email: z.string().email().describe("Recipient email address"),
-  customerProfileId: z.string().optional().describe("Explicit customer profile ID supplied by callers that already know the attribution. This gateway preserves it when forwarding status lookups; it is never inferred from the email."),
 });
 
 export const StatusRequestSchema = z
@@ -387,7 +384,6 @@ export const OrgScopedHeadersSchema = z.object({
   "x-brand-id": z.string().optional().describe("Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"),
   "x-workflow-slug": z.string().optional().describe("Workflow slug injected by workflow-service (optional, used for tracking)"),
   "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional, propagated through the chain)"),
-  "x-customer-profile-id": z.string().optional().describe("Explicit customer profile ID for attribution. Forwarded only when present; never inferred."),
 });
 
 
@@ -416,7 +412,7 @@ registry.registerPath({
   path: "/orgs/send",
   tags: ["Email Routing"],
   summary: "Send an email",
-  description: "Send a transactional or broadcast email via the appropriate provider. When `customerProfileId` is supplied in the body or matching attribution header, the gateway forwards that exact value as provider metadata/variables. Missing attribution stays missing and is never inferred from recipient email, campaign, brand, or hashes.",
+  description: "Send a transactional or broadcast email via the appropriate provider. Routes to Postmark (transactional) or Instantly (broadcast) based on `type`.",
   security: [{ apiKey: [] }],
   request: {
     headers: OrgScopedHeadersSchema,
@@ -511,7 +507,7 @@ registry.registerPath({
   path: "/orgs/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats",
-  description: "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\n`groupBy=customerProfileId` exposes only provider rows that already carry explicit attribution from send metadata/variables or provider events. Untagged outcomes remain unattributed and do not create a profile row.\n\n`groupBy=day` is broadcast-only and delegates local-calendar grouping to instantly-service; pass `timezone` as an IANA timezone when needed. Transactional stats do not produce day groups, so day groups contain only `broadcast` data.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
+  description: "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\n`groupBy=day` is broadcast-only and delegates local-calendar grouping to instantly-service; pass `timezone` as an IANA timezone when needed. Transactional stats do not produce day groups, so day groups contain only `broadcast` data.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
   security: [{ apiKey: [] }],
   request: {
     headers: OrgScopedHeadersSchema,
@@ -536,7 +532,7 @@ registry.registerPath({
   path: "/public/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats (public, no identity headers required)",
-  description: "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`). `groupBy=customerProfileId` returns only explicitly attributed provider rows; untagged outcomes remain absent. `groupBy=day` is broadcast-only, accepts optional IANA `timezone`, and returns groups with only `broadcast` populated.",
+  description: "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`). `groupBy=day` is broadcast-only, accepts optional IANA `timezone`, and returns groups with only `broadcast` populated.",
   security: [{ apiKey: [] }],
   request: {
     query: StatsQuerySchema,

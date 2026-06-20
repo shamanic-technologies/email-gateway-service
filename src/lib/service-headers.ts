@@ -15,7 +15,6 @@ export function buildServiceHeaders(apiKey: string, ctx?: OrgContext): Record<st
   if (ctx.brandId) headers["x-brand-id"] = ctx.brandId;
   if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
   if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
-  if (ctx.customerProfileId) headers["x-customer-profile-id"] = ctx.customerProfileId;
 
   return headers;
 }
