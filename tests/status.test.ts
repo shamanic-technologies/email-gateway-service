@@ -158,7 +158,6 @@ describe("POST /orgs/status", () => {
         items: [
           {
             email: "john@acme.com",
-            customerPersonaId: "persona_a",
             customerProfileId: "profile_a",
           },
           { email: "jane@acme.com" },
@@ -171,7 +170,6 @@ describe("POST /orgs/status", () => {
       expect(body.items).toEqual([
         {
           email: "john@acme.com",
-          customerPersonaId: "persona_a",
           customerProfileId: "profile_a",
         },
         { email: "jane@acme.com" },
