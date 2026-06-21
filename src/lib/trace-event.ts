@@ -22,6 +22,7 @@ export function traceEvent(
   if (ctx.campaignId) headers["x-campaign-id"] = ctx.campaignId;
   if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
   if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
+  if (ctx.audienceId) headers["x-audience-id"] = ctx.audienceId;
 
   fetch(url, {
     method: "POST",
