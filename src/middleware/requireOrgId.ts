@@ -9,6 +9,8 @@ export interface OrgContext {
   brandId?: string;
   workflowSlug?: string;
   featureSlug?: string;
+  /** Priority audience for cost attribution — set by campaign-service at run start. Absent outside campaign flow. */
+  audienceId?: string;
 }
 
 function optionalString(value: string | string[] | undefined): string | undefined {
@@ -29,6 +31,7 @@ export function extractOrgContext(req: Request): OrgContext | null {
     brandId,
     workflowSlug: optionalString(req.headers["x-workflow-slug"]),
     featureSlug: optionalString(req.headers["x-feature-slug"]),
+    audienceId: optionalString(req.headers["x-audience-id"]),
   };
 }
 
