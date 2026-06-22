@@ -746,14 +746,21 @@ describe("POST /orgs/send", () => {
       );
     });
 
-    it("returns explicit error when recipientLastName is missing", async () => {
-      const { recipientLastName, ...body } = buildBroadcastBody();
+    it("accepts broadcast without optional recipient profile fields", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const { recipientFirstName, recipientLastName, recipientCompany, ...body } = buildBroadcastBody();
       const res = await authedPost("/orgs/send").send(body);
 
-      expect(res.status).toBe(400);
-      expect(res.body.details.fieldErrors.recipientLastName[0]).toContain(
-        "recipientLastName is required"
-      );
+      expect(res.status).toBe(200);
+      const forwarded = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(forwarded.firstName).toBeUndefined();
+      expect(forwarded.lastName).toBeUndefined();
+      expect(forwarded.company).toBeUndefined();
     });
 
     it("returns 401 without API key", async () => {
