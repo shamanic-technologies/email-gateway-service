@@ -220,9 +220,6 @@
             },
             "required": [
               "to",
-              "recipientFirstName",
-              "recipientLastName",
-              "recipientCompany",
               "type",
               "subject"
             ]
@@ -301,9 +298,6 @@
             },
             "required": [
               "to",
-              "recipientFirstName",
-              "recipientLastName",
-              "recipientCompany",
               "type",
               "subject",
               "sequence"
