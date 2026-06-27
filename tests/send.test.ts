@@ -121,24 +121,47 @@ describe("POST /orgs/send", () => {
       expect(res.body.campaignId).toBe("inst_camp_123");
     });
 
-    it("retries on timeout with a fresh AbortSignal", async () => {
-      // First call: simulate a network timeout (AbortError)
+    it("does NOT retry the broadcast send on timeout (prevents duplicate campaign)", async () => {
+      // The send is non-idempotent: instantly may have already created the
+      // campaign server-side before the gateway saw a timeout. Retrying would
+      // create a second campaign — so a timed-out send must fail, not retry.
       mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"));
-      // Retry: succeed
+
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      // Dispatched exactly once — no duplicate send.
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(502);
+    });
+
+    it("uses the scoped 60s timeout for the send so a >10s instantly multi-call latency does not false-time-out (not the default 10s)", async () => {
+      const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
           Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
       });
 
-      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+      await authedPost("/orgs/send").send(buildBroadcastBody());
 
-      expect(res.status).toBe(200);
-      expect(mockFetch).toHaveBeenCalledTimes(2);
-      // Verify each call got its own signal (not the same object)
-      const signal1 = mockFetch.mock.calls[0][1].signal;
-      const signal2 = mockFetch.mock.calls[1][1].signal;
-      expect(signal1).not.toBe(signal2);
+      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      timeoutSpy.mockRestore();
+    });
+
+    it("forwards the idempotencyKey as an idempotency-key header to instantly", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(
+        buildBroadcastBody({ idempotencyKey: "price-request:outlet_42" })
+      );
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const instantlyHeaders = mockFetch.mock.calls[0][1].headers;
+      expect(instantlyHeaders["idempotency-key"]).toBe("price-request:outlet_42");
     });
 
     it("retries on timeout with a fresh AbortSignal (transactional)", async () => {

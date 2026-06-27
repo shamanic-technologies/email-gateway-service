@@ -13,26 +13,50 @@ import type {
 const { url, apiKey } = config.instantly;
 
 const TIMEOUT_MS = 10_000;
+// The send path makes ~5 sequential Instantly.ai API calls, so it legitimately
+// exceeds the default 10s. Scope a longer timeout to send only (not the GET
+// stats/status calls, where 10s should stay tight enough to surface failures).
+const SEND_TIMEOUT_MS = 60_000;
 const RETRY_DELAY_MS = 500;
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; ctx?: OrgContext } = {}
+  options: {
+    method?: string;
+    body?: unknown;
+    ctx?: OrgContext;
+    timeoutMs?: number;
+    // Non-idempotent mutations (the send) must NOT auto-retry — a retry of a
+    // succeeded-server-side send creates a duplicate Instantly campaign.
+    retry?: boolean;
+    idempotencyKey?: string;
+  } = {}
 ): Promise<T> {
-  const { method = "GET", body, ctx } = options;
+  const {
+    method = "GET",
+    body,
+    ctx,
+    timeoutMs = TIMEOUT_MS,
+    retry = true,
+    idempotencyKey,
+  } = options;
   const fullUrl = `${url}${path}`;
   const headers = buildServiceHeaders(apiKey, ctx);
+  // Forward the inbound idempotency key so instantly-service can dedupe a
+  // duplicate send downstream (coordination point for its idempotency support).
+  if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
   const jsonBody = body ? JSON.stringify(body) : undefined;
 
+  const maxAttempts = retry ? 2 : 1;
   let lastError: Error | undefined;
 
-  for (let attempt = 0; attempt < 2; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
       const response = await fetch(fullUrl, {
         method,
         headers,
         body: jsonBody,
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
 
       if (!response.ok) {
@@ -47,7 +71,7 @@ async function request<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
       // Only retry on network-level errors (fetch failed, timeout), not HTTP errors
       if (lastError.message.includes("instantly-service")) throw lastError;
-      if (attempt === 0) {
+      if (attempt < maxAttempts - 1) {
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
       }
     }
@@ -80,8 +104,18 @@ export async function atomicSend(body: {
     bodyText?: string;
     daysSinceLastStep: number;
   }>;
-}, ctx?: OrgContext) {
-  return request<AtomicSendResponse>("/orgs/send", { method: "POST", body, ctx });
+}, ctx?: OrgContext, idempotencyKey?: string) {
+  // The send is non-idempotent (creates a campaign) and makes ~5 sequential
+  // Instantly.ai calls. Use the longer send timeout, disable auto-retry, and
+  // forward the idempotency key so a downstream dedupe is possible.
+  return request<AtomicSendResponse>("/orgs/send", {
+    method: "POST",
+    body,
+    ctx,
+    timeoutMs: SEND_TIMEOUT_MS,
+    retry: false,
+    idempotencyKey,
+  });
 }
 
 // Stats payload shapes — defined by the shared contract.
