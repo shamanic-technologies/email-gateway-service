@@ -84,6 +84,10 @@ router.post("/send", async (req: Request, res: Response) => {
     }
 
     if (body.type === "broadcast") {
+      const bccList = body.bcc
+        ? body.bcc.split(",").map((e) => e.trim()).filter((e) => e.length > 0)
+        : [];
+
       const result = await instantlyClient.atomicSend({
         leadId: body.leadId,
         to: body.to,
@@ -91,6 +95,7 @@ router.post("/send", async (req: Request, res: Response) => {
         lastName: body.recipientLastName,
         company: body.recipientCompany,
         variables: metadata,
+        bcc: bccList.length > 0 ? bccList : undefined,
         subject: body.subject,
         sequence: body.sequence,
       }, ctx);
