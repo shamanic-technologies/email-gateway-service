@@ -135,6 +135,7 @@ const BroadcastSendSchema = SendBaseSchema.extend({
   type: z.literal("broadcast").describe("Broadcast email channel"),
   subject: z.string().describe("Shared email subject line (same thread, follow-ups are Re:)"),
   sequence: z.array(SequenceStepSchema).min(1).describe("Email sequence steps sent via Instantly"),
+  bcc: z.string().optional().describe("Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."),
 });
 
 export const SendRequestSchema = z
