@@ -98,7 +98,7 @@ router.post("/send", async (req: Request, res: Response) => {
         bcc: bccList.length > 0 ? bccList : undefined,
         subject: body.subject,
         sequence: body.sequence,
-      }, ctx);
+      }, ctx, body.idempotencyKey);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
       traceEvent(ctx, "send.broadcast.ok", `campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
