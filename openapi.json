@@ -294,6 +294,10 @@
                 },
                 "minItems": 1,
                 "description": "Email sequence steps sent via Instantly"
+              },
+              "bcc": {
+                "type": "string",
+                "description": "Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."
               }
             },
             "required": [

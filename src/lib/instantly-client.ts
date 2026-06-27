@@ -72,6 +72,7 @@ export async function atomicSend(body: {
   lastName?: string;
   company?: string;
   variables?: Record<string, string>;
+  bcc?: string[];
   subject: string;
   sequence: Array<{
     step: number;

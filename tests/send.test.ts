@@ -280,6 +280,65 @@ describe("POST /orgs/send", () => {
       expect(body.sequence[0].bodyHtml).toBe("<p>Hi</p>");
       expect(body.email).toBeUndefined();
     });
+
+    describe("bcc forwarding", () => {
+      it("splits comma-separated bcc into an array forwarded to instantly-service", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
+        const res = await authedPost("/orgs/send").send(
+          buildBroadcastBody({ bcc: "a@x.com, b@x.com" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.bcc).toEqual(["a@x.com", "b@x.com"]);
+      });
+
+      it("trims whitespace and drops empty entries", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
+        await authedPost("/orgs/send").send(
+          buildBroadcastBody({ bcc: " a@x.com ,, b@x.com , " })
+        );
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.bcc).toEqual(["a@x.com", "b@x.com"]);
+      });
+
+      it("does not include bcc in body when absent (existing behavior)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
+        await authedPost("/orgs/send").send(buildBroadcastBody());
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.bcc).toBeUndefined();
+      });
+
+      it("does not include bcc when only empty/whitespace entries are provided", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
+        await authedPost("/orgs/send").send(buildBroadcastBody({ bcc: " , , " }));
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.bcc).toBeUndefined();
+      });
+    });
   });
 
   describe("transactional (Postmark)", () => {
