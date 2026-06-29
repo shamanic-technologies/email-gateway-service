@@ -97,6 +97,7 @@ router.post("/send", async (req: Request, res: Response) => {
         variables: metadata,
         bcc: bccList.length > 0 ? bccList : undefined,
         subject: body.subject,
+        timezone: body.timezone,
         sequence: body.sequence,
       }, ctx, body.idempotencyKey);
 
