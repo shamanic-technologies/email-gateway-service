@@ -237,6 +237,34 @@ describe("POST /orgs/send", () => {
       expect(body.parentRunId).toBeUndefined();
     });
 
+    it("forwards the lead's IANA timezone to instantly-service when present", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(
+        buildBroadcastBody({ timezone: "America/New_York" })
+      );
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.timezone).toBe("America/New_York");
+    });
+
+    it("omits timezone when the lead has none (instantly-service default)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.timezone).toBeUndefined();
+    });
+
     it("forwards metadata to Instantly variables when provided in body", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,

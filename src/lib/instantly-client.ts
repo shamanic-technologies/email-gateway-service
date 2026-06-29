@@ -98,6 +98,10 @@ export async function atomicSend(body: {
   variables?: Record<string, string>;
   bcc?: string[];
   subject: string;
+  // Recipient's IANA timezone (from the lead). instantly-service uses it to
+  // schedule the sequence in the prospect's local business hours; absent =
+  // instantly-service default tz.
+  timezone?: string;
   sequence: Array<{
     step: number;
     bodyHtml: string;
