@@ -246,6 +246,34 @@ export const PublicEngagementLatencyResponseSchema = z
 
 export type PublicEngagementLatencyResponse = z.infer<typeof PublicEngagementLatencyResponseSchema>;
 
+// --- GET /public/stats/sending-forecast ---
+// Passthrough of instantly-service's fleet sending forecast. Field names mirror
+// the provider's response byte-for-byte (features-service depends on the contract).
+
+export const SendingForecastDaySchema = z
+  .object({
+    date: z.string().describe("Calendar day, YYYY-MM-DD (UTC)."),
+    scheduledCount: z.number().int().describe("Emails scheduled to send that day across the whole fleet."),
+  })
+  .openapi("SendingForecastDay");
+
+export type SendingForecastDay = z.infer<typeof SendingForecastDaySchema>;
+
+export const SendingForecastResponseSchema = z
+  .object({
+    asOf: z.string().describe("ISO8601 timestamp of computation."),
+    dailyCapacity: z.number().int().describe("Emails/day the healthy fleet can send."),
+    healthyAccountCount: z.number().int().describe("Accounts passing the provider's health filter."),
+    totalAccountCount: z.number().int().describe("All accounts in the shared workspace before filtering."),
+    blockedDomainCount: z.number().int().describe("Accounts excluded because their domain is blocked."),
+    days: z
+      .array(SendingForecastDaySchema)
+      .describe("Per-day scheduled send volume from today forward, chronological. May be [] when nothing is scheduled."),
+  })
+  .openapi("SendingForecastResponse");
+
+export type SendingForecastResponse = z.infer<typeof SendingForecastResponseSchema>;
+
 // --- POST /orgs/status ---
 
 const StatusResultSchema = z
@@ -577,6 +605,31 @@ registry.registerPath({
       },
     },
     400: { description: "Invalid request or unsupported grouping", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/public/stats/sending-forecast",
+  tags: ["Stats"],
+  summary: "Get the fleet sending forecast (public, provider-agnostic)",
+  description:
+    "Relays the broadcast provider's fleet sending forecast: the available daily sending CAPACITY (`dailyCapacity`) alongside a per-day projection of upcoming scheduled send VOLUME (`days[]`, chronological, each `{ date, scheduledCount }`). " +
+    "Fleet-wide (no org filter) — a global forecast; requires no identity headers. " +
+    "Passthrough: field names are preserved exactly as the provider returns them. " +
+    "Fails loud (502) on any provider error or missing config; no silent zero fallback.",
+  security: [{ apiKey: [] }],
+  responses: {
+    200: {
+      description: "Fleet sending forecast — daily capacity and per-day scheduled volume.",
+      content: {
+        "application/json": {
+          schema: SendingForecastResponseSchema,
+        },
+      },
+    },
     401: { description: "Unauthorized", content: errorContent },
     502: { description: "Upstream service error", content: errorContent },
   },
