@@ -216,3 +216,31 @@ export async function getStatus(body: {
 export async function forwardWebhook(body: unknown) {
   return request("/webhooks/instantly", { method: "POST", body });
 }
+
+// --- GET /internal/audit/sending-forecast ---
+// Fleet-wide (no org) sending forecast. Passthrough shape — field names must be
+// preserved exactly as instantly-service returns them (features-service depends
+// on the byte-equal contract).
+export interface SendingForecastDay {
+  date: string;
+  scheduledCount: number;
+}
+
+export interface SendingForecastResult {
+  asOf: string;
+  dailyCapacity: number;
+  healthyAccountCount: number;
+  totalAccountCount: number;
+  blockedDomainCount: number;
+  days: SendingForecastDay[];
+}
+
+export async function getSendingForecast(): Promise<SendingForecastResult> {
+  // Fail loud on missing config — no silent fallback to a stub forecast.
+  if (!config.instantly.apiKey) {
+    throw new Error("INSTANTLY_SERVICE_API_KEY not configured");
+  }
+  // Platform-scoped internal call — no org context, authed with the shared
+  // instantly-service API key (buildServiceHeaders sets X-API-Key from config).
+  return request<SendingForecastResult>("/internal/audit/sending-forecast");
+}
