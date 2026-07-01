@@ -268,6 +268,21 @@ async function statsHandler(req: Request, res: Response) {
 router.get("/stats", statsHandler);
 internalRouter.get("/stats", statsHandler);
 internalRouter.get("/stats/engagement-latency", publicEngagementLatencyHandler);
+internalRouter.get("/stats/sending-forecast", sendingForecastHandler);
+
+async function sendingForecastHandler(_req: Request, res: Response) {
+  try {
+    // Passthrough — relay instantly-service's fleet forecast body as-is
+    // (dailyCapacity + days[] with identical field names). No reshape, no
+    // zero fallback: any provider error propagates as 5xx.
+    const forecast = await instantlyClient.getSendingForecast();
+    res.json(forecast);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[email-gateway] Sending forecast failed: ${message}`);
+    res.status(502).json({ error: "Failed to fetch sending forecast", details: message });
+  }
+}
 
 async function publicEngagementLatencyHandler(req: Request, res: Response) {
   const input = parsePublicEngagementLatencyInput(req);

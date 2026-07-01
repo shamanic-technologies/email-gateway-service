@@ -1488,3 +1488,84 @@ describe("GET /public/stats", () => {
     });
   });
 });
+
+describe("GET /public/stats/sending-forecast", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  const FORECAST = {
+    asOf: "2026-07-01T12:00:00.000Z",
+    dailyCapacity: 1200,
+    healthyAccountCount: 40,
+    totalAccountCount: 55,
+    blockedDomainCount: 3,
+    days: [
+      { date: "2026-07-01", scheduledCount: 800 },
+      { date: "2026-07-02", scheduledCount: 950 },
+      { date: "2026-07-03", scheduledCount: 120 },
+    ],
+  };
+
+  function mockForecast(body: unknown) {
+    return { ok: true, status: 200, json: () => Promise.resolve(body) };
+  }
+
+  it("relays instantly-service's fleet forecast body as-is (dailyCapacity + days[] field names preserved)", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("/internal/audit/sending-forecast")) {
+        return Promise.resolve(mockForecast(FORECAST));
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
+
+    const res = await serviceAuthGet("/public/stats/sending-forecast");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(FORECAST);
+
+    const forecastUrl = mockFetch.mock.calls[0][0];
+    expect(forecastUrl).toBe("http://localhost:3011/internal/audit/sending-forecast");
+    const options = mockFetch.mock.calls[0][1];
+    expect(options.headers["X-API-Key"]).toBe("inst-key");
+    // Fleet-wide platform call — no org identity forwarded.
+    expect(options.headers["x-org-id"]).toBeUndefined();
+    expect(options.headers["x-user-id"]).toBeUndefined();
+  });
+
+  it("passes through an empty days[] without zero-fabrication", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("/internal/audit/sending-forecast")) {
+        return Promise.resolve(mockForecast({ ...FORECAST, days: [] }));
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
+
+    const res = await serviceAuthGet("/public/stats/sending-forecast");
+
+    expect(res.status).toBe(200);
+    expect(res.body.days).toEqual([]);
+    expect(res.body.dailyCapacity).toBe(1200);
+  });
+
+  it("propagates a 5xx on instantly error — no silent zero fallback", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("/internal/audit/sending-forecast")) {
+        return Promise.resolve({ ok: false, status: 500, text: () => Promise.resolve("boom") });
+      }
+      return Promise.reject(new Error("Unexpected URL"));
+    });
+
+    const res = await serviceAuthGet("/public/stats/sending-forecast");
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe("Failed to fetch sending forecast");
+    expect(res.body.days).toBeUndefined();
+    expect(res.body.dailyCapacity).toBeUndefined();
+  });
+
+  it("requires service auth", async () => {
+    const res = await request(app).get("/public/stats/sending-forecast");
+    expect(res.status).toBe(401);
+  });
+});

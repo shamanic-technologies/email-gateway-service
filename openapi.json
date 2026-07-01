@@ -298,6 +298,10 @@
               "bcc": {
                 "type": "string",
                 "description": "Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."
+              },
+              "timezone": {
+                "type": "string",
+                "description": "Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent/invalid = instantly-service falls back to its default timezone."
               }
             },
             "required": [
@@ -1601,6 +1605,63 @@
           "sampleSize"
         ]
       },
+      "SendingForecastResponse": {
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "description": "ISO8601 timestamp of computation."
+          },
+          "dailyCapacity": {
+            "type": "integer",
+            "description": "Emails/day the healthy fleet can send."
+          },
+          "healthyAccountCount": {
+            "type": "integer",
+            "description": "Accounts passing the provider's health filter."
+          },
+          "totalAccountCount": {
+            "type": "integer",
+            "description": "All accounts in the shared workspace before filtering."
+          },
+          "blockedDomainCount": {
+            "type": "integer",
+            "description": "Accounts excluded because their domain is blocked."
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SendingForecastDay"
+            },
+            "description": "Per-day scheduled send volume from today forward, chronological. May be [] when nothing is scheduled."
+          }
+        },
+        "required": [
+          "asOf",
+          "dailyCapacity",
+          "healthyAccountCount",
+          "totalAccountCount",
+          "blockedDomainCount",
+          "days"
+        ]
+      },
+      "SendingForecastDay": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar day, YYYY-MM-DD (UTC)."
+          },
+          "scheduledCount": {
+            "type": "integer",
+            "description": "Emails scheduled to send that day across the whole fleet."
+          }
+        },
+        "required": [
+          "date",
+          "scheduledCount"
+        ]
+      },
       "StatusResponse": {
         "type": "object",
         "properties": {
@@ -2672,6 +2733,7 @@
                     "leadId": "f9e8d7c6-5432-1abc-def0-abcdef012345",
                     "idempotencyKey": "run-xyz789:email-send",
                     "campaignId": "c58bd21c-69dd-4483-b678-1f13c3d4e590",
+                    "timezone": "America/New_York",
                     "sequence": [
                       {
                         "step": 1,
@@ -3221,6 +3283,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Upstream service error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/stats/sending-forecast": {
+      "get": {
+        "tags": [
+          "Stats"
+        ],
+        "summary": "Get the fleet sending forecast (public, provider-agnostic)",
+        "description": "Relays the broadcast provider's fleet sending forecast: the available daily sending CAPACITY (`dailyCapacity`) alongside a per-day projection of upcoming scheduled send VOLUME (`days[]`, chronological, each `{ date, scheduledCount }`). Fleet-wide (no org filter) — a global forecast; requires no identity headers. Passthrough: field names are preserved exactly as the provider returns them. Fails loud (502) on any provider error or missing config; no silent zero fallback.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Fleet sending forecast — daily capacity and per-day scheduled volume.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendingForecastResponse"
                 }
               }
             }
