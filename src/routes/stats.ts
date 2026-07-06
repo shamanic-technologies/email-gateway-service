@@ -172,12 +172,17 @@ function rewriteGroupByForProvider(groupBy: string): string {
   return groupBy;
 }
 
-function isDayGroupBy(filters: Record<string, unknown>): boolean {
-  return filters.groupBy === "day";
+// Grouping dimensions that only broadcast (Instantly) can produce. Postmark
+// (transactional) has no audience attribution and no local-calendar day grouping,
+// so these groupBys are routed to a broadcast-only handler.
+function isBroadcastOnlyGroupBy(filters: Record<string, unknown>): boolean {
+  return filters.groupBy === "day" || filters.groupBy === "audienceId";
 }
 
 function withoutBroadcastOnlyFilters(filters: Record<string, unknown>): Record<string, unknown> {
-  const { timezone, ...rest } = filters;
+  // timezone (day-bucketing) and audienceId (audience attribution) are
+  // broadcast-only — strip them before hitting postmark.
+  const { timezone, audienceId, ...rest } = filters;
   return rest;
 }
 
@@ -375,8 +380,8 @@ async function handleGrouped(
   filters: Record<string, unknown>,
   ctx?: OrgContext,
 ) {
-  if (isDayGroupBy(filters)) {
-    return await handleDayGrouped(res, type, filters, ctx);
+  if (isBroadcastOnlyGroupBy(filters)) {
+    return await handleBroadcastOnlyGrouped(res, type, filters, ctx);
   }
 
   const postmarkFilters = withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0];
@@ -446,7 +451,7 @@ async function handleGrouped(
   res.json({ groups });
 }
 
-async function handleDayGrouped(
+async function handleBroadcastOnlyGrouped(
   res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
