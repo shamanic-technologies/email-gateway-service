@@ -549,6 +549,73 @@ describe("GET /orgs/stats", () => {
     });
   });
 
+  describe("audienceId attribution", () => {
+    // The consumer JTBD: for one audience, split engagement outcomes per workflow
+    // at recipient grain. Path = audienceId filter + groupBy=workflowSlug.
+    it("resolves the (audienceId, workflowSlug) couple: forwards audienceId filter + groupBy=workflowSlug to Instantly", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockGroupedInstantly([
+          { key: "outreach-v1", emailOverrides: { sent: 12, opened: 6, clicked: 3 }, recipientOverrides: { repliesPositive: 2, repliesDetail: { ...ZERO_DETAIL, interested: 2 } } },
+          { key: "outreach-v2", emailOverrides: { sent: 20, opened: 9, clicked: 5 }, recipientOverrides: { repliesPositive: 1, repliesDetail: { ...ZERO_DETAIL, meetingBooked: 1 } } },
+        ])
+      );
+
+      const res = await authedGet("/orgs/stats?type=broadcast&audienceId=aud_1&groupBy=workflowSlug");
+
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
+      expect(byKey.get("outreach-v1").broadcast.emailStats.clicked).toBe(3);
+      expect(byKey.get("outreach-v1").broadcast.recipientStats.repliesPositive).toBe(2);
+      expect(byKey.get("outreach-v2").broadcast.emailStats.sent).toBe(20);
+      expect(byKey.get("outreach-v2").broadcast.recipientStats.repliesPositive).toBe(1);
+
+      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
+      expect(params.get("audienceId")).toBe("aud_1");
+      expect(params.get("groupBy")).toBe("workflowSlug");
+    });
+
+    it("forwards audienceId filter to Instantly but strips it from Postmark (broadcast-only, aggregate mode)", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
+        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      await authedGet("/orgs/stats?audienceId=aud_1");
+
+      const instantlyCall = mockFetch.mock.calls.find((c) => String(c[0]).includes("3011"))!;
+      const postmarkCall = mockFetch.mock.calls.find((c) => String(c[0]).includes("3010"))!;
+      expect(new URL(instantlyCall[0]).searchParams.get("audienceId")).toBe("aud_1");
+      expect(new URL(postmarkCall[0]).searchParams.has("audienceId")).toBe(false);
+    });
+
+    it("routes groupBy=audienceId as broadcast-only (Instantly only, no Postmark call)", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockGroupedInstantly([{ key: "aud_1" }, { key: "aud_2" }])
+      );
+
+      const res = await authedGet("/orgs/stats?groupBy=audienceId");
+
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain("http://localhost:3011/orgs/stats");
+      expect(res.body.groups).toHaveLength(2);
+      expect(res.body.groups[0].key).toBe("aud_1");
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+      expect(res.body.groups[0].transactional).toBeUndefined();
+      expect(new URL(mockFetch.mock.calls[0][0]).searchParams.get("groupBy")).toBe("audienceId");
+    });
+
+    it("does not query Postmark or fabricate buckets for transactional groupBy=audienceId", async () => {
+      const res = await authedGet("/orgs/stats?type=transactional&groupBy=audienceId");
+
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toEqual([]);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
   describe("groupBy", () => {
     it("returns grouped broadcast stats from a single provider", async () => {
       mockFetch.mockResolvedValueOnce(
