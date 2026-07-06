@@ -547,17 +547,35 @@ describe("GET /orgs/stats", () => {
         expect(params.get("featureSlugs")).toBe("feat_1");
       }
     });
+  });
 
-    it("passes audienceId to provider", async () => {
-      mockFetch.mockResolvedValueOnce(mockInstantlyStats());
+  describe("audienceId attribution", () => {
+    // The consumer JTBD: for one audience, split engagement outcomes per workflow
+    // at recipient grain. Path = audienceId filter + groupBy=workflowSlug.
+    it("resolves the (audienceId, workflowSlug) couple: forwards audienceId filter + groupBy=workflowSlug to Instantly", async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockGroupedInstantly([
+          { key: "outreach-v1", emailOverrides: { sent: 12, opened: 6, clicked: 3 }, recipientOverrides: { repliesPositive: 2, repliesDetail: { ...ZERO_DETAIL, interested: 2 } } },
+          { key: "outreach-v2", emailOverrides: { sent: 20, opened: 9, clicked: 5 }, recipientOverrides: { repliesPositive: 1, repliesDetail: { ...ZERO_DETAIL, meetingBooked: 1 } } },
+        ])
+      );
 
-      await authedGet("/orgs/stats?type=broadcast&audienceId=aud_1");
+      const res = await authedGet("/orgs/stats?type=broadcast&audienceId=aud_1&groupBy=workflowSlug");
+
+      expect(res.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
+      expect(byKey.get("outreach-v1").broadcast.emailStats.clicked).toBe(3);
+      expect(byKey.get("outreach-v1").broadcast.recipientStats.repliesPositive).toBe(2);
+      expect(byKey.get("outreach-v2").broadcast.emailStats.sent).toBe(20);
+      expect(byKey.get("outreach-v2").broadcast.recipientStats.repliesPositive).toBe(1);
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
       expect(params.get("audienceId")).toBe("aud_1");
+      expect(params.get("groupBy")).toBe("workflowSlug");
     });
 
-    it("forwards audienceId to both providers on an untyped query", async () => {
+    it("forwards audienceId filter to Instantly but strips it from Postmark (broadcast-only, aggregate mode)", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
         if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
@@ -566,58 +584,35 @@ describe("GET /orgs/stats", () => {
 
       await authedGet("/orgs/stats?audienceId=aud_1");
 
-      for (const call of mockFetch.mock.calls) {
-        const params = new URL(call[0]).searchParams;
-        expect(params.get("audienceId")).toBe("aud_1");
-      }
+      const instantlyCall = mockFetch.mock.calls.find((c) => String(c[0]).includes("3011"))!;
+      const postmarkCall = mockFetch.mock.calls.find((c) => String(c[0]).includes("3010"))!;
+      expect(new URL(instantlyCall[0]).searchParams.get("audienceId")).toBe("aud_1");
+      expect(new URL(postmarkCall[0]).searchParams.has("audienceId")).toBe(false);
     });
-  });
 
-  describe("(audience, workflow) couple", () => {
-    it("forwards audienceId filter + groupBy=workflowSlug so the broadcast provider returns per-couple recipient-grain outcomes", async () => {
+    it("routes groupBy=audienceId as broadcast-only (Instantly only, no Postmark call)", async () => {
       mockFetch.mockResolvedValueOnce(
-        mockGroupedInstantly([
-          {
-            key: "cold-email",
-            recipientOverrides: { sent: 30, delivered: 28, opened: 12, clicked: 5, repliesPositive: 3, repliesDetail: { ...ZERO_DETAIL, interested: 3 } },
-            emailOverrides: { sent: 45, opened: 14, clicked: 6 },
-          },
-          {
-            key: "warm-followup",
-            recipientOverrides: { sent: 10, delivered: 9, opened: 4, clicked: 1, repliesPositive: 1, repliesDetail: { ...ZERO_DETAIL, interested: 1 } },
-            emailOverrides: { sent: 12, opened: 5, clicked: 1 },
-          },
-        ])
+        mockGroupedInstantly([{ key: "aud_1" }, { key: "aud_2" }])
       );
 
-      const res = await authedGet("/orgs/stats?type=broadcast&audienceId=aud_1&groupBy=workflowSlug");
+      const res = await authedGet("/orgs/stats?groupBy=audienceId");
 
       expect(res.status).toBe(200);
-
-      // audienceId scoping + workflow grouping both reach the provider
-      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("audienceId")).toBe("aud_1");
-      expect(params.get("groupBy")).toBe("workflowSlug");
-
-      // one bucket per workflow the audience ran = the (audience, workflow) couples
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch.mock.calls[0][0]).toContain("http://localhost:3011/orgs/stats");
       expect(res.body.groups).toHaveLength(2);
-      const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
-      expect(byKey.get("cold-email").broadcast.recipientStats.sent).toBe(30);
-      expect(byKey.get("cold-email").broadcast.recipientStats.clicked).toBe(5);
-      expect(byKey.get("cold-email").broadcast.recipientStats.repliesPositive).toBe(3);
-      expect(byKey.get("warm-followup").broadcast.recipientStats.sent).toBe(10);
-      expect(byKey.get("warm-followup").broadcast.recipientStats.repliesPositive).toBe(1);
+      expect(res.body.groups[0].key).toBe("aud_1");
+      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
+      expect(res.body.groups[0].transactional).toBeUndefined();
+      expect(new URL(mockFetch.mock.calls[0][0]).searchParams.get("groupBy")).toBe("audienceId");
     });
 
-    it("supports groupBy=audienceId, forwarding it to the provider", async () => {
-      mockFetch.mockResolvedValueOnce(mockGroupedInstantly([{ key: "aud_1" }, { key: "aud_2" }]));
-
-      const res = await authedGet("/orgs/stats?type=broadcast&groupBy=audienceId");
+    it("does not query Postmark or fabricate buckets for transactional groupBy=audienceId", async () => {
+      const res = await authedGet("/orgs/stats?type=transactional&groupBy=audienceId");
 
       expect(res.status).toBe(200);
-      const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("groupBy")).toBe("audienceId");
-      expect(res.body.groups.map((g: { key: string }) => g.key)).toEqual(["aud_1", "aud_2"]);
+      expect(res.body.groups).toEqual([]);
+      expect(mockFetch).not.toHaveBeenCalled();
     });
   });
 
