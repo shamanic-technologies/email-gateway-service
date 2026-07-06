@@ -160,7 +160,7 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 
 // --- Stats ---
 
-export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "workflowDynastySlug", "featureDynastySlug", "day"]);
+export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "audienceId", "workflowDynastySlug", "featureDynastySlug", "day"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
 export const StatsQuerySchema = z
@@ -169,6 +169,7 @@ export const StatsQuerySchema = z
     runIds: z.string().optional().describe("Comma-separated run IDs"),
     brandId: z.string().optional().describe("Comma-separated brand IDs to filter by"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
+    audienceId: z.string().optional().describe("Filter engagement by the audience that produced the send (per-audience attribution set at run start). Combine with groupBy=workflowSlug to get, for one audience, per-(audience, workflow) recipient-grain outcome counts. Honored by the broadcast provider (Instantly); transactional (Postmark) support is rolling out."),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by"),
     featureSlugs: z.string().optional().describe("Comma-separated feature slugs to filter by"),
     workflowDynastySlug: z.string().optional().describe("Filter by workflow dynasty slug (resolved to all versioned slugs)"),
@@ -538,7 +539,7 @@ registry.registerPath({
   path: "/orgs/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats",
-  description: "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\n`groupBy=day` is broadcast-only and delegates local-calendar grouping to instantly-service; pass `timezone` as an IANA timezone when needed. Transactional stats do not produce day groups, so day groups contain only `broadcast` data.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
+  description: "Returns email stats aggregated across providers.\n\n**Without `groupBy`:** returns a flat `StatsResponse` with optional `transactional` and `broadcast` objects.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — an object with a `groups` array. Each element has a `key` (the value of the groupBy dimension, e.g. a brand UUID when `groupBy=brandId`) and optional `transactional` / `broadcast` stats objects.\n\n`groupBy=day` is broadcast-only and delegates local-calendar grouping to instantly-service; pass `timezone` as an IANA timezone when needed. Transactional stats do not produce day groups, so day groups contain only `broadcast` data.\n\n**Per-(audience, workflow) outcomes:** pass `audienceId` to scope engagement to the audience that produced the send, and `groupBy=workflowSlug` to split that audience's recipient-grain outcomes (sent/delivered/opened/clicked/positive-reply) by the workflow that produced each engagement. `groupBy=audienceId` is also supported. Both are honored by the broadcast provider (Instantly); transactional (Postmark) audience support is rolling out, so scope to `type=broadcast` for audience-attributed outcomes until then.\n\nUse the `type` parameter to restrict to a single provider (transactional or broadcast).",
   security: [{ apiKey: [] }],
   request: {
     headers: OrgScopedHeadersSchema,
@@ -563,7 +564,7 @@ registry.registerPath({
   path: "/public/stats",
   tags: ["Stats"],
   summary: "Get aggregated email stats (public, no identity headers required)",
-  description: "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`). `groupBy=day` is broadcast-only, accepts optional IANA `timezone`, and returns groups with only `broadcast` populated.",
+  description: "Same behavior as `GET /orgs/stats` but does not require `x-org-id` or any identity headers. Intended for internal services (e.g. leaderboard) that don't have user context.\n\n**Without `groupBy`:** returns a flat `StatsResponse`.\n\n**With `groupBy`:** returns a `GroupedStatsResponse` — `{ groups: [{ key, transactional?, broadcast? }] }`. The `key` is the value of the groupBy dimension (e.g. a brand UUID when `groupBy=brandId`). `groupBy=day` is broadcast-only, accepts optional IANA `timezone`, and returns groups with only `broadcast` populated.\n\nPass `audienceId` to scope engagement to one audience and `groupBy=workflowSlug` to get its per-(audience, workflow) recipient-grain outcomes; `groupBy=audienceId` is also supported. Honored by the broadcast provider (Instantly); transactional (Postmark) audience support is rolling out.",
   security: [{ apiKey: [] }],
   request: {
     query: StatsQuerySchema,
