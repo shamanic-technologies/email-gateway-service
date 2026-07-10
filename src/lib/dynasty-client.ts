@@ -68,7 +68,13 @@ async function fetchJson<T>(url: string, apiKey: string, identityHeaders?: Ident
 
 export async function resolveWorkflowDynastySlugs(dynastySlug: string, identityHeaders?: IdentityHeaders): Promise<string[]> {
   const { url, apiKey } = config.workflow;
-  const endpoint = `${url}/workflows/dynasty/slugs?dynastySlug=${encodeURIComponent(dynastySlug)}`;
+  // workflow-service GET /workflows/dynasty/slugs expects the query param `workflowDynastySlug`
+  // (NOT `dynastySlug`). The mismatch was masked while the route required identity headers (it 400'd
+  // "identity headers required" before validating params); once workflow-service made resolution
+  // api-key-only (org-less public path), the param validation runs and a `dynastySlug` query 400s
+  // "Missing required query parameter: workflowDynastySlug" → this endpoint 502s on the public
+  // dynasty-filtered stats path (runs-service already sends the correct name).
+  const endpoint = `${url}/workflows/dynasty/slugs?workflowDynastySlug=${encodeURIComponent(dynastySlug)}`;
   const result = await fetchJson<WorkflowDynastySlugResponse>(endpoint, apiKey, identityHeaders);
   return result.workflowSlugs;
 }
