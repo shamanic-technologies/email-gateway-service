@@ -433,6 +433,83 @@ describe("POST /orgs/status", () => {
     expect(res.body.results[0].broadcast.campaign.replyClassification).toBe("positive");
   });
 
+  it("passes through sentCount per scope from both providers (broadcast + transactional)", async () => {
+    // Broadcast (instantly) reports 3 sends to this recipient in the campaign;
+    // transactional (postmark) reports 1. email-gateway forwards each provider's
+    // per-scope send-event count untouched — the consumer derives sequence
+    // position from it (1 = initial, 2 = first follow-up, ...).
+    const broadcastScope = { ...deliveredScope, sentCount: 3 };
+    const transactionalScope = { ...deliveredScope, sentCount: 1 };
+
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: broadcastScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([
+        { email: "john@acme.com", byCampaign: null, campaign: transactionalScope, brand: null, global: emptyGlobal },
+      ]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign.sentCount).toBe(3);
+    expect(res.body.results[0].transactional.campaign.sentCount).toBe(1);
+  });
+
+  it("passes through per-campaign sentCount and brand-summed sentCount (brand mode)", async () => {
+    // Brand mode: byCampaign carries each campaign's own count; brand scope is
+    // the SUM across the brand's campaigns (2 + 1 = 3 emails to this recipient).
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          {
+            email: "john@acme.com",
+            byCampaign: {
+              "camp-uuid-1": { ...deliveredScope, sentCount: 2 },
+              "camp-uuid-2": { ...deliveredScope, sentCount: 1 },
+            },
+            campaign: null,
+            brand: { ...deliveredScope, sentCount: 3 },
+            global: emptyGlobal,
+          },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ brandId: "brand_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.byCampaign["camp-uuid-1"].sentCount).toBe(2);
+    expect(broadcast.byCampaign["camp-uuid-2"].sentCount).toBe(1);
+    expect(broadcast.brand.sentCount).toBe(3);
+  });
+
+  it("omits sentCount transparently when a provider predates it (absent-safe)", async () => {
+    // A provider still on the old contract returns no sentCount → the field is
+    // simply absent; the passthrough must not fabricate or default it.
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockProviderResponse([]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign).not.toHaveProperty("sentCount");
+  });
+
   it("returns null replyClassification when no reply", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3011")) {
