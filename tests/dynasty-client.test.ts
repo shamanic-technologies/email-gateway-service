@@ -37,7 +37,7 @@ describe("dynasty-client", () => {
       expect(slugs).toEqual(["cold-email", "cold-email-v2", "cold-email-v3"]);
       expect(mockFetch).toHaveBeenCalledTimes(1);
       const [url, opts] = mockFetch.mock.calls[0];
-      expect(url).toContain("/workflows/dynasty/slugs?dynastySlug=cold-email");
+      expect(url).toContain("/workflows/dynasty/slugs?workflowDynastySlug=cold-email");
       expect(opts.headers["X-API-Key"]).toBe("wf-key");
     });
 
