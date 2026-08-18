@@ -136,7 +136,7 @@ const BroadcastSendSchema = SendBaseSchema.extend({
   subject: z.string().describe("Shared email subject line (same thread, follow-ups are Re:)"),
   sequence: z.array(SequenceStepSchema).min(1).describe("Email sequence steps sent via Instantly"),
   bcc: z.string().optional().describe("Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."),
-  timezone: z.string().optional().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent/invalid = instantly-service falls back to its default timezone."),
+  timezone: z.string().nullish().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."),
 });
 
 export const SendRequestSchema = z

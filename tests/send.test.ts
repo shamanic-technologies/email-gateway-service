@@ -265,6 +265,42 @@ describe("POST /orgs/send", () => {
       expect(body.timezone).toBeUndefined();
     });
 
+    it("accepts an explicit null timezone and omits it downstream (instantly-service default)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const res = await authedPost("/orgs/send").send(
+        buildBroadcastBody({ timezone: null })
+      );
+
+      expect(res.status).toBe(200);
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body).not.toHaveProperty("timezone");
+    });
+
+    it("rejects a malformed timezone (non-string)", async () => {
+      const res = await authedPost("/orgs/send").send(
+        buildBroadcastBody({ timezone: 42 })
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.details.fieldErrors.timezone).toBeDefined();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("rejects a malformed timezone (object)", async () => {
+      const res = await authedPost("/orgs/send").send(
+        buildBroadcastBody({ timezone: { iana: "America/New_York" } })
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.details.fieldErrors.timezone).toBeDefined();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("forwards metadata to Instantly variables when provided in body", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
