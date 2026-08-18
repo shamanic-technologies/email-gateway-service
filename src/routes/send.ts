@@ -97,7 +97,9 @@ router.post("/send", async (req: Request, res: Response) => {
         variables: metadata,
         bcc: bccList.length > 0 ? bccList : undefined,
         subject: body.subject,
-        timezone: body.timezone,
+        // Explicit null means "the lead has no known timezone" — same as absent.
+        // Omit the field so instantly-service applies its own default timezone.
+        timezone: body.timezone ?? undefined,
         sequence: body.sequence,
       }, ctx, body.idempotencyKey);
 
