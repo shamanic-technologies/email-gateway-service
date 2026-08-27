@@ -119,13 +119,31 @@ describe("POST /orgs/manual-qualifications", () => {
     expect(res.body).toEqual({ error: "x-user-id header is required" });
   });
 
-  it("returns 400 for invalid status enum (local Zod)", async () => {
+  it("forwards a status this service does not know, letting instantly-service decide", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(400, { error: "Invalid status 'not_a_real_status'" }),
+    );
+
     const res = await authedPost("/orgs/manual-qualifications")
       .set("x-user-id", "user_1")
       .send({
         campaign_id: "camp_1",
         email: "alice@media.com",
         status: "not_a_real_status",
+      });
+
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: "Invalid status 'not_a_real_status'" });
+  });
+
+  it("returns 400 locally for a malformed email (still validated here)", async () => {
+    const res = await authedPost("/orgs/manual-qualifications")
+      .set("x-user-id", "user_1")
+      .send({
+        campaign_id: "camp_1",
+        email: "not-an-email",
+        status: "lead_interested",
       });
 
     expect(res.status).toBe(400);
@@ -213,16 +231,19 @@ describe("POST /orgs/manual-qualifications", () => {
     expect(JSON.parse(options.body)).toEqual(body);
   });
 
-  it("accepts all 8 status enum values", async () => {
+  it("accepts every status instantly-service accepts today", async () => {
     const statuses = [
       "lead_interested",
-      "lead_meeting_booked",
-      "lead_closed",
+      "lead_referral",
+      "lead_info_requested",
+      "lead_meeting_requested",
       "lead_not_interested",
       "lead_wrong_person",
       "lead_neutral",
       "lead_out_of_office",
       "auto_reply_received",
+      "lead_meeting_booked",
+      "lead_closed",
     ];
 
     for (const status of statuses) {
@@ -238,6 +259,26 @@ describe("POST /orgs/manual-qualifications", () => {
 
       expect(res.status).toBe(200);
     }
+
+    expect(mockFetch).toHaveBeenCalledTimes(statuses.length);
+  });
+
+  it("accepts a status added upstream after this service was deployed", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, {
+        idempotent: false,
+        qualification: { ...SAMPLE_QUALIFICATION, status: "lead_some_future_kind" },
+      }),
+    );
+
+    const res = await authedPost("/orgs/manual-qualifications").send({
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+      status: "lead_some_future_kind",
+    });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(mockFetch.mock.calls[0][1].body).status).toBe("lead_some_future_kind");
   });
 });
 
