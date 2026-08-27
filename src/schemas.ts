@@ -310,19 +310,11 @@ export type StatusResponse = z.infer<typeof StatusResponseSchema>;
 // --- POST /orgs/manual-qualifications ---
 
 export const ManualQualificationStatusSchema = z
-  .enum([
-    "lead_interested",
-    "lead_meeting_booked",
-    "lead_closed",
-    "lead_not_interested",
-    "lead_wrong_person",
-    "lead_neutral",
-    "lead_out_of_office",
-    "auto_reply_received",
-  ])
+  .string()
+  .min(1)
   .openapi("ManualQualificationStatus", {
     description:
-      "Manual reply qualification status — mirrors Instantly webhook reply event_type values exactly. Set by a human via the dashboard when Instantly fails to detect a reply (e.g. reply received on a non-leurre email account).",
+      "What a human states about the reply. instantly-service owns this vocabulary and is the only place it is authoritative — refer to its openapi.json rather than to this line, which cannot be kept in lockstep across a deploy boundary. Values it rejects are round-tripped from upstream, not refused here.",
   });
 
 export type ManualQualificationStatus = z.infer<typeof ManualQualificationStatusSchema>;
@@ -339,6 +331,7 @@ export const ManualQualificationSchema = z
     notes: z.string().nullable(),
     qualifiedAt: z.string().describe("ISO 8601 timestamp"),
   })
+  .passthrough()
   .openapi("ManualQualification");
 
 export type ManualQualification = z.infer<typeof ManualQualificationSchema>;
@@ -353,6 +346,7 @@ export const PostManualQualificationRequestSchema = z
     status: ManualQualificationStatusSchema,
     notes: z.string().max(2000).optional().describe("Optional free-text human note for audit"),
   })
+  .passthrough()
   .openapi("PostManualQualificationRequest");
 
 export type PostManualQualificationRequest = z.infer<typeof PostManualQualificationRequestSchema>;

@@ -2563,21 +2563,15 @@
           "qualifiedBy",
           "notes",
           "qualifiedAt"
-        ]
+        ],
+        "additionalProperties": {
+          "nullable": true
+        }
       },
       "ManualQualificationStatus": {
         "type": "string",
-        "enum": [
-          "lead_interested",
-          "lead_meeting_booked",
-          "lead_closed",
-          "lead_not_interested",
-          "lead_wrong_person",
-          "lead_neutral",
-          "lead_out_of_office",
-          "auto_reply_received"
-        ],
-        "description": "Manual reply qualification status — mirrors Instantly webhook reply event_type values exactly. Set by a human via the dashboard when Instantly fails to detect a reply (e.g. reply received on a non-leurre email account)."
+        "minLength": 1,
+        "description": "What a human states about the reply. instantly-service owns this vocabulary and is the only place it is authoritative — refer to its openapi.json rather than to this line, which cannot be kept in lockstep across a deploy boundary. Values it rejects are round-tripped from upstream, not refused here."
       },
       "PostManualQualificationRequest": {
         "type": "object",
@@ -2605,7 +2599,10 @@
           "campaign_id",
           "email",
           "status"
-        ]
+        ],
+        "additionalProperties": {
+          "nullable": true
+        }
       },
       "GetManualQualificationsResponse": {
         "type": "object",
