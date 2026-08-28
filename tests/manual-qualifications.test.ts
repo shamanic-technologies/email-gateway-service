@@ -239,6 +239,7 @@ describe("POST /orgs/manual-qualifications", () => {
       "lead_meeting_requested",
       "lead_not_interested",
       "lead_wrong_person",
+      "lead_changed_job",
       "lead_neutral",
       "lead_out_of_office",
       "auto_reply_received",
@@ -409,5 +410,152 @@ describe("GET /orgs/manual-qualifications", () => {
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBe("Upstream service error");
+  });
+});
+
+const WITHDRAWN_QUALIFICATION = {
+  ...SAMPLE_QUALIFICATION,
+  replyKind: "lead_interested",
+  withdrawnAt: "2026-08-28T09:00:00.000Z",
+  withdrawnBy: "user_1",
+};
+
+describe("POST /orgs/manual-qualifications/withdrawals", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it("returns 200 with { qualification } when instantly withdraws the statement", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, { qualification: WITHDRAWN_QUALIFICATION }),
+    );
+
+    const res = await authedPost("/orgs/manual-qualifications/withdrawals").send({
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+      notes: "Picked the wrong kind by mistake",
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ qualification: WITHDRAWN_QUALIFICATION });
+  });
+
+  it("forwards the body byte-identical to instantly-service", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, { qualification: WITHDRAWN_QUALIFICATION }),
+    );
+
+    const body = {
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+      notes: "Picked the wrong kind by mistake",
+    };
+    await authedPost("/orgs/manual-qualifications/withdrawals").send(body);
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("http://localhost:3011/orgs/manual-qualifications/withdrawals");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(init.body)).toEqual(body);
+  });
+
+  it("forwards identity headers to instantly-service", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, { qualification: WITHDRAWN_QUALIFICATION }),
+    );
+
+    await authedPost("/orgs/manual-qualifications/withdrawals")
+      .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
+      .send({ campaign_id: "camp_1", email: "alice@media.com" });
+
+    const headers = mockFetch.mock.calls[0][1].headers;
+    expect(headers["x-org-id"]).toBe("org_1");
+    expect(headers["x-user-id"]).toBe("user_1");
+    expect(headers["x-run-id"]).toBe("run_1");
+  });
+
+  it("returns 401 without API key", async () => {
+    const res = await request(app)
+      .post("/orgs/manual-qualifications/withdrawals")
+      .send({ campaign_id: "camp_1", email: "alice@media.com" });
+
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 400 when x-org-id header is missing", async () => {
+    const res = await request(app)
+      .post("/orgs/manual-qualifications/withdrawals")
+      .set("X-API-Key", API_KEY)
+      .send({ campaign_id: "camp_1", email: "alice@media.com" });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain("x-org-id");
+  });
+
+  it("returns 400 locally for a malformed body without calling instantly", async () => {
+    const res = await authedPost("/orgs/manual-qualifications/withdrawals").send({
+      campaign_id: "camp_1",
+      email: "not-an-email",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Invalid request");
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("round-trips the 404 no_standing_qualification refusal byte-equal", async () => {
+    const refusal = {
+      error: "No standing qualification to withdraw",
+      code: "no_standing_qualification",
+    };
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(404, refusal));
+
+    const res = await authedPost("/orgs/manual-qualifications/withdrawals").send({
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual(refusal);
+  });
+
+  it("round-trips the 404 campaign_not_found refusal byte-equal", async () => {
+    const refusal = { error: "Campaign not found", code: "campaign_not_found" };
+    mockFetch.mockResolvedValueOnce(mockJsonResponse(404, refusal));
+
+    const res = await authedPost("/orgs/manual-qualifications/withdrawals").send({
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+    });
+
+    expect(res.status).toBe(404);
+    expect(res.body).toEqual(refusal);
+  });
+
+  it("returns 502 on upstream 5xx", async () => {
+    mockFetch.mockResolvedValueOnce(mockTextResponse(503, "Service Unavailable"));
+
+    const res = await authedPost("/orgs/manual-qualifications/withdrawals").send({
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+    });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBe("Upstream service error");
+  });
+
+  it("does not collide with POST /orgs/manual-qualifications", async () => {
+    mockFetch.mockResolvedValueOnce(
+      mockJsonResponse(200, { qualification: WITHDRAWN_QUALIFICATION }),
+    );
+
+    await authedPost("/orgs/manual-qualifications/withdrawals").send({
+      campaign_id: "camp_1",
+      email: "alice@media.com",
+    });
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("http://localhost:3011/orgs/manual-qualifications/withdrawals");
+    expect(JSON.parse(init.body).status).toBeUndefined();
   });
 });
