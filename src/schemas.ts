@@ -330,6 +330,18 @@ export const ManualQualificationSchema = z
     qualifiedBy: z.string(),
     notes: z.string().nullable(),
     qualifiedAt: z.string().describe("ISO 8601 timestamp"),
+    withdrawnAt: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "ISO 8601 timestamp of the withdrawal, or null while the statement still STANDS. Non-null means a human took the statement back: it is kept for audit and must never be rendered as the lead's current reply kind.",
+      ),
+    withdrawnBy: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Who withdrew the statement, or null while it still stands."),
   })
   .passthrough()
   .openapi("ManualQualification");
@@ -363,6 +375,46 @@ export const PostManualQualificationResponseSchema = z
   .openapi("PostManualQualificationResponse");
 
 export type PostManualQualificationResponse = z.infer<typeof PostManualQualificationResponseSchema>;
+
+export const PostManualQualificationWithdrawalRequestSchema = z
+  .object({
+    campaign_id: z
+      .string()
+      .min(1)
+      .describe("Logical campaign id (groups sub-campaigns for the same workflow run)"),
+    email: z.string().email().describe("Lead email address"),
+    notes: z.string().max(2000).optional().describe("Optional free-text human note for audit"),
+  })
+  .passthrough()
+  .openapi("PostManualQualificationWithdrawalRequest");
+
+export type PostManualQualificationWithdrawalRequest = z.infer<
+  typeof PostManualQualificationWithdrawalRequestSchema
+>;
+
+export const PostManualQualificationWithdrawalResponseSchema = z
+  .object({
+    qualification: ManualQualificationSchema.describe(
+      "The statement that was withdrawn, now carrying withdrawnAt / withdrawnBy.",
+    ),
+  })
+  .openapi("PostManualQualificationWithdrawalResponse");
+
+export type PostManualQualificationWithdrawalResponse = z.infer<
+  typeof PostManualQualificationWithdrawalResponseSchema
+>;
+
+export const ManualQualificationWithdrawalRefusalSchema = z
+  .object({
+    error: z.string(),
+    code: z
+      .string()
+      .describe(
+        "instantly-service's refusal code. `no_standing_qualification`: nobody currently stands behind a reply kind for this pair (nothing was ever stated, or the statement is already withdrawn). `campaign_not_found`: no campaign in this org for the given email. instantly-service owns this vocabulary — refer to its openapi.json.",
+      ),
+  })
+  .passthrough()
+  .openapi("ManualQualificationWithdrawalRefusal");
 
 export const GetManualQualificationsQuerySchema = z
   .object({
@@ -852,6 +904,57 @@ registry.registerPath({
     400: { description: "Invalid body or missing identity header", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
     404: { description: "Campaign not found in this org for the given email", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/orgs/manual-qualifications/withdrawals",
+  tags: ["Manual Qualifications"],
+  summary: "Withdraw the standing manual reply qualification for a (campaign, lead) pair",
+  description: [
+    "Proxy to instantly-service `POST /orgs/manual-qualifications/withdrawals`. Takes back a human statement about a reply — for a person who picked the wrong kind by mistake. After the withdrawal the lead reads as it did before anybody said anything and the automatic classification takes over again. Nothing is deleted: the statement is kept for audit and comes back carrying `withdrawnAt` / `withdrawnBy`.",
+    "",
+    "The gateway validates the body locally and forwards it byte-identical to instantly-service. Identity headers (`x-org-id`, `x-user-id`, `x-run-id`, etc.) are propagated. Upstream 4xx responses — including the 404 refusal `code` — are round-tripped to the caller byte-equal; network failures and upstream 5xx surface as 502.",
+  ].join("\n"),
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: PostManualQualificationWithdrawalRequestSchema,
+          examples: {
+            mistake: {
+              summary: "Take back a reply kind picked by mistake",
+              value: {
+                campaign_id: "c1a2b3c4-0000-0000-0000-000000000001",
+                email: "alice@media.com",
+                notes: "Picked the wrong kind by mistake",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The standing statement was withdrawn",
+      content: {
+        "application/json": { schema: PostManualQualificationWithdrawalResponseSchema },
+      },
+    },
+    400: { description: "Invalid body or missing identity header", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    404: {
+      description:
+        "Nothing to withdraw. `code: \"no_standing_qualification\"` — nobody has stated a reply kind for this pair, or the statement was already withdrawn. `code: \"campaign_not_found\"` — no campaign in this org for the given email.",
+      content: {
+        "application/json": { schema: ManualQualificationWithdrawalRefusalSchema },
+      },
+    },
     502: { description: "Upstream service error", content: errorContent },
   },
 });
