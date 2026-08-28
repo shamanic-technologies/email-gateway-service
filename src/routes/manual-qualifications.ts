@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { z } from "zod";
 import {
   PostManualQualificationRequestSchema,
+  PostManualQualificationWithdrawalRequestSchema,
   GetManualQualificationsQuerySchema,
 } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
@@ -11,6 +12,7 @@ import { traceEvent } from "../lib/trace-event";
 const router = Router();
 
 const UPSTREAM_PATH = "/orgs/manual-qualifications";
+const UPSTREAM_WITHDRAWALS_PATH = "/orgs/manual-qualifications/withdrawals";
 
 function parseUpstreamBody(bodyText: string, contentType: string | null): unknown {
   if (!bodyText) return null;
@@ -63,6 +65,49 @@ router.post("/manual-qualifications", async (req: Request, res: Response) => {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] manual-qualifications POST failed: ${message}`);
     traceEvent(ctx, "manual-qualifications.post.error", message);
+    res.status(502).json({ error: "Upstream service error", details: message });
+  }
+});
+
+router.post("/manual-qualifications/withdrawals", async (req: Request, res: Response) => {
+  const parsed = PostManualQualificationWithdrawalRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const ctx = res.locals.orgContext as OrgContext;
+  const body = parsed.data;
+
+  traceEvent(
+    ctx,
+    "manual-qualifications.withdrawal.post.start",
+    `campaign=${body.campaign_id} email=${body.email}`,
+  );
+
+  try {
+    const upstream = await instantlyPassthrough(UPSTREAM_WITHDRAWALS_PATH, {
+      method: "POST",
+      body,
+      ctx,
+    });
+
+    if (upstream.status >= 500) {
+      console.error(
+        `[email-gateway] manual-qualifications withdrawal POST upstream ${upstream.status}: ${upstream.bodyText.slice(0, 500)}`,
+      );
+      traceEvent(ctx, "manual-qualifications.withdrawal.post.error", `upstream=${upstream.status}`);
+      res.status(502).json({ error: "Upstream service error", details: upstream.bodyText });
+      return;
+    }
+
+    const parsedBody = parseUpstreamBody(upstream.bodyText, upstream.contentType);
+    traceEvent(ctx, "manual-qualifications.withdrawal.post.done", `status=${upstream.status}`);
+    res.status(upstream.status).json(parsedBody);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[email-gateway] manual-qualifications withdrawal POST failed: ${message}`);
+    traceEvent(ctx, "manual-qualifications.withdrawal.post.error", message);
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
