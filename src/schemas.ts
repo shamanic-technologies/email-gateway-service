@@ -277,11 +277,63 @@ export type SendingForecastResponse = z.infer<typeof SendingForecastResponseSche
 
 // --- POST /orgs/status ---
 
+/**
+ * The contract's `StatusScope`, widened with the two fields a provider may
+ * serve on top of it. Both are forwarded verbatim: this hop neither decides
+ * nor validates what they mean.
+ *
+ * `replyKind` is deliberately an unconstrained string. The vocabulary belongs
+ * to the provider (instantly-service today) and a closed set re-declared here
+ * goes stale across a deploy boundary and refuses a value the owner accepts —
+ * the exact failure this repo already paid for on the manual-qualification
+ * status. Refer to instantly-service's openapi.json for the current values.
+ *
+ * Both are optional: a provider that predates the fields simply omits them,
+ * and postmark (transactional) has no reply tracking at all.
+ */
+export const ScopedStatusSchema = RawStatusScope.extend({
+  replyKind: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      "WHICH reply is on record — the finer reading of `replyClassification`, which keeps its exact meaning. Null when no reply kind is on record; absent from a provider that does not serve it (postmark). The provider owns this vocabulary; refer to its openapi.json rather than to this line.",
+    ),
+  disqualified: z
+    .boolean()
+    .optional()
+    .describe(
+      "True iff the provider reports this person as PERMANENTLY out (not the right contact, or gone from the role). A prospect who simply declines today is NOT disqualified — the lead stays recyclable. Derived by the provider from `replyKind`; this hop forwards it and decides nothing.",
+    ),
+});
+
+export type ScopedStatus = z.infer<typeof ScopedStatusSchema>;
+
+/**
+ * The contract's `ProviderStatus` with each scope widened to `ScopedStatus`.
+ * Structure and per-scope meaning are unchanged — only the two additive fields
+ * inside every scope are new.
+ */
+export const GatewayProviderStatusSchema = RawProviderStatus.extend({
+  byCampaign: z
+    .record(z.string(), ScopedStatusSchema)
+    .nullable()
+    .describe("Per-campaign breakdown keyed by campaignId — present in brand mode, null otherwise"),
+  campaign: ScopedStatusSchema.nullable().describe(
+    "Status scoped to the given campaign — present in campaign mode, null otherwise",
+  ),
+  brand: ScopedStatusSchema.nullable().describe(
+    "Aggregated status across all campaigns for the brand — present in brand mode, null otherwise",
+  ),
+});
+
+export type GatewayProviderStatus = z.infer<typeof GatewayProviderStatusSchema>;
+
 const StatusResultSchema = z
   .object({
     email: z.string().describe("Recipient email address"),
-    broadcast: ProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly). Omitted if no broadcast data exists for this email."),
-    transactional: ProviderStatusSchema.optional().describe("Status from transactional provider (Postmark). Omitted if no transactional data exists for this email."),
+    broadcast: GatewayProviderStatusSchema.optional().describe("Status from broadcast provider (Instantly). Omitted if no broadcast data exists for this email."),
+    transactional: GatewayProviderStatusSchema.optional().describe("Status from transactional provider (Postmark). Omitted if no transactional data exists for this email."),
   })
   .openapi("StatusResult");
 
@@ -439,6 +491,136 @@ export const GetManualQualificationsResponseSchema = z
   .openapi("GetManualQualificationsResponse");
 
 export type GetManualQualificationsResponse = z.infer<typeof GetManualQualificationsResponseSchema>;
+
+// --- POST /orgs/opt-outs ---
+
+export const OptOutChannelSchema = z
+  .string()
+  .min(1)
+  .openapi("OptOutChannel", {
+    description:
+      "The channel the person used to ask us to stop (an SMS, a call, a forwarded thread, a conversation). instantly-service owns this vocabulary and is the only place it is authoritative — refer to its openapi.json rather than to this line, which cannot be kept in lockstep across a deploy boundary. Values it rejects are round-tripped from upstream, not refused here.",
+  });
+
+export type OptOutChannel = z.infer<typeof OptOutChannelSchema>;
+
+export const LeadOptOutSchema = z
+  .object({
+    id: z.string(),
+    orgId: z.string(),
+    email: z.string(),
+    channel: OptOutChannelSchema,
+    statedBy: z.string().describe("The staff member who recorded it (x-user-id)"),
+    notes: z.string().nullable(),
+    statedAt: z.string().describe("ISO 8601 timestamp"),
+    withdrawnAt: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "ISO 8601 timestamp of the withdrawal, or null while the record still STANDS. Non-null means it was taken back: it is kept for audit and must never be rendered as a current opt-out.",
+      ),
+    withdrawnBy: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("Who withdrew the record, or null while it still stands."),
+  })
+  .passthrough()
+  .openapi("LeadOptOut");
+
+export type LeadOptOut = z.infer<typeof LeadOptOutSchema>;
+
+export const PostOptOutRequestSchema = z
+  .object({
+    email: z.string().email().describe("The person who asked us to stop"),
+    channel: OptOutChannelSchema,
+    notes: z.string().max(2000).optional().describe("Optional free-text human note for audit"),
+  })
+  .passthrough()
+  .openapi("PostOptOutRequest");
+
+export type PostOptOutRequest = z.infer<typeof PostOptOutRequestSchema>;
+
+export const PostOptOutResponseSchema = z
+  .object({
+    idempotent: z
+      .boolean()
+      .describe("True if a standing opt-out already existed — no new record, no repeated side effects"),
+    campaignsAffected: z.number().int().describe("Campaigns of this org holding that address"),
+    campaignsStopped: z
+      .number()
+      .int()
+      .describe(
+        "How many of them could be stopped at the SENDER. Below campaignsAffected means a pause failed and is logged — the local stop and the opt-out record still hold.",
+      ),
+    optOut: LeadOptOutSchema,
+  })
+  .openapi("PostOptOutResponse");
+
+export type PostOptOutResponse = z.infer<typeof PostOptOutResponseSchema>;
+
+export const PostOptOutWithdrawalRequestSchema = z
+  .object({
+    email: z.string().email().describe("The person whose opt-out is being taken back"),
+    notes: z.string().max(2000).optional().describe("Optional free-text human note for audit"),
+  })
+  .passthrough()
+  .openapi("PostOptOutWithdrawalRequest");
+
+export type PostOptOutWithdrawalRequest = z.infer<typeof PostOptOutWithdrawalRequestSchema>;
+
+export const PostOptOutWithdrawalResponseSchema = z
+  .object({
+    campaignsAffected: z.number().int(),
+    optOut: LeadOptOutSchema.describe(
+      "The record that was withdrawn, now carrying withdrawnAt / withdrawnBy.",
+    ),
+  })
+  .openapi("PostOptOutWithdrawalResponse");
+
+export type PostOptOutWithdrawalResponse = z.infer<typeof PostOptOutWithdrawalResponseSchema>;
+
+export const OptOutWithdrawalRefusalSchema = z
+  .object({
+    error: z.string(),
+    code: z
+      .string()
+      .describe(
+        "instantly-service's refusal code. `no_standing_optout`: nothing currently stands for this lead — nothing was ever recorded, or it is already withdrawn. instantly-service owns this vocabulary — refer to its openapi.json.",
+      ),
+  })
+  .passthrough()
+  .openapi("OptOutWithdrawalRefusal");
+
+export const GetOptOutsQuerySchema = z
+  .object({
+    email: z.string().email().optional().describe("Filter by lead email"),
+    standing_only: z
+      .enum(["true", "false"])
+      .optional()
+      .describe(
+        "Return only records that still STAND (default false — withdrawn records are part of the audit)",
+      ),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(500)
+      .optional()
+      .describe("Max rows to return (default 200, max 500)"),
+  })
+  .openapi("GetOptOutsQuery");
+
+export type GetOptOutsQuery = z.infer<typeof GetOptOutsQuerySchema>;
+
+export const GetOptOutsResponseSchema = z
+  .object({
+    optOuts: z.array(LeadOptOutSchema),
+  })
+  .openapi("GetOptOutsResponse");
+
+export type GetOptOutsResponse = z.infer<typeof GetOptOutsResponseSchema>;
 
 // --- Health ---
 
@@ -768,7 +950,7 @@ registry.registerPath({
                     byCampaign: null,
                     campaign: {
                       contacted: true, sent: true, delivered: true, opened: true, clicked: true, replied: false,
-                      replyClassification: null, bounced: false, unsubscribed: false,
+                      replyClassification: null, replyKind: null, disqualified: false, bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-02-20T14:30:00.000Z",
                       firstContactedAt: "2026-02-20T14:29:00.000Z",
                       firstSentAt: "2026-02-20T14:29:30.000Z",
@@ -794,7 +976,7 @@ registry.registerPath({
                     byCampaign: {
                       "b47ac10b-58cc-4372-a567-0e02b2c3d479": {
                         contacted: true, sent: true, delivered: true, opened: false, clicked: false, replied: false,
-                        replyClassification: null, bounced: false, unsubscribed: false,
+                        replyClassification: null, replyKind: null, disqualified: false, bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-01T10:00:00.000Z",
                         firstContactedAt: "2026-03-01T09:59:00.000Z",
                         firstSentAt: "2026-03-01T09:59:30.000Z",
@@ -804,7 +986,7 @@ registry.registerPath({
                       },
                       "d69ce32d-7aee-5594-c789-2g24d4e5f6a1": {
                         contacted: true, sent: true, delivered: true, opened: true, clicked: true, replied: true,
-                        replyClassification: "positive", bounced: false, unsubscribed: false,
+                        replyClassification: "positive", replyKind: "lead_interested", disqualified: false, bounced: false, unsubscribed: false,
                         lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                         firstContactedAt: "2026-03-02T11:59:00.000Z",
                         firstSentAt: "2026-03-02T11:59:30.000Z",
@@ -818,7 +1000,7 @@ registry.registerPath({
                     campaign: null,
                     brand: {
                       contacted: true, sent: true, delivered: true, opened: true, clicked: true, replied: true,
-                      replyClassification: "positive", bounced: false, unsubscribed: false,
+                      replyClassification: "positive", replyKind: "lead_interested", disqualified: false, bounced: false, unsubscribed: false,
                       lastDeliveredAt: "2026-03-02T12:00:00.000Z",
                       // brand scope = MIN across the brand's campaigns (first occurrence anywhere)
                       firstContactedAt: "2026-03-01T09:59:00.000Z",
@@ -975,6 +1157,118 @@ registry.registerPath({
     200: {
       description: "List of manual qualifications",
       content: { "application/json": { schema: GetManualQualificationsResponseSchema } },
+    },
+    400: { description: "Invalid query parameters", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/orgs/opt-outs",
+  tags: ["Opt-outs"],
+  summary: "Record that a person asked a human to stop contacting them",
+  description: [
+    "Proxy to instantly-service `POST /orgs/opt-outs`. A prospect rarely clicks the unsubscribe link: they send an SMS, they call, they reply to a forwarded thread, they say it in person. This records that statement — it is never inferred — and instantly-service then honours it: the sending stops and the person reads as `unsubscribed` on `POST /orgs/status`.",
+    "",
+    "Scope is the PERSON, not a campaign. The record is a consent record: who stated it, when, and through which channel.",
+    "",
+    "The gateway validates the body locally and forwards it byte-identical to instantly-service. Identity headers (`x-org-id`, `x-user-id`, `x-run-id`, etc.) are propagated. Upstream 4xx responses are round-tripped to the caller byte-equal; network failures and upstream 5xx surface as 502.",
+  ].join("\n"),
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: PostOptOutRequestSchema,
+          examples: {
+            sms: {
+              summary: "A prospect texted asking not to be contacted again",
+              value: {
+                email: "alice@media.com",
+                channel: "sms",
+                notes: "Texted my mobile asking not to be contacted again",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Opt-out recorded (or idempotent no-op)",
+      content: { "application/json": { schema: PostOptOutResponseSchema } },
+    },
+    400: { description: "Invalid body or missing identity header", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/orgs/opt-outs/withdrawals",
+  tags: ["Opt-outs"],
+  summary: "Withdraw the standing recorded opt-out for a person",
+  description: [
+    "Proxy to instantly-service `POST /orgs/opt-outs/withdrawals`. Takes a recorded opt-out back — recorded on the wrong lead, or a prospect who came back and asked to hear from us again. After it, `POST /orgs/status` stops reporting that person as unsubscribed.",
+    "",
+    "A correction, not an erasure: the record is kept for audit and comes back carrying `withdrawnAt` / `withdrawnBy`. It releases the opt-out; it does not resume the sequences it stopped.",
+    "",
+    "The gateway validates the body locally and forwards it byte-identical to instantly-service. Identity headers are propagated. Upstream 4xx responses — including the 404 refusal `code` — are round-tripped to the caller byte-equal; network failures and upstream 5xx surface as 502.",
+  ].join("\n"),
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: PostOptOutWithdrawalRequestSchema,
+          examples: {
+            mistake: {
+              summary: "Recorded on the wrong lead",
+              value: { email: "alice@media.com", notes: "Recorded on the wrong lead" },
+            },
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "The standing opt-out was withdrawn",
+      content: { "application/json": { schema: PostOptOutWithdrawalResponseSchema } },
+    },
+    400: { description: "Invalid body or missing identity header", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    404: {
+      description:
+        "Nothing stands for this lead. `code: \"no_standing_optout\"` — nothing was ever recorded, or it is already withdrawn.",
+      content: { "application/json": { schema: OptOutWithdrawalRefusalSchema } },
+    },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/orgs/opt-outs",
+  tags: ["Opt-outs"],
+  summary: "The org's recorded opt-out log",
+  description:
+    "Proxy to instantly-service `GET /orgs/opt-outs`. Every opt-out recorded by a human for this org, newest first. Withdrawn records are returned too and carry `withdrawnAt` / `withdrawnBy` — hiding them would destroy the audit. Pass `standing_only=true` for only the records that still stand. Cross-org reads are blocked by instantly-service.",
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    query: GetOptOutsQuerySchema,
+  },
+  responses: {
+    200: {
+      description: "The org's recorded opt-outs",
+      content: { "application/json": { schema: GetOptOutsResponseSchema } },
     },
     400: { description: "Invalid query parameters", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },

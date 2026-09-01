@@ -198,11 +198,23 @@ export async function getPublicEngagementLatencyGroups(groups: Record<string, { 
 // StatusScope re-exported from shared contract.
 export type { StatusScope } from "@shamanic-technologies/email-domain-contract";
 
+/**
+ * The contract's `StatusScope` plus the two fields instantly-service serves on
+ * top of it. `replyKind` is typed as a plain string on purpose: the vocabulary
+ * is instantly-service's, and a copy of its enum here would go stale and refuse
+ * a value the owner accepts. Both optional — the gateway forwards whatever the
+ * provider sends and decides nothing about it.
+ */
+export type ScopedStatus = StatusScope & {
+  replyKind?: string | null;
+  disqualified?: boolean;
+};
+
 export interface StatusResult {
   email: string;
-  byCampaign: Record<string, StatusScope> | null;
-  campaign: StatusScope | null;
-  brand: StatusScope | null;
+  byCampaign: Record<string, ScopedStatus> | null;
+  campaign: ScopedStatus | null;
+  brand: ScopedStatus | null;
   global: GlobalStatus;
 }
 
