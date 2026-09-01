@@ -798,3 +798,185 @@ describe("StatusRequestSchema", () => {
     expect(result.success).toBe(false);
   });
 });
+
+// --- Reply kind / disqualified passthrough (instantly-service owns both) ---
+
+describe("POST /orgs/status — replyKind + disqualified passthrough", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  function scopeWithKind(replyKind: string | null, disqualified: boolean) {
+    return {
+      ...deliveredScope,
+      replied: replyKind !== null,
+      replyClassification: replyKind === null ? null : "negative",
+      replyKind,
+      disqualified,
+    };
+  }
+
+  function mockBothProviders(broadcastResults: unknown[], transactionalResults: unknown[]) {
+    mockFetch.mockImplementation((url: string) => {
+      const results = url.includes("3011") ? broadcastResults : transactionalResults;
+      return Promise.resolve(mockProviderResponse(results));
+    });
+  }
+
+  it("carries replyKind + disqualified on every scope the read answers for", async () => {
+    const perCampaign = scopeWithKind("lead_wrong_person", true);
+    const brand = scopeWithKind("lead_wrong_person", true);
+    mockBothProviders(
+      [
+        {
+          email: "john@acme.com",
+          byCampaign: { camp_1: perCampaign },
+          campaign: null,
+          brand,
+          global: emptyGlobal,
+        },
+      ],
+      [],
+    );
+
+    const res = await authedPost("/orgs/status").send({
+      brandId: "brand_1",
+      items: [{ email: "john@acme.com" }],
+    });
+
+    expect(res.status).toBe(200);
+    const broadcast = res.body.results[0].broadcast;
+    expect(broadcast.byCampaign.camp_1.replyKind).toBe("lead_wrong_person");
+    expect(broadcast.byCampaign.camp_1.disqualified).toBe(true);
+    expect(broadcast.brand.replyKind).toBe("lead_wrong_person");
+    expect(broadcast.brand.disqualified).toBe(true);
+  });
+
+  it("carries them on the campaign scope too", async () => {
+    mockBothProviders(
+      [
+        {
+          email: "john@acme.com",
+          byCampaign: null,
+          campaign: scopeWithKind("lead_not_interested", false),
+          brand: null,
+          global: emptyGlobal,
+        },
+      ],
+      [],
+    );
+
+    const res = await authedPost("/orgs/status").send({
+      campaignId: "camp_1",
+      items: [{ email: "john@acme.com" }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign).toEqual(
+      scopeWithKind("lead_not_interested", false),
+    );
+  });
+
+  // A recyclable "no" and a permanent one are both `negative` — the coarse
+  // value is unchanged and the finer one is what tells them apart.
+  it("tells a recyclable no from a permanent disqualification without changing the coarse class", async () => {
+    const recyclable = scopeWithKind("lead_not_interested", false);
+    const permanent = scopeWithKind("lead_changed_job", true);
+
+    expect(recyclable.replyClassification).toBe("negative");
+    expect(permanent.replyClassification).toBe("negative");
+
+    mockBothProviders(
+      [
+        {
+          email: "john@acme.com",
+          byCampaign: { camp_1: recyclable, camp_2: permanent },
+          campaign: null,
+          brand: permanent,
+          global: emptyGlobal,
+        },
+      ],
+      [],
+    );
+
+    const res = await authedPost("/orgs/status").send({
+      brandId: "brand_1",
+      items: [{ email: "john@acme.com" }],
+    });
+
+    const byCampaign = res.body.results[0].broadcast.byCampaign;
+    expect(byCampaign.camp_1.replyClassification).toBe("negative");
+    expect(byCampaign.camp_1.disqualified).toBe(false);
+    expect(byCampaign.camp_2.replyClassification).toBe("negative");
+    expect(byCampaign.camp_2.disqualified).toBe(true);
+  });
+
+  // AC3 — the vocabulary is instantly-service's. A kind this gateway has never
+  // seen must reach the caller untouched, never be dropped or refused.
+  it.each([
+    "lead_interested",
+    "lead_referral",
+    "lead_info_requested",
+    "lead_meeting_requested",
+    "lead_not_interested",
+    "lead_wrong_person",
+    "lead_changed_job",
+    "lead_neutral",
+    "lead_out_of_office",
+    "auto_reply_received",
+    "lead_kind_this_gateway_has_never_seen",
+  ])("forwards reply kind %s untouched", async (replyKind) => {
+    mockBothProviders(
+      [
+        {
+          email: "john@acme.com",
+          byCampaign: null,
+          campaign: scopeWithKind(replyKind, false),
+          brand: null,
+          global: emptyGlobal,
+        },
+      ],
+      [],
+    );
+
+    const res = await authedPost("/orgs/status").send({
+      campaignId: "camp_1",
+      items: [{ email: "john@acme.com" }],
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign.replyKind).toBe(replyKind);
+  });
+
+  // AC2 — purely additive: a provider that omits the fields is unaffected.
+  it("leaves a scope without the fields exactly as it was", async () => {
+    mockBothProviders(
+      [
+        {
+          email: "john@acme.com",
+          byCampaign: null,
+          campaign: deliveredScope,
+          brand: null,
+          global: emptyGlobal,
+        },
+      ],
+      [
+        {
+          email: "john@acme.com",
+          byCampaign: null,
+          campaign: emptyScope,
+          brand: null,
+          global: emptyGlobal,
+        },
+      ],
+    );
+
+    const res = await authedPost("/orgs/status").send({
+      campaignId: "camp_1",
+      items: [{ email: "john@acme.com" }],
+    });
+
+    expect(res.body.results[0].broadcast.campaign).toEqual(deliveredScope);
+    expect(res.body.results[0].transactional.campaign).toEqual(emptyScope);
+  });
+});
