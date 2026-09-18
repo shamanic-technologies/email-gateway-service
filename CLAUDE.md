@@ -33,6 +33,42 @@ Cost 2026-08-18 (`timezone`, #182→#183/v0.25.2): `BroadcastSendSchema.timezone
 
 **Sibling fields not yet widened:** `recipientFirstName` / `recipientLastName` / `recipientCompany` are also lead-sourced and still `.optional()`. They have not been observed failing in prod (the 13 failures were all timezone), so they were left alone — but a caller that starts forwarding their nulls will hit the identical 400.
 
+## Reading ONE logical send operation back — `runIds` cannot do it, and the failure is silent
+
+`GET /stats?runIds=<run>` filters on the run the PROVIDER recorded against each
+message, which is a CHILD run minted per send. It is not the run of the service
+that asked for the sends. So a caller that performed thousands of sends as one
+operation, and asks with its own run, matches nothing and gets a clean
+well-formed response saying nothing was sent — byte-identical to a real all-zero
+result. Measured in prod 2026-09-18: release run `79982eb6…` → `sent: 0`; its
+child run `e095307e…` → `sent: 1`.
+
+`GET /orgs/stats/by-operation` + `GET /public/stats/by-operation` take an
+`operationId` instead — the value the caller set as the send's `tag` on every
+message of that operation — and pass it to postmark-service's own per-operation
+read (`/stats/by-tag`, v0.32.6+), which is one indexed query whatever the
+operation's size.
+
+**The half that matters is `matched`, not the figures.** An operation nothing
+belongs to comes back `matched: false` with NO `transactional` block at all.
+Never "improve" this into a zeroed `ChannelStats`: a consumer polling an
+operation in flight must be able to tell "my question found nothing" from "the
+outcomes are zero", and the only way to give it that is to refuse to emit
+numbers with no messages behind them. Same reason the handler 502s when the
+provider claims a match and serves no figures.
+
+**Transactional only, on purpose.** Broadcast sequences are already named by
+their campaign and audience, and the broadcast provider has no equivalent
+per-send handle — so this read does not answer for broadcast rather than
+answering with a silent zero. This is NOT the broadcast-only strip pattern
+below; it is its mirror, and it is a separate read rather than a filter on
+`/stats` precisely because `/stats`'s response shape cannot express
+"I matched nothing".
+
+Consumer: transactional-email-service's mailing-list release self-halt, which
+stops a release when Postmark's bounce or unsubscribe outcomes go bad. It read
+the run-keyed query and was therefore inert for its whole life.
+
 ## Shared contract
 
 Cross-provider canonical shapes (`StatusScope`, `RecipientStats`, `EmailStats`, `StepStats`, `RepliesDetail`, `ChannelStats`, `ProviderStatus`, `GlobalStatus`, `ReplyClassification`) live in [`@shamanic-technologies/email-domain-contract`](https://github.com/shamanic-technologies/email-domain-contract). Do NOT redeclare these schemas locally — re-export from the package via `src/schemas.ts`. As of 2026-06-05 (DIS-229), instantly-service (v0.40.0) and postmark-service both migrated onto this package too — all three services now source the shared shapes from `^1.1.0`, so a contract change propagates to every provider on a version bump.
