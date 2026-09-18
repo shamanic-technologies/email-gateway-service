@@ -283,7 +283,9 @@ internalRouter.get("/stats/sending-forecast", sendingForecastHandler);
  * A caller that sent many messages as one operation cannot ask `/stats` for
  * them: the only per-operation filter there is `runIds`, and the run recorded
  * against a message downstream is a CHILD run minted per send — so the caller's
- * own run matches nothing and the answer is a clean, well-formed zero. That is
+ * own run matches nothing there and the answer is a clean, well-formed zero.
+ * The handle here is that same caller run (`operationRunId`), which the
+ * transactional provider persists as each message's PARENT run. That is
  * the failure this read removes, and removing it means REFUSING to answer in
  * the same shape: an operation nothing belongs to comes back `matched: false`
  * with no `transactional` block at all, so a blind question cannot be read as a
@@ -304,14 +306,17 @@ async function operationStatsHandler(req: Request, res: Response) {
     return;
   }
 
-  const { operationId } = parsed.data;
+  const { operationRunId } = parsed.data;
   const ctx: OrgContext | undefined = res.locals.orgContext ?? extractOrgContext(req) ?? extractPartialContext(req);
 
   try {
-    const raw = await postmarkClient.getStatsByTag(operationId, ctx);
+    const raw = await postmarkClient.getOperationStats(operationRunId, ctx);
 
-    if (!raw.matched) {
-      res.json({ operationId, matched: false, messageCount: 0 });
+    if (raw === null) {
+      // The provider NAMED the empty case (404 + OPERATION_NOT_FOUND). Anything
+      // else it fails on — including a bare 404 from a route that no longer
+      // exists — throws below and surfaces as a 502, never as an empty match.
+      res.json({ operationRunId, matched: false, messagesMatched: 0 });
       return;
     }
 
@@ -323,9 +328,12 @@ async function operationStatsHandler(req: Request, res: Response) {
     }
 
     res.json({
-      operationId,
+      operationRunId,
       matched: true,
-      messageCount: raw.messageCount,
+      messagesMatched: raw.messagesMatched,
+      recipientsMatched: raw.recipientsMatched,
+      firstMessageAt: raw.firstMessageAt,
+      lastMessageAt: raw.lastMessageAt,
       transactional: { recipientStats: raw.recipientStats, emailStats: raw.emailStats },
     });
   } catch (error: unknown) {
