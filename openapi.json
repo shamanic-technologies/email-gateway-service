@@ -1562,6 +1562,20 @@
             "type": "integer",
             "description": "How many messages belong to this operation. 0 exactly when `matched` is false."
           },
+          "recipientCount": {
+            "type": "integer",
+            "description": "How many distinct recipients those messages went to. Present only when matched is true."
+          },
+          "firstMessageAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the operation's first message was submitted. Present only when matched is true."
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "nullable": true,
+            "description": "When the operation's most recent message was submitted — how fresh this answer is. Present only when matched is true."
+          },
           "transactional": {
             "type": "object",
             "properties": {
@@ -3913,7 +3927,7 @@
           "Stats"
         ],
         "summary": "Get aggregated outcomes for one logical send operation",
-        "description": "Aggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider has no equivalent per-send handle — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.",
+        "description": "Aggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**How the operation is named.** `operationId` is the caller's OWN run id. The transactional provider persists it on every message it sends (the parent of the child run it records per message), so it names exactly that operation's messages and nothing else — one indexed lookup, no enumeration.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider records nothing under the caller's own run — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.",
         "security": [
           {
             "apiKey": []
@@ -3924,10 +3938,10 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "description": "Identifies one logical send operation. Every message the caller sent as part of it carries this value, set at send time as the send's `tag`. Distinct per operation — a mailing-list release uses its own release id, not the list's."
+              "description": "The caller's OWN run id — the run it tracks the operation under, and sends under. The transactional provider persists it on every message it sends, so it names exactly that operation's messages. It is not the run the provider records per message: that one is a child run minted per send, which is why filtering `/stats` on `runIds` with this value matches nothing."
             },
             "required": true,
-            "description": "Identifies one logical send operation. Every message the caller sent as part of it carries this value, set at send time as the send's `tag`. Distinct per operation — a mailing-list release uses its own release id, not the list's.",
+            "description": "The caller's OWN run id — the run it tracks the operation under, and sends under. The transactional provider persists it on every message it sends, so it names exactly that operation's messages. It is not the run the provider records per message: that one is a child run minted per send, which is why filtering `/stats` on `runIds` with this value matches nothing.",
             "name": "operationId",
             "in": "query"
           },
@@ -4052,7 +4066,7 @@
           "Stats"
         ],
         "summary": "Get aggregated outcomes for one logical send operation (public, no identity headers required)",
-        "description": "Same behavior as `GET /orgs/stats/by-operation` but does not require `x-org-id` or any identity headers. This is the route a background worker uses, since it has no request to take identity from.\n\nAggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider has no equivalent per-send handle — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.",
+        "description": "Same behavior as `GET /orgs/stats/by-operation` but does not require `x-org-id` or any identity headers. This is the route a background worker uses, since it has no request to take identity from.\n\nAggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**How the operation is named.** `operationId` is the caller's OWN run id. The transactional provider persists it on every message it sends (the parent of the child run it records per message), so it names exactly that operation's messages and nothing else — one indexed lookup, no enumeration.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider records nothing under the caller's own run — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.",
         "security": [
           {
             "apiKey": []
@@ -4063,10 +4077,10 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "description": "Identifies one logical send operation. Every message the caller sent as part of it carries this value, set at send time as the send's `tag`. Distinct per operation — a mailing-list release uses its own release id, not the list's."
+              "description": "The caller's OWN run id — the run it tracks the operation under, and sends under. The transactional provider persists it on every message it sends, so it names exactly that operation's messages. It is not the run the provider records per message: that one is a child run minted per send, which is why filtering `/stats` on `runIds` with this value matches nothing."
             },
             "required": true,
-            "description": "Identifies one logical send operation. Every message the caller sent as part of it carries this value, set at send time as the send's `tag`. Distinct per operation — a mailing-list release uses its own release id, not the list's.",
+            "description": "The caller's OWN run id — the run it tracks the operation under, and sends under. The transactional provider persists it on every message it sends, so it names exactly that operation's messages. It is not the run the provider records per message: that one is a child run minted per send, which is why filtering `/stats` on `runIds` with this value matches nothing.",
             "name": "operationId",
             "in": "query"
           }

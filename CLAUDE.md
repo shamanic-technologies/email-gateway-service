@@ -44,30 +44,35 @@ result. Measured in prod 2026-09-18: release run `79982eb6…` → `sent: 0`; it
 child run `e095307e…` → `sent: 1`.
 
 `GET /orgs/stats/by-operation` + `GET /public/stats/by-operation` take an
-`operationId` instead — the value the caller set as the send's `tag` on every
-message of that operation — and pass it to postmark-service's own per-operation
-read (`/stats/by-tag`, v0.32.6+), which is one indexed query whatever the
-operation's size.
+`operationId` instead, which is **the caller's own run id**. postmark-service
+persists it on every message as `parent_run_id` (v0.33.0) — the value it always
+had in hand at send time and used to throw away — and serves
+`GET /internal/operations/{runId}/stats` over an index on it. One lookup
+whatever the operation's size.
 
-**The half that matters is `matched`, not the figures.** An operation nothing
-belongs to comes back `matched: false` with NO `transactional` block at all.
-Never "improve" this into a zeroed `ChannelStats`: a consumer polling an
+**The half that matters is `matched`, not the figures.** postmark-service
+answers an operation it has no messages for with a **404 carrying
+`code: OPERATION_NOT_FOUND`** and no stats. This hop turns that into
+`matched: false` with no `transactional` block — a 200, because a poller
+should not have to read an HTTP error to learn its operation has not started.
+Never "improve" that into a zeroed `ChannelStats`: a consumer polling an
 operation in flight must be able to tell "my question found nothing" from "the
 outcomes are zero", and the only way to give it that is to refuse to emit
-numbers with no messages behind them. Same reason the handler 502s when the
-provider claims a match and serves no figures.
+numbers with no messages behind them. For the same reason the 404 is matched on
+its `code` and NOT on its status alone — a routing 404 from a provider that
+never shipped the route would otherwise read as a healthy empty operation. It
+502s.
 
-**Transactional only, on purpose.** Broadcast sequences are already named by
-their campaign and audience, and the broadcast provider has no equivalent
-per-send handle — so this read does not answer for broadcast rather than
+**Transactional only, on purpose.** The broadcast provider records nothing under
+the caller's own run, so this read does not answer for broadcast rather than
 answering with a silent zero. This is NOT the broadcast-only strip pattern
-below; it is its mirror, and it is a separate read rather than a filter on
+above; it is its mirror, and it is a separate read rather than a filter on
 `/stats` precisely because `/stats`'s response shape cannot express
 "I matched nothing".
 
 Consumer: transactional-email-service's mailing-list release self-halt, which
 stops a release when Postmark's bounce or unsubscribe outcomes go bad. It read
-the run-keyed query and was therefore inert for its whole life.
+the run-keyed `/stats` query and was therefore inert for its whole life.
 
 ## Shared contract
 

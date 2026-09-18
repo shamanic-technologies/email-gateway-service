@@ -119,24 +119,60 @@ export async function getStats(filters: {
 }
 
 /**
- * postmark-service's per-operation read (v0.32.6+).
+ * postmark-service's per-operation read (v0.33.0+).
  *
- * `matched` is the field this whole path exists for: postmark-service refuses
- * to emit stats for a tag nothing carries, so an empty match cannot be mistaken
- * for a measured zero anywhere downstream.
+ * The operation is named by the CALLER'S OWN RUN, which postmark-service now
+ * persists on every message as `parent_run_id` — the value it always had in
+ * hand at send time and used to throw away. The run it stores as `run_id` is
+ * the child it mints per send, which is why a caller filtering on its own run
+ * matched nothing and read a well-formed zero.
+ *
+ * An operation it has no messages for is a 404 carrying no stats, never zeros.
+ * That is the distinction this whole path exists to preserve, so it is read
+ * here as a first-class outcome rather than as an error.
  */
 export interface ProviderOperationStats {
-  tag: string;
-  matched: boolean;
-  messageCount: number;
-  recipientStats?: RecipientStats;
-  emailStats?: EmailStats;
+  operationRunId: string;
+  messagesMatched: number;
+  recipientsMatched: number;
+  firstMessageAt: string | null;
+  lastMessageAt: string | null;
+  recipientStats: RecipientStats;
+  emailStats: EmailStats;
 }
 
-export async function getStatsByTag(tag: string, ctx?: OrgContext) {
-  const basePath = ctx?.orgId ? "/orgs/stats/by-tag" : "/internal/stats/by-tag";
-  const path = `${basePath}?tag=${encodeURIComponent(tag)}`;
-  return request<ProviderOperationStats>(path, { ctx });
+export type OperationStatsResult =
+  | { matched: true; stats: ProviderOperationStats }
+  | { matched: false };
+
+/**
+ * Read one operation's outcomes, distinguishing "no messages under it" from
+ * every other kind of failure.
+ *
+ * Deliberately not routed through `request()`: that helper turns any non-2xx
+ * into a throw, which would flatten the 404 that carries the answer into the
+ * same shape as a provider outage. Only `OPERATION_NOT_FOUND` is read as an
+ * empty match; anything else still fails loud.
+ */
+export async function getOperationStats(operationRunId: string, ctx?: OrgContext): Promise<OperationStatsResult> {
+  const path = `/internal/operations/${encodeURIComponent(operationRunId)}/stats`;
+  const response = await fetch(`${url}${path}`, {
+    method: "GET",
+    headers: buildServiceHeaders(apiKey, ctx),
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+
+  if (response.status === 404) {
+    const body = (await response.json().catch(() => ({}))) as { code?: string };
+    if (body.code === "OPERATION_NOT_FOUND") return { matched: false };
+    throw new Error(`postmark-service GET ${path}: 404 - ${JSON.stringify(body)}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`postmark-service GET ${path}: ${response.status} - ${await response.text()}`);
+  }
+
+  return { matched: true, stats: (await response.json()) as ProviderOperationStats };
 }
 
 // StatusScope re-exported from shared contract.

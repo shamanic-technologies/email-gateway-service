@@ -43,7 +43,30 @@ function emailStats(overrides: Record<string, unknown> = {}) {
 }
 
 function ok(body: unknown) {
-  return { ok: true, json: () => Promise.resolve(body) };
+  return { ok: true, status: 200, json: () => Promise.resolve(body) };
+}
+
+/** The provider's answer for an operation it has no messages for. */
+function notFound() {
+  return {
+    ok: false,
+    status: 404,
+    json: () => Promise.resolve({ error: "No messages are recorded under this operation", code: "OPERATION_NOT_FOUND" }),
+    text: () => Promise.resolve("{}"),
+  };
+}
+
+function operation(overrides: Record<string, unknown> = {}) {
+  return {
+    operationRunId: "op",
+    messagesMatched: 1,
+    recipientsMatched: 1,
+    firstMessageAt: "2026-09-18T09:00:00.000Z",
+    lastMessageAt: "2026-09-18T10:00:00.000Z",
+    recipientStats: recipientStats(),
+    emailStats: emailStats(),
+    ...overrides,
+  };
 }
 
 function serviceAuthGet(path: string) {
@@ -69,9 +92,7 @@ describe("GET /stats/by-operation", () => {
   });
 
   it("reports an operation nothing belongs to as unmatched, with no stats block", async () => {
-    mockFetch.mockResolvedValueOnce(
-      ok({ tag: "never-ran", matched: false, messageCount: 0 })
-    );
+    mockFetch.mockResolvedValueOnce(notFound());
 
     const res = await serviceAuthGet("/public/stats/by-operation?operationId=never-ran");
 
@@ -83,13 +104,13 @@ describe("GET /stats/by-operation", () => {
 
   it("returns the operation's outcomes when messages back them", async () => {
     mockFetch.mockResolvedValueOnce(
-      ok({
-        tag: "mailing-list-release-7",
-        matched: true,
-        messageCount: 30013,
+      ok(operation({
+        operationRunId: "mailing-list-release-7",
+        messagesMatched: 30013,
+        recipientsMatched: 30013,
         recipientStats: recipientStats({ contacted: 30013, sent: 30013, delivered: 29800, bounced: 213, unsubscribed: 41 }),
         emailStats: emailStats({ sent: 30013, delivered: 29800, bounced: 213, unsubscribed: 41 }),
-      })
+      }))
     );
 
     const res = await serviceAuthGet("/public/stats/by-operation?operationId=mailing-list-release-7");
@@ -101,17 +122,19 @@ describe("GET /stats/by-operation", () => {
     expect(res.body.transactional.emailStats.bounced).toBe(213);
     expect(res.body.transactional.emailStats.unsubscribed).toBe(41);
     expect(res.body.transactional.recipientStats.delivered).toBe(29800);
+    expect(res.body.recipientCount).toBe(30013);
+    expect(res.body.lastMessageAt).toBe("2026-09-18T10:00:00.000Z");
   });
 
   it("distinguishes a matched all-zero operation from an unmatched one", async () => {
     mockFetch.mockResolvedValueOnce(
-      ok({
-        tag: "just-started",
-        matched: true,
-        messageCount: 5,
+      ok(operation({
+        operationRunId: "just-started",
+        messagesMatched: 5,
+        recipientsMatched: 5,
         recipientStats: recipientStats({ contacted: 5, sent: 5, delivered: 5 }),
         emailStats: emailStats({ sent: 5, delivered: 5 }),
-      })
+      }))
     );
 
     const res = await serviceAuthGet("/public/stats/by-operation?operationId=just-started");
@@ -121,23 +144,26 @@ describe("GET /stats/by-operation", () => {
     expect(res.body.transactional.emailStats.unsubscribed).toBe(0);
   });
 
-  it("asks the provider for exactly one operation, by tag, in one request", async () => {
-    mockFetch.mockResolvedValueOnce(ok({ tag: "op with spaces/&", matched: false, messageCount: 0 }));
+  it("asks the provider for exactly one operation, by the caller's own run, in one request", async () => {
+    mockFetch.mockResolvedValueOnce(notFound());
 
-    await serviceAuthGet(`/public/stats/by-operation?operationId=${encodeURIComponent("op with spaces/&")}`);
+    await serviceAuthGet(`/public/stats/by-operation?operationId=${encodeURIComponent("run/with&chars")}`);
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const url = mockFetch.mock.calls[0][0] as string;
-    expect(url).toContain("/internal/stats/by-tag");
-    expect(url).toContain(`tag=${encodeURIComponent("op with spaces/&")}`);
+    expect(url).toContain(`/internal/operations/${encodeURIComponent("run/with&chars")}/stats`);
+    // Never the run-filtered stats read: that one matches the child runs the
+    // provider mints per send, so it answers zero for the caller's own run.
+    expect(url).not.toContain("runIds");
   });
 
-  it("uses the org-scoped provider route when the caller has an org", async () => {
-    mockFetch.mockResolvedValueOnce(ok({ tag: "op", matched: false, messageCount: 0 }));
+  it("serves the same answer on the org-scoped route", async () => {
+    mockFetch.mockResolvedValueOnce(notFound());
 
-    await authedGet("/orgs/stats/by-operation?operationId=op");
+    const res = await authedGet("/orgs/stats/by-operation?operationId=op");
 
-    expect(mockFetch.mock.calls[0][0]).toContain("/orgs/stats/by-tag");
+    expect(res.status).toBe(200);
+    expect(res.body.matched).toBe(false);
   });
 
   it("rejects a request with no operationId", async () => {
@@ -156,11 +182,17 @@ describe("GET /stats/by-operation", () => {
     expect(res.body).not.toHaveProperty("matched");
   });
 
-  it("fails loud when the provider claims a match but serves no figures", async () => {
-    mockFetch.mockResolvedValueOnce(ok({ tag: "op", matched: true, messageCount: 4 }));
+  it("fails loud on a 404 that is not the empty-match one, rather than calling it empty", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: () => Promise.resolve({ error: "Cannot GET /internal/operations/op/stats" }),
+      text: () => Promise.resolve("{}"),
+    });
 
     const res = await serviceAuthGet("/public/stats/by-operation?operationId=op");
 
     expect(res.status).toBe(502);
+    expect(res.body).not.toHaveProperty("matched");
   });
 });

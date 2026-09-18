@@ -217,7 +217,8 @@ export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 // `runIds` cannot give it: the run recorded against a message downstream is a
 // CHILD run minted per send, so a query keyed on the caller's own run matches
 // nothing and answers a well-formed zero — which reads exactly like a measured
-// zero. The operation handle is what names the set instead, and this read
+// zero. This read keys on the caller's own run instead, which the transactional
+// provider persists on every message as the parent of that child, and it
 // reports an empty match AS an empty match, never as zeros.
 //
 // Transactional only. Broadcast operations are already named by the campaign
@@ -231,7 +232,7 @@ export const OperationStatsQuerySchema = z
       .string()
       .min(1)
       .describe(
-        "Identifies one logical send operation. Every message the caller sent as part of it carries this value, set at send time as the send's `tag`. Distinct per operation — a mailing-list release uses its own release id, not the list's.",
+        "The caller's OWN run id — the run it tracks the operation under, and sends under. The transactional provider persists it on every message it sends, so it names exactly that operation's messages. It is not the run the provider records per message: that one is a child run minted per send, which is why filtering `/stats` on `runIds` with this value matches nothing.",
       ),
   })
   .openapi("OperationStatsQuery");
@@ -250,6 +251,21 @@ export const OperationStatsResponseSchema = z
       .number()
       .int()
       .describe("How many messages belong to this operation. 0 exactly when `matched` is false."),
+    recipientCount: z
+      .number()
+      .int()
+      .optional()
+      .describe("How many distinct recipients those messages went to. Present only when matched is true."),
+    firstMessageAt: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("When the operation's first message was submitted. Present only when matched is true."),
+    lastMessageAt: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("When the operation's most recent message was submitted — how fresh this answer is. Present only when matched is true."),
     // Present only when matched is true. Not `.openapi()`-tagged: ChannelStats
     // comes from the shared contract package, whose instances predate this
     // module's Zod extension (see the Zod 4 caveat in CLAUDE.md).
@@ -812,7 +828,7 @@ registry.registerPath({
 });
 
 const OPERATION_STATS_DESCRIPTION =
-  "Aggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider has no equivalent per-send handle — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.";
+  "Aggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**How the operation is named.** `operationId` is the caller's OWN run id. The transactional provider persists it on every message it sends (the parent of the child run it records per message), so it names exactly that operation's messages and nothing else — one indexed lookup, no enumeration.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider records nothing under the caller's own run — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.";
 
 registry.registerPath({
   method: "get",

@@ -291,8 +291,8 @@ internalRouter.get("/stats/sending-forecast", sendingForecastHandler);
  *
  * Transactional only, and deliberately so. Broadcast sequences are already
  * named by the campaign and audience they belong to, and the broadcast provider
- * has no equivalent per-send handle — answering a broadcast question here would
- * mean inventing one or serving a silent zero, which is what we are fixing.
+ * records nothing under the caller's own run — answering a broadcast question
+ * here would mean serving a silent zero, which is what we are fixing.
  *
  * Passthrough of postmark-service's own per-operation read: one indexed query
  * on its side whatever the operation's size, and no fan-out on ours.
@@ -308,25 +308,22 @@ async function operationStatsHandler(req: Request, res: Response) {
   const ctx: OrgContext | undefined = res.locals.orgContext ?? extractOrgContext(req) ?? extractPartialContext(req);
 
   try {
-    const raw = await postmarkClient.getStatsByTag(operationId, ctx);
+    const result = await postmarkClient.getOperationStats(operationId, ctx);
 
-    if (!raw.matched) {
+    if (!result.matched) {
       res.json({ operationId, matched: false, messageCount: 0 });
       return;
     }
 
-    if (!raw.recipientStats || !raw.emailStats) {
-      // The provider said it matched and then served no figures. That is a
-      // broken contract, not an empty operation — surface it rather than
-      // flattening it into the zeros this endpoint exists to never emit.
-      throw new Error("postmark-service reported a matched operation with no stats");
-    }
-
+    const { stats } = result;
     res.json({
       operationId,
       matched: true,
-      messageCount: raw.messageCount,
-      transactional: { recipientStats: raw.recipientStats, emailStats: raw.emailStats },
+      messageCount: stats.messagesMatched,
+      recipientCount: stats.recipientsMatched,
+      firstMessageAt: stats.firstMessageAt,
+      lastMessageAt: stats.lastMessageAt,
+      transactional: { recipientStats: stats.recipientStats, emailStats: stats.emailStats },
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
