@@ -89,6 +89,16 @@ been inert for its whole life — first reading `/stats?runIds=` (a silent zero)
 then this read while it was 502ing on the withdrawn provider route. It must send
 `operationRunId` to get a verdict.
 
+## The prod container is `distribute-email-gateway-service-1`, not `distribute-email-gateway-1`
+
+The service key in `docker-compose.yml` carries the repo's full name, so the
+container Docker names is `distribute-email-gateway-service-1`. A probe or a
+deploy poll written against the shorter form fails with `No such container`,
+which — when the poll swallows stderr — is an EMPTY reading indistinguishable
+from "the deploy has not landed", and it runs to exhaustion against a service
+that has been serving the change for minutes. Read the name rather than typing
+it: `docker ps --format '{{.Names}} {{.Status}}' | grep email`.
+
 ## Shared contract
 
 Cross-provider canonical shapes (`StatusScope`, `RecipientStats`, `EmailStats`, `StepStats`, `RepliesDetail`, `ChannelStats`, `ProviderStatus`, `GlobalStatus`, `ReplyClassification`) live in [`@shamanic-technologies/email-domain-contract`](https://github.com/shamanic-technologies/email-domain-contract). Do NOT redeclare these schemas locally — re-export from the package via `src/schemas.ts`. As of 2026-06-05 (DIS-229), instantly-service (v0.40.0) and postmark-service both migrated onto this package too — all three services now source the shared shapes from `^1.1.0`, so a contract change propagates to every provider on a version bump.
