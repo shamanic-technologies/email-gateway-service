@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { StatsQuerySchema, PublicEngagementLatencyQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
+import { StatsQuerySchema, OperationStatsQuerySchema, PublicEngagementLatencyQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import { extractOrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
@@ -271,9 +271,69 @@ async function statsHandler(req: Request, res: Response) {
 }
 
 router.get("/stats", statsHandler);
+router.get("/stats/by-operation", operationStatsHandler);
 internalRouter.get("/stats", statsHandler);
+internalRouter.get("/stats/by-operation", operationStatsHandler);
 internalRouter.get("/stats/engagement-latency", publicEngagementLatencyHandler);
 internalRouter.get("/stats/sending-forecast", sendingForecastHandler);
+
+/**
+ * Aggregate outcomes for one logical send operation.
+ *
+ * A caller that sent many messages as one operation cannot ask `/stats` for
+ * them: the only per-operation filter there is `runIds`, and the run recorded
+ * against a message downstream is a CHILD run minted per send — so the caller's
+ * own run matches nothing and the answer is a clean, well-formed zero. That is
+ * the failure this read removes, and removing it means REFUSING to answer in
+ * the same shape: an operation nothing belongs to comes back `matched: false`
+ * with no `transactional` block at all, so a blind question cannot be read as a
+ * healthy one.
+ *
+ * Transactional only, and deliberately so. Broadcast sequences are already
+ * named by the campaign and audience they belong to, and the broadcast provider
+ * has no equivalent per-send handle — answering a broadcast question here would
+ * mean inventing one or serving a silent zero, which is what we are fixing.
+ *
+ * Passthrough of postmark-service's own per-operation read: one indexed query
+ * on its side whatever the operation's size, and no fan-out on ours.
+ */
+async function operationStatsHandler(req: Request, res: Response) {
+  const parsed = OperationStatsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Invalid request", details: z.flattenError(parsed.error) });
+    return;
+  }
+
+  const { operationId } = parsed.data;
+  const ctx: OrgContext | undefined = res.locals.orgContext ?? extractOrgContext(req) ?? extractPartialContext(req);
+
+  try {
+    const raw = await postmarkClient.getStatsByTag(operationId, ctx);
+
+    if (!raw.matched) {
+      res.json({ operationId, matched: false, messageCount: 0 });
+      return;
+    }
+
+    if (!raw.recipientStats || !raw.emailStats) {
+      // The provider said it matched and then served no figures. That is a
+      // broken contract, not an empty operation — surface it rather than
+      // flattening it into the zeros this endpoint exists to never emit.
+      throw new Error("postmark-service reported a matched operation with no stats");
+    }
+
+    res.json({
+      operationId,
+      matched: true,
+      messageCount: raw.messageCount,
+      transactional: { recipientStats: raw.recipientStats, emailStats: raw.emailStats },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error(`[email-gateway] Operation stats failed: ${message}`);
+    res.status(502).json({ error: "Failed to fetch operation stats", details: message });
+  }
+}
 
 async function sendingForecastHandler(_req: Request, res: Response) {
   try {

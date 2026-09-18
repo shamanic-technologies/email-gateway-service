@@ -25,6 +25,50 @@ Email gateway - routes emails to Postmark (transactional) or Instantly (broadcas
 
 The `/stats` route is a passthrough, but "passthrough" does NOT mean "forward every filter to both providers." A filter/groupBy dimension that one provider genuinely has NO concept of must be stripped before that provider, or the response is incoherent. Postmark (transactional) has no `timezone`/day-calendar grouping, no per-`audienceId` attribution — so those are **broadcast-only** and handled by `withoutBroadcastOnlyFilters` (strips `timezone` + `audienceId` before postmark) and `isBroadcastOnlyGroupBy` (`day`/`audienceId` → `handleBroadcastOnlyGrouped`, transactional returns empty groups). This is NOT "working around missing backend data" — postmark truly has no such dimension, so returning nothing for its side is correct; forwarding the filter instead makes postmark drop the unknown param and return UNFILTERED transactional stats presented alongside audience/day-scoped broadcast stats (a self-contradictory secondary surface = a bug). **When adding a new stats dimension, first ask "does postmark have this dimension?" If no, add it to the broadcast-only strip/route set — do NOT pure-forward it.** Cost 2026-07-06 (audienceId, #170→#171): shipped a pure-passthrough forwarding `audienceId` to both providers to main/prod; incoherent transactional output; #171 reverted onto the broadcast-only pattern (twin's #168, already on staging). When postmark-service#160 ships per-audience transactional stats, remove `audienceId` from the broadcast-only strip.
 
+## An "unknown value" request field is `.nullish()`, never `.optional()` — absent and null must both be accepted
+
+A request field whose absence MEANS "we don't know this value" (a lead-sourced attribute: timezone, company, location) gets `.nullish()`. `.optional()` accepts an absent key but rejects an explicit `null`, so a caller that faithfully forwards its own null column gets a 400 on a request that is perfectly well-formed — and the field's own description usually already promises a downstream fallback, making the refusal self-contradictory. Absent and null are the same statement; only one of them working is a bug, not strictness. Then normalize at the downstream boundary (`body.x ?? undefined`) so the provider receives an OMITTED key and applies its own default — do NOT forward `null` (the provider may reject it) and do NOT substitute a gateway-side default (choosing where a prospect is, is not the gateway's call). A real value still forwards unchanged; a malformed value (number, object) is still refused.
+
+Cost 2026-08-18 (`timezone`, #182→#183/v0.25.2): `BroadcastSendSchema.timezone` was `.optional()` while lead-service sent explicit `null` for leads with no location — 10 of 13 job failures in a 30-minute prod window, all on the send step, i.e. after the lead had already been found, enriched and had an email generated. 55,468 fleet leads have no city and no country, so no timezone exists for them at any price and every one of them was permanently unsendable.
+
+**Sibling fields not yet widened:** `recipientFirstName` / `recipientLastName` / `recipientCompany` are also lead-sourced and still `.optional()`. They have not been observed failing in prod (the 13 failures were all timezone), so they were left alone — but a caller that starts forwarding their nulls will hit the identical 400.
+
+## Reading ONE logical send operation back — `runIds` cannot do it, and the failure is silent
+
+`GET /stats?runIds=<run>` filters on the run the PROVIDER recorded against each
+message, which is a CHILD run minted per send. It is not the run of the service
+that asked for the sends. So a caller that performed thousands of sends as one
+operation, and asks with its own run, matches nothing and gets a clean
+well-formed response saying nothing was sent — byte-identical to a real all-zero
+result. Measured in prod 2026-09-18: release run `79982eb6…` → `sent: 0`; its
+child run `e095307e…` → `sent: 1`.
+
+`GET /orgs/stats/by-operation` + `GET /public/stats/by-operation` take an
+`operationId` instead — the value the caller set as the send's `tag` on every
+message of that operation — and pass it to postmark-service's own per-operation
+read (`/stats/by-tag`, v0.32.6+), which is one indexed query whatever the
+operation's size.
+
+**The half that matters is `matched`, not the figures.** An operation nothing
+belongs to comes back `matched: false` with NO `transactional` block at all.
+Never "improve" this into a zeroed `ChannelStats`: a consumer polling an
+operation in flight must be able to tell "my question found nothing" from "the
+outcomes are zero", and the only way to give it that is to refuse to emit
+numbers with no messages behind them. Same reason the handler 502s when the
+provider claims a match and serves no figures.
+
+**Transactional only, on purpose.** Broadcast sequences are already named by
+their campaign and audience, and the broadcast provider has no equivalent
+per-send handle — so this read does not answer for broadcast rather than
+answering with a silent zero. This is NOT the broadcast-only strip pattern
+below; it is its mirror, and it is a separate read rather than a filter on
+`/stats` precisely because `/stats`'s response shape cannot express
+"I matched nothing".
+
+Consumer: transactional-email-service's mailing-list release self-halt, which
+stops a release when Postmark's bounce or unsubscribe outcomes go bad. It read
+the run-keyed query and was therefore inert for its whole life.
+
 ## Shared contract
 
 Cross-provider canonical shapes (`StatusScope`, `RecipientStats`, `EmailStats`, `StepStats`, `RepliesDetail`, `ChannelStats`, `ProviderStatus`, `GlobalStatus`, `ReplyClassification`) live in [`@shamanic-technologies/email-domain-contract`](https://github.com/shamanic-technologies/email-domain-contract). Do NOT redeclare these schemas locally — re-export from the package via `src/schemas.ts`. As of 2026-06-05 (DIS-229), instantly-service (v0.40.0) and postmark-service both migrated onto this package too — all three services now source the shared shapes from `^1.1.0`, so a contract change propagates to every provider on a version bump.
@@ -46,3 +90,9 @@ The extended schemas carry no `.openapi("Name")` for the reason in the next sect
 ## Zod 4 caveat — contract schemas + `.openapi()`
 
 `@asteasolutions/zod-to-openapi` attaches `.openapi()` to Zod schema instances at the time `extendZodWithOpenApi(z)` runs in the consumer. The contract package's schemas were instantiated before that point in the consumer's module graph, so they do NOT gain `.openapi()` retroactively. Re-export them without `.openapi(name)` and let the generator inline them (no `$ref` name). Local schemas defined in `src/schemas.ts` (after `import "./zod-setup"`) keep their `.openapi(name)` tagging.
+
+## A vocabulary another service OWNS must not be re-declared here — validate loosely, let the owner refuse
+
+`/orgs/manual-qualifications` forwards a human's reply statement to instantly-service, which owns that vocabulary. This service used to carry its own `z.enum([...])` copy of the list. instantly-service widened it (v0.74.0: `lead_referral`, `lead_info_requested`, `lead_meeting_requested`) and the copy went stale, so three kinds the owner accepts were refused here with a local 400 — the customer clicked and nothing happened, and no deploy of instantly-service could fix it. A second copy of an owner's list is a second place for the two to drift, and it drifts in the direction that breaks the customer.
+
+So on a passthrough route: validate only what THIS service can be authoritative about (required fields present, `campaign_id` non-empty, `email` is an email address) and type an owner-owned value as `z.string().min(1)` with a description pointing at the owner's openapi as the authority. A value the owner rejects still comes back as a refusal — round-tripped from the owner, which is where the refusal belongs. Do NOT add a mapping/translation layer to reconcile the two lists; that is the same drift wearing a different hat. api-service made the identical call on the same field. Note this is the OPPOSITE of the broadcast-only stats rule above: there, postmark genuinely has no such dimension, so stripping is correct — here, the owner has the dimension and simply knows more values than we do. (Shipped 2026-08-27, v0.25.3.)
