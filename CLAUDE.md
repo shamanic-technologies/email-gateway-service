@@ -44,10 +44,28 @@ result. Measured in prod 2026-09-18: release run `79982eb6…` → `sent: 0`; it
 child run `e095307e…` → `sent: 1`.
 
 `GET /orgs/stats/by-operation` + `GET /public/stats/by-operation` take an
-`operationId` instead — the value the caller set as the send's `tag` on every
-message of that operation — and pass it to postmark-service's own per-operation
-read (`/stats/by-tag`, v0.32.6+), which is one indexed query whatever the
+`operationRunId` instead — the `x-run-id` the caller performed the operation
+under — and pass it to postmark-service's own per-operation read
+(`GET /internal/operations/{operationRunId}/stats`, v0.33.0+), which persists
+that value as each message's `parent_run_id`. One indexed aggregate whatever the
 operation's size.
+
+**The handle used to be the send's `tag`, and that premise was false.** A tag is
+the `eventType` transactional-email-service reads out of its own templates table,
+so it is per-TEMPLATE: 11 mailing-list releases over 8 days carried the same
+`mailing-list-newsletter-test` tag, and one release's question returned all 11.
+postmark-service withdrew `/stats/by-tag` before it reached prod (its #188) while
+this gateway's v0.26.0 had promoted three minutes earlier, so every call here was
+a 502 on a route that no longer existed. Shipped as a break, not an alias: a
+caller still sending `operationId` gets a 400, never a number computed on the
+wrong basis. A second handle for one question is two answers for one question.
+
+**A bare 404 from the provider is NOT an empty operation.** The empty case is
+only the one the provider NAMES (`404` + `code: OPERATION_NOT_FOUND`); everything
+else — a withdrawn route, a typo'd path, a 500 — is a 502 here. Flattening an
+unnamed 404 into `matched: false` would turn "this read no longer exists" into
+"this operation has nothing", which is the same silent-zero failure in a new
+costume.
 
 **The half that matters is `matched`, not the figures.** An operation nothing
 belongs to comes back `matched: false` with NO `transactional` block at all.
@@ -66,8 +84,10 @@ below; it is its mirror, and it is a separate read rather than a filter on
 "I matched nothing".
 
 Consumer: transactional-email-service's mailing-list release self-halt, which
-stops a release when Postmark's bounce or unsubscribe outcomes go bad. It read
-the run-keyed query and was therefore inert for its whole life.
+stops a release when Postmark's bounce or unsubscribe outcomes go bad. It has
+been inert for its whole life — first reading `/stats?runIds=` (a silent zero),
+then this read while it was 502ing on the withdrawn provider route. It must send
+`operationRunId` to get a verdict.
 
 ## Shared contract
 
