@@ -15,9 +15,9 @@ const RETRY_DELAY_MS = 500;
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; ctx?: OrgContext } = {}
+  options: { method?: string; body?: unknown; ctx?: OrgContext; nullOn404Code?: string } = {}
 ): Promise<T> {
-  const { method = "GET", body, ctx } = options;
+  const { method = "GET", body, ctx, nullOn404Code } = options;
   const fullUrl = `${url}${path}`;
   const headers = buildServiceHeaders(apiKey, ctx);
   const jsonBody = body ? JSON.stringify(body) : undefined;
@@ -35,6 +35,20 @@ async function request<T>(
 
       if (!response.ok) {
         const errorText = await response.text();
+        // A 404 is only a legitimate answer when the provider NAMES the case it
+        // is answering. A bare 404 (a withdrawn route, a typo'd path) must stay
+        // an error: flattening it would turn "this read no longer exists" into
+        // "this operation has nothing", which is the exact confusion this whole
+        // path exists to prevent.
+        if (response.status === 404 && nullOn404Code) {
+          let code: unknown;
+          try {
+            code = (JSON.parse(errorText) as { code?: unknown }).code;
+          } catch {
+            code = undefined;
+          }
+          if (code === nullOn404Code) return null as T;
+        }
         throw new Error(
           `postmark-service ${method} ${path}: ${response.status} - ${errorText}`
         );
@@ -119,24 +133,32 @@ export async function getStats(filters: {
 }
 
 /**
- * postmark-service's per-operation read (v0.32.6+).
+ * postmark-service's per-operation read (v0.33.0+).
  *
- * `matched` is the field this whole path exists for: postmark-service refuses
- * to emit stats for a tag nothing carries, so an empty match cannot be mistaken
- * for a measured zero anywhere downstream.
+ * Keyed on the OPERATION RUN — the `x-run-id` the caller performed the sends
+ * under, which postmark-service now persists as each message's `parent_run_id`.
+ * The earlier tag-keyed read (`/stats/by-tag`) was withdrawn before it reached
+ * prod: a tag is per-TEMPLATE, so one release's question returned every past
+ * release's messages.
+ *
+ * An operation the provider has nothing under is a 404 carrying
+ * `code: OPERATION_NOT_FOUND` and NO stats block — returned here as `null`, so
+ * an empty match can never be read as a measured zero. Service-auth route only;
+ * there is no org-scoped variant, and the gateway holds the service key.
  */
 export interface ProviderOperationStats {
-  tag: string;
-  matched: boolean;
-  messageCount: number;
+  operationRunId: string;
+  messagesMatched: number;
+  recipientsMatched: number;
+  firstMessageAt: string | null;
+  lastMessageAt: string | null;
   recipientStats?: RecipientStats;
   emailStats?: EmailStats;
 }
 
-export async function getStatsByTag(tag: string, ctx?: OrgContext) {
-  const basePath = ctx?.orgId ? "/orgs/stats/by-tag" : "/internal/stats/by-tag";
-  const path = `${basePath}?tag=${encodeURIComponent(tag)}`;
-  return request<ProviderOperationStats>(path, { ctx });
+export async function getOperationStats(operationRunId: string, ctx?: OrgContext) {
+  const path = `/internal/operations/${encodeURIComponent(operationRunId)}/stats`;
+  return request<ProviderOperationStats | null>(path, { ctx, nullOn404Code: "OPERATION_NOT_FOUND" });
 }
 
 // StatusScope re-exported from shared contract.
