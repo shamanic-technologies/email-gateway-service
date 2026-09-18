@@ -210,6 +210,55 @@ export const GroupedStatsResponseSchema = z
 
 export type GroupedStatsResponse = z.infer<typeof GroupedStatsResponseSchema>;
 
+// --- Per-operation stats ---
+//
+// A caller that performed many sends as ONE logical operation (a mailing-list
+// release, a batch notification) needs that operation's outcomes back as a set.
+// `runIds` cannot give it: the run recorded against a message downstream is a
+// CHILD run minted per send, so a query keyed on the caller's own run matches
+// nothing and answers a well-formed zero — which reads exactly like a measured
+// zero. The operation handle is what names the set instead, and this read
+// reports an empty match AS an empty match, never as zeros.
+//
+// Transactional only. Broadcast operations are already named by the campaign
+// and audience the sequence belongs to, and the broadcast provider has no such
+// per-send handle — so a broadcast question here is refused rather than
+// answered with a silent zero.
+
+export const OperationStatsQuerySchema = z
+  .object({
+    operationId: z
+      .string()
+      .min(1)
+      .describe(
+        "Identifies one logical send operation. Every message the caller sent as part of it carries this value, set at send time as the send's `tag`. Distinct per operation — a mailing-list release uses its own release id, not the list's.",
+      ),
+  })
+  .openapi("OperationStatsQuery");
+
+export type OperationStatsQuery = z.infer<typeof OperationStatsQuerySchema>;
+
+export const OperationStatsResponseSchema = z
+  .object({
+    operationId: z.string().describe("The operation that was asked for, echoed back."),
+    matched: z
+      .boolean()
+      .describe(
+        "Whether any message belongs to this operation. False means the question found NOTHING — it does not mean the outcomes are zero, and `transactional` is absent so no caller can read one as the other. A consumer polling an operation in flight treats false as 'no evidence yet', never as 'healthy'.",
+      ),
+    messageCount: z
+      .number()
+      .int()
+      .describe("How many messages belong to this operation. 0 exactly when `matched` is false."),
+    // Present only when matched is true. Not `.openapi()`-tagged: ChannelStats
+    // comes from the shared contract package, whose instances predate this
+    // module's Zod extension (see the Zod 4 caveat in CLAUDE.md).
+    transactional: ChannelStatsSchema.optional(),
+  })
+  .openapi("OperationStatsResponse");
+
+export type OperationStatsResponse = z.infer<typeof OperationStatsResponseSchema>;
+
 export const PublicEngagementLatencyQuerySchema = z
   .object({
     featureSlugs: z.string().describe("Comma-separated feature slugs to filter by"),
@@ -762,6 +811,9 @@ registry.registerPath({
   },
 });
 
+const OPERATION_STATS_DESCRIPTION =
+  "Aggregate delivery outcomes for ONE logical send operation — a set of messages the caller sent as a single unit (a mailing-list release, a batch notification) — in one request.\n\n**Why this exists.** The only per-operation filter on `GET /stats` is `runIds`, and the run recorded against a message downstream is a CHILD run minted per send, not the caller's own run. Asking `/stats` with the caller's run therefore matches no messages and returns a clean, well-formed response saying nothing was sent — indistinguishable from a real all-zero result. A consumer that decides anything on that reads a blind query as a healthy one.\n\n**An empty match says so.** `matched: false` means the question found nothing; `transactional` is then absent entirely, so there are no zeros to misread. `matched: true` means real messages back the figures, including when those figures are genuinely zero. A consumer polling an operation in flight treats `matched: false` as 'no evidence yet' and never as 'healthy'.\n\n**Transactional only.** Broadcast sequences are already named by the campaign and audience they belong to, and the broadcast provider has no equivalent per-send handle — so this read does not answer for broadcast rather than answering with a silent zero.\n\n**Cost.** One indexed lookup on the transactional provider whatever the operation's size; no fan-out, no enumeration of messages or child runs. Safe to poll every minute against tens of thousands of messages.\n\nEvery existing stats filter and grouping is untouched — this is a separate read, not a new filter on `/stats`.";
+
 registry.registerPath({
   method: "get",
   path: "/orgs/stats",
@@ -806,6 +858,54 @@ registry.registerPath({
         },
       },
     },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/orgs/stats/by-operation",
+  tags: ["Stats"],
+  summary: "Get aggregated outcomes for one logical send operation",
+  description: OPERATION_STATS_DESCRIPTION,
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    query: OperationStatsQuerySchema,
+  },
+  responses: {
+    200: {
+      description:
+        "Outcomes for the operation, or `matched: false` (with no `transactional` block) when no message belongs to it.",
+      content: { "application/json": { schema: OperationStatsResponseSchema } },
+    },
+    400: { description: "Invalid request", content: errorContent },
+    401: { description: "Unauthorized", content: errorContent },
+    502: { description: "Upstream service error", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/public/stats/by-operation",
+  tags: ["Stats"],
+  summary: "Get aggregated outcomes for one logical send operation (public, no identity headers required)",
+  description:
+    "Same behavior as `GET /orgs/stats/by-operation` but does not require `x-org-id` or any identity headers. This is the "
+    + "route a background worker uses, since it has no request to take identity from.\n\n"
+    + OPERATION_STATS_DESCRIPTION,
+  security: [{ apiKey: [] }],
+  request: {
+    query: OperationStatsQuerySchema,
+  },
+  responses: {
+    200: {
+      description:
+        "Outcomes for the operation, or `matched: false` (with no `transactional` block) when no message belongs to it.",
+      content: { "application/json": { schema: OperationStatsResponseSchema } },
+    },
+    400: { description: "Invalid request", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
     502: { description: "Upstream service error", content: errorContent },
   },

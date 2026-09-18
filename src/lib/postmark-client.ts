@@ -4,6 +4,8 @@ import type { OrgContext } from "../middleware/requireOrgId";
 import type {
   StatusScope,
   GlobalStatus,
+  RecipientStats,
+  EmailStats,
 } from "@shamanic-technologies/email-domain-contract";
 
 const { url, apiKey } = config.postmark;
@@ -114,6 +116,27 @@ export async function getStats(filters: {
   const basePath = ctx?.orgId ? "/orgs/stats" : "/internal/stats";
   const path = basePath + buildStatsQuery(filters);
   return request<ProviderStatsResult>(path, { ctx });
+}
+
+/**
+ * postmark-service's per-operation read (v0.32.6+).
+ *
+ * `matched` is the field this whole path exists for: postmark-service refuses
+ * to emit stats for a tag nothing carries, so an empty match cannot be mistaken
+ * for a measured zero anywhere downstream.
+ */
+export interface ProviderOperationStats {
+  tag: string;
+  matched: boolean;
+  messageCount: number;
+  recipientStats?: RecipientStats;
+  emailStats?: EmailStats;
+}
+
+export async function getStatsByTag(tag: string, ctx?: OrgContext) {
+  const basePath = ctx?.orgId ? "/orgs/stats/by-tag" : "/internal/stats/by-tag";
+  const path = `${basePath}?tag=${encodeURIComponent(tag)}`;
+  return request<ProviderOperationStats>(path, { ctx });
 }
 
 // StatusScope re-exported from shared contract.
