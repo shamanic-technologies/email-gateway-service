@@ -204,6 +204,10 @@
                 "type": "string",
                 "description": "Blind-carbon-copy recipients as a comma-separated email list. Forwarded to postmark-service, which sets Postmark's Bcc header. Transactional only."
               },
+              "cc": {
+                "type": "string",
+                "description": "Carbon-copy recipients as a comma-separated email list. Forwarded to postmark-service, which sets Postmark's Cc header, so the address is visible to every recipient of the message and a reply-all reaches it. Every address is validated: one malformed entry refuses the whole send with a 400. Absent = no Cc header at all, byte-identical to a send that never named one. Transactional only."
+              },
               "inReplyTo": {
                 "type": "string",
                 "pattern": "^<[^<>\\s]+@[^<>\\s]+>$",
@@ -298,6 +302,10 @@
               "bcc": {
                 "type": "string",
                 "description": "Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."
+              },
+              "cc": {
+                "type": "string",
+                "description": "Not accepted on a broadcast send. Instantly drives a per-lead cold-email sequence and exposes no visible-copy recipient, so naming one is refused rather than silently dropped."
               },
               "timezone": {
                 "type": "string",

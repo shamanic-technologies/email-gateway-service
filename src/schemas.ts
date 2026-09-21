@@ -116,6 +116,14 @@ const TransactionalSendSchema = SendBaseSchema.extend({
   textBody: z.string().optional().describe("Plain text email body"),
   from: z.string().optional().describe("Sender address, e.g. \"Display Name <email@domain.com>\". If omitted, the downstream provider resolves its own default."),
   bcc: z.string().optional().describe("Blind-carbon-copy recipients as a comma-separated email list. Forwarded to postmark-service, which sets Postmark's Bcc header. Transactional only."),
+  cc: z
+    .string()
+    .refine(
+      (v) => v.split(",").every((e) => z.string().email().safeParse(e.trim()).success),
+      "cc must be a comma-separated list of valid email addresses"
+    )
+    .optional()
+    .describe("Carbon-copy recipients as a comma-separated email list. Forwarded to postmark-service, which sets Postmark's Cc header, so the address is visible to every recipient of the message and a reply-all reaches it. Every address is validated: one malformed entry refuses the whole send with a 400. Absent = no Cc header at all, byte-identical to a send that never named one. Transactional only."),
   inReplyTo: z
     .string()
     .regex(messageIdRegex, "inReplyTo must be a RFC 5322 Message-ID enclosed in angle brackets, e.g. <id@host>")
@@ -136,6 +144,11 @@ const BroadcastSendSchema = SendBaseSchema.extend({
   subject: z.string().describe("Shared email subject line (same thread, follow-ups are Re:)"),
   sequence: z.array(SequenceStepSchema).min(1).describe("Email sequence steps sent via Instantly"),
   bcc: z.string().optional().describe("Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."),
+  cc: z
+    .string()
+    .refine(() => false, "cc is transactional-only: a broadcast sequence has no visible-copy recipient")
+    .optional()
+    .describe("Not accepted on a broadcast send. Instantly drives a per-lead cold-email sequence and exposes no visible-copy recipient, so naming one is refused rather than silently dropped."),
   timezone: z.string().nullish().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."),
 });
 

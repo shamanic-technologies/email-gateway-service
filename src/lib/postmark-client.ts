@@ -80,6 +80,7 @@ export async function sendEmail(body: {
   from?: string;
   to: string;
   bcc?: string;
+  cc?: string;
   subject: string;
   htmlBody?: string;
   textBody?: string;
