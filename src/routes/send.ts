@@ -62,6 +62,7 @@ router.post("/send", async (req: Request, res: Response) => {
         from: body.from,
         to: body.to,
         bcc: body.bcc,
+        cc: body.cc,
         subject: body.subject,
         htmlBody: htmlWithSignature,
         textBody: body.textBody,

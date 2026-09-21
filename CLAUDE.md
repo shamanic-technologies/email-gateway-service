@@ -21,6 +21,39 @@ Email gateway - routes emails to Postmark (transactional) or Instantly (broadcas
 - `tests/` — Test files (`*.test.ts`)
 - `openapi.json` — Auto-generated, do NOT edit manually
 
+## A visible copy is a different instrument from a blind one — `cc` is transactional-only and every address is validated
+
+`cc` (transactional sends) is a comma-separated email list forwarded verbatim to
+postmark-service's own `cc`, which sets Postmark's `Cc` header: the address lands
+on a header every recipient of the message can see, and a reply-all reaches it.
+That reader-facing difference is the whole point and it is why `bcc` was not
+enough for the case that drove it — forwarding a prospect's reply thread to the
+agency inbox while copying the client's own sales rep. A rep on `Bcc` receives a
+mail addressed to somebody else (reads as mis-sent, gets ignored) and their
+reply-all reaches nobody on our side, so the thread goes silently private.
+
+Two things differ from `bcc` deliberately, and neither is an oversight:
+
+**Every address is validated.** `bcc` is a bare `z.string()` with no email check
+(unchanged — a caller relying on that keeps today's behaviour byte for byte).
+`cc` refines each comma-separated entry through `z.string().email()`, so one
+malformed entry refuses the WHOLE send with a 400 naming the field rather than
+dropping the address quietly. An empty string is refused for the same reason:
+a caller that names nobody omits the field, and then no `cc` key reaches
+postmark-service at all.
+
+**Broadcast refuses it rather than dropping it.** Instantly drives a per-lead
+cold-email sequence and has no visible-copy recipient, so `cc` on a broadcast
+body is a 400, not a silent strip. A discriminated union strips unknown keys by
+default, which would have made a broadcast caller believe a visible copy was
+going out; the field is therefore declared on `BroadcastSendSchema` with a
+refinement that always fails. (It is typed `z.string()` rather than `z.never()`
+only because `@asteasolutions/zod-to-openapi` throws `UnknownZodTypeError` on
+`never` — the refusal is what matters, the type is the generator's constraint.)
+This is the mirror of the broadcast-only strip below: there postmark has no such
+dimension so stripping is correct; here the dimension is transactional-only so
+naming it on the other channel is an error.
+
 ## Stats passthrough — broadcast-only filters/groupBys must be STRIPPED for postmark, never forwarded
 
 The `/stats` route is a passthrough, but "passthrough" does NOT mean "forward every filter to both providers." A filter/groupBy dimension that one provider genuinely has NO concept of must be stripped before that provider, or the response is incoherent. Postmark (transactional) has no `timezone`/day-calendar grouping, no per-`audienceId` attribution — so those are **broadcast-only** and handled by `withoutBroadcastOnlyFilters` (strips `timezone` + `audienceId` before postmark) and `isBroadcastOnlyGroupBy` (`day`/`audienceId` → `handleBroadcastOnlyGrouped`, transactional returns empty groups). This is NOT "working around missing backend data" — postmark truly has no such dimension, so returning nothing for its side is correct; forwarding the filter instead makes postmark drop the unknown param and return UNFILTERED transactional stats presented alongside audience/day-scoped broadcast stats (a self-contradictory secondary surface = a bug). **When adding a new stats dimension, first ask "does postmark have this dimension?" If no, add it to the broadcast-only strip/route set — do NOT pure-forward it.** Cost 2026-07-06 (audienceId, #170→#171): shipped a pure-passthrough forwarding `audienceId` to both providers to main/prod; incoherent transactional output; #171 reverted onto the broadcast-only pattern (twin's #168, already on staging). When postmark-service#160 ships per-audience transactional stats, remove `audienceId` from the broadcast-only strip.

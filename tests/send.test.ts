@@ -649,6 +649,108 @@ describe("POST /orgs/send", () => {
         expect(body.bcc).toBeUndefined();
       });
     });
+
+    describe("cc forwarding", () => {
+      it("forwards a single cc recipient to postmark-service", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_cc_one" }),
+        });
+
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ cc: "rep@client.com" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.cc).toBe("rep@client.com");
+      });
+
+      it("forwards several cc recipients verbatim as a comma-separated list", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_cc_many" }),
+        });
+
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ cc: "rep@client.com, manager@client.com" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.cc).toBe("rep@client.com, manager@client.com");
+      });
+
+      it("omits cc from the downstream body entirely when the caller names nobody", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_nocc" }),
+        });
+
+        await authedPost("/orgs/send").send(buildTransactionalBody());
+
+        const raw = mockFetch.mock.calls[0][1].body;
+        const body = JSON.parse(raw);
+        expect(body.cc).toBeUndefined();
+        expect(Object.keys(body)).not.toContain("cc");
+      });
+
+      it("refuses a malformed cc address rather than dropping it", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ cc: "not-an-email" })
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Invalid request");
+        expect(res.body.details.fieldErrors.cc[0]).toMatch(/valid email/i);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it("refuses the whole send when one address of several is malformed", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ cc: "rep@client.com,oops" })
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.body.details.fieldErrors.cc[0]).toMatch(/valid email/i);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it("refuses an empty cc string rather than sending an empty Cc header", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ cc: "" })
+        );
+
+        expect(res.status).toBe(400);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it("leaves bcc untouched when cc is also named", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_cc_bcc" }),
+        });
+
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ cc: "rep@client.com", bcc: "a@x.com,b@y.com" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.cc).toBe("rep@client.com");
+        expect(body.bcc).toBe("a@x.com,b@y.com");
+      });
+
+      it("refuses cc on a broadcast send rather than silently dropping it", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildBroadcastBody({ cc: "rep@client.com" })
+        );
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("Invalid request");
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe("idempotency", () => {
