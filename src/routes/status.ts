@@ -23,33 +23,22 @@ router.post("/status", async (req: Request, res: Response) => {
   const payload = { brandId, campaignId, items };
 
   try {
-    const [broadcastResult, transactionalResult] = await Promise.allSettled([
+    // Both providers are REQUIRED, and each must answer for every requested
+    // address. A consumer reads an absent `broadcast` block as "never
+    // contacted", so answering 200 with one provider missing — or with some
+    // addresses missing from a provider's answer — is a partial answer that
+    // looks complete. That is exactly what happened on 2026-09-24 while
+    // instantly-service redeployed: its `fetch failed` was swallowed, ten
+    // 100-address batches came back 200 with no broadcast evidence, and a
+    // customer's `contacted` count dropped by exactly 1,000 for one refresh.
+    // Refuse instead: the caller retries or keeps its last good figure.
+    const [broadcast, transactional] = await Promise.all([
       instantlyClient.getStatus(payload, ctx),
       postmarkClient.getStatus(payload, ctx),
     ]);
 
-    const broadcastMap = new Map<string, instantlyClient.StatusResult>();
-    if (broadcastResult.status === "fulfilled") {
-      for (const r of broadcastResult.value.results) {
-        broadcastMap.set(r.email, r);
-      }
-    } else {
-      console.warn(`[email-gateway] instantly-service error: ${broadcastResult.reason}`);
-    }
-
-    const transactionalMap = new Map<string, postmarkClient.StatusResult>();
-    if (transactionalResult.status === "fulfilled") {
-      for (const r of transactionalResult.value.results) {
-        transactionalMap.set(r.email, r);
-      }
-    } else {
-      console.warn(`[email-gateway] postmark-service error: ${transactionalResult.reason}`);
-    }
-
-    if (broadcastResult.status === "rejected" && transactionalResult.status === "rejected") {
-      res.status(502).json({ error: "Both upstream services failed" });
-      return;
-    }
+    const broadcastMap = indexByEmail("instantly-service", broadcast.results, items);
+    const transactionalMap = indexByEmail("postmark-service", transactional.results, items);
 
     const results = items.map((item) => {
       const broadcast = broadcastMap.get(item.email);
@@ -88,5 +77,30 @@ router.post("/status", async (req: Request, res: Response) => {
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
+
+/**
+ * Index a provider's per-address answer, refusing one that does not cover
+ * every requested address. Both providers answer one row per requested item,
+ * so a missing address is a truncated answer, never "no data" (no data is a
+ * row with empty scopes).
+ */
+function indexByEmail<T extends { email: string }>(
+  provider: string,
+  results: T[] | undefined,
+  items: Array<{ email: string }>,
+): Map<string, T> {
+  if (!Array.isArray(results)) {
+    throw new Error(`${provider} POST /orgs/status: response carried no results array`);
+  }
+  const map = new Map<string, T>();
+  for (const r of results) map.set(r.email, r);
+  const missing = items.filter((item) => !map.has(item.email)).length;
+  if (missing > 0) {
+    throw new Error(
+      `${provider} POST /orgs/status: incomplete answer, ${missing} of ${items.length} requested addresses missing`,
+    );
+  }
+  return map;
+}
 
 export default router;

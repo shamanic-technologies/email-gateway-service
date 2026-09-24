@@ -417,29 +417,18 @@ async function handleFlat(
     return;
   }
 
-  // No type specified: aggregate both
-  const [postmarkResult, instantlyResult] = await Promise.allSettled([
+  // No type specified: aggregate both. Both are required — a provider that
+  // fails rejects the whole read (502 via statsHandler), never a 200 with one
+  // channel missing, which a consumer summing channels reads as a real drop.
+  const [postmarkRaw, instantlyRaw] = await Promise.all([
     postmarkClient.getStats(withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0], ctx),
     instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx),
   ]);
 
-  const response: Record<string, unknown> = {};
-
-  if (postmarkResult.status === "fulfilled") {
-    response.transactional = toChannelStats(postmarkResult.value as ProviderStatsFlat);
-  } else {
-    console.error(`[email-gateway] Postmark failed: ${postmarkResult.reason?.message}`);
-    response.transactional = { error: postmarkResult.reason?.message };
-  }
-
-  if (instantlyResult.status === "fulfilled") {
-    response.broadcast = toChannelStats(instantlyResult.value as ProviderStatsFlat);
-  } else {
-    console.error(`[email-gateway] Instantly failed: ${instantlyResult.reason?.message}`);
-    response.broadcast = { error: instantlyResult.reason?.message };
-  }
-
-  res.json(response);
+  res.json({
+    transactional: toChannelStats(postmarkRaw as ProviderStatsFlat),
+    broadcast: toChannelStats(instantlyRaw as ProviderStatsFlat),
+  });
 }
 
 async function handleGrouped(
@@ -483,32 +472,29 @@ async function handleGrouped(
     return;
   }
 
-  // No type: merge groups from both providers by key
-  const [postmarkResult, instantlyResult] = await Promise.allSettled([
+  // No type: merge groups from both providers by key. A provider failure
+  // rejects the whole read (502 via statsHandler) rather than serving the
+  // other provider's groups as if they were the full answer.
+  const [postmarkRaw, instantlyRaw] = await Promise.all([
     postmarkClient.getStats(postmarkFilters, ctx),
     instantlyClient.getStats(instantlyFilters, ctx),
   ]);
+  if (!isGrouped(instantlyRaw)) {
+    throw new Error("instantly-service returned a non-grouped response when grouped was expected");
+  }
 
   const merged = new Map<string, { transactional?: ChannelStats; broadcast?: ChannelStats }>();
 
-  if (postmarkResult.status === "fulfilled" && isGrouped(postmarkResult.value)) {
-    for (const g of postmarkResult.value.groups) {
+  if (isGrouped(postmarkRaw)) {
+    for (const g of postmarkRaw.groups) {
       merged.set(g.key, { transactional: { recipientStats: g.recipientStats, emailStats: g.emailStats } });
     }
-  } else if (postmarkResult.status === "rejected") {
-    console.error(`[email-gateway] Postmark failed (grouped): ${postmarkResult.reason?.message}`);
   }
 
-  if (instantlyResult.status === "fulfilled" && isGrouped(instantlyResult.value)) {
-    for (const g of instantlyResult.value.groups) {
-      const existing = merged.get(g.key) ?? {};
-      existing.broadcast = { recipientStats: g.recipientStats, emailStats: g.emailStats };
-      merged.set(g.key, existing);
-    }
-  } else if (instantlyResult.status === "fulfilled") {
-    console.warn(`[email-gateway] Instantly returned non-grouped response when grouped was expected — broadcast stats dropped`);
-  } else if (instantlyResult.status === "rejected") {
-    console.error(`[email-gateway] Instantly failed (grouped): ${instantlyResult.reason?.message}`);
+  for (const g of instantlyRaw.groups) {
+    const existing = merged.get(g.key) ?? {};
+    existing.broadcast = { recipientStats: g.recipientStats, emailStats: g.emailStats };
+    merged.set(g.key, existing);
   }
 
   const groups = Array.from(merged.entries()).map(([key, value]) => ({
@@ -594,35 +580,31 @@ async function handleDynastyGrouped(
   }
 
   // No type: merge both providers
+  // Both providers are required: a failure rejects the whole read (502 via
+  // statsHandler), never a 200 carrying one provider's groups as the total.
   const [postmarkResult, instantlyResult, dynasties] = await Promise.all([
-    postmarkClient.getStats(postmarkFilters, ctx).catch((e: Error) => e),
-    instantlyClient.getStats(instantlyFilters, ctx).catch((e: Error) => e),
+    postmarkClient.getStats(postmarkFilters, ctx),
+    instantlyClient.getStats(instantlyFilters, ctx),
     fetchDynasties(identityHeaders),
   ]);
+  if (!isGrouped(instantlyResult)) {
+    throw new Error("instantly-service returned a non-grouped response when dynasty grouped was expected");
+  }
 
   const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
   const merged = new Map<string, { transactional?: ChannelStats; broadcast?: ChannelStats }>();
 
-  if (!(postmarkResult instanceof Error) && isGrouped(postmarkResult)) {
+  if (isGrouped(postmarkResult)) {
     const regrouped = regroupByDynasty(postmarkResult.groups, slugMap);
     for (const g of regrouped) {
       merged.set(g.key, { transactional: g.channelStats });
     }
-  } else if (postmarkResult instanceof Error) {
-    console.error(`[email-gateway] Postmark failed (dynasty grouped): ${postmarkResult.message}`);
   }
 
-  if (!(instantlyResult instanceof Error) && isGrouped(instantlyResult)) {
-    const regrouped = regroupByDynasty(instantlyResult.groups, slugMap);
-    for (const g of regrouped) {
-      const existing = merged.get(g.key) ?? {};
-      existing.broadcast = g.channelStats;
-      merged.set(g.key, existing);
-    }
-  } else if (!(instantlyResult instanceof Error)) {
-    console.warn(`[email-gateway] Instantly returned non-grouped response when dynasty grouped was expected — broadcast stats dropped`);
-  } else {
-    console.error(`[email-gateway] Instantly failed (dynasty grouped): ${instantlyResult.message}`);
+  for (const g of regroupByDynasty(instantlyResult.groups, slugMap)) {
+    const existing = merged.get(g.key) ?? {};
+    existing.broadcast = g.channelStats;
+    merged.set(g.key, existing);
   }
 
   const groups = Array.from(merged.entries()).map(([key, value]) => ({
