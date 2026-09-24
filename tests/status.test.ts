@@ -22,7 +22,32 @@ vi.mock("../src/config", () => ({
 
 const API_KEY = "test-api-key";
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+
+// Both providers answer `/orgs/status` with ONE row per requested item (an
+// address with no data is a row with null scopes), and the gateway now refuses
+// an answer missing any requested address. Fixtures below list only the rows a
+// test cares about, so pad the rest the way a real provider would. Tests that
+// exercise a truncated provider answer switch this off.
+let padMissingRows = true;
+const emptyProviderRow = (email: string) => ({
+  email,
+  byCampaign: null,
+  campaign: null,
+  brand: null,
+  global: { email: { bounced: false, unsubscribed: false } },
+});
+global.fetch = (async (url: string, init?: RequestInit) => {
+  const response = await mockFetch(url, init);
+  if (!padMissingRows || !response?.ok || typeof init?.body !== "string") return response;
+  const { items } = JSON.parse(init.body) as { items?: Array<{ email: string }> };
+  if (!items) return response;
+  const body = (await response.json()) as { results?: Array<{ email: string }> };
+  const results = [...(body.results ?? [])];
+  for (const { email } of items) {
+    if (!results.some((r) => r.email === email)) results.push(emptyProviderRow(email));
+  }
+  return { ...response, ok: true, json: () => Promise.resolve({ ...body, results }) };
+}) as typeof fetch;
 
 function authedPost(path: string) {
   return request(app)
@@ -78,6 +103,7 @@ function mockServiceError() {
 describe("POST /orgs/status", () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    padMissingRows = true;
   });
 
   // --- Auth & validation ---
@@ -265,7 +291,8 @@ describe("POST /orgs/status", () => {
 
     const second = res.body.results[1];
     expect(second.broadcast).toBeDefined();
-    expect(second.transactional).toBeUndefined();
+    // postmark answered jane with an empty row: present, no scopes.
+    expect(second.transactional.campaign).toBeNull();
   });
 
   it("no leadId in response", async () => {
@@ -285,27 +312,14 @@ describe("POST /orgs/status", () => {
     expect(res.body.results[0]).not.toHaveProperty("leadId");
   });
 
-  // --- Partial failures ---
+  // --- A provider that fails or answers partially fails the whole read ---
+  // A consumer reads an absent `broadcast` block as "never contacted", so a 200
+  // with one provider missing is a partial answer that looks complete. On
+  // 2026-09-24 instantly-service redeployed, its `fetch failed` was swallowed,
+  // and a customer's `contacted` count dropped by exactly 1,000 (ten 100-address
+  // batches) for one refresh.
 
-  it("returns results when only broadcast succeeds", async () => {
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("3011")) {
-        return Promise.resolve(mockProviderResponse([
-          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
-        ]));
-      }
-      return Promise.resolve(mockServiceError());
-    });
-
-    const res = await authedPost("/orgs/status")
-      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
-
-    expect(res.status).toBe(200);
-    expect(res.body.results[0].broadcast).toBeDefined();
-    expect(res.body.results[0].transactional).toBeUndefined();
-  });
-
-  it("returns results when only transactional succeeds", async () => {
+  it("returns 502, not a broadcast-less 200, when instantly-service fails", async () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes("3010")) {
         return Promise.resolve(mockProviderResponse([
@@ -318,9 +332,27 @@ describe("POST /orgs/status", () => {
     const res = await authedPost("/orgs/status")
       .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
-    expect(res.status).toBe(200);
-    expect(res.body.results[0].transactional).toBeDefined();
-    expect(res.body.results[0].broadcast).toBeUndefined();
+    expect(res.status).toBe(502);
+    expect(res.body.details).toContain("instantly-service");
+    expect(res.body.results).toBeUndefined();
+  });
+
+  it("returns 502, not a transactional-less 200, when postmark-service fails", async () => {
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011")) {
+        return Promise.resolve(mockProviderResponse([
+          { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
+        ]));
+      }
+      return Promise.resolve(mockServiceError());
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(502);
+    expect(res.body.details).toContain("postmark-service");
+    expect(res.body.results).toBeUndefined();
   });
 
   it("returns 502 when both sub-services fail", async () => {
@@ -330,7 +362,78 @@ describe("POST /orgs/status", () => {
       .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
 
     expect(res.status).toBe(502);
-    expect(res.body.error).toBe("Both upstream services failed");
+    expect(res.body.results).toBeUndefined();
+  });
+
+  it("a bulk read during an instantly-service restart yields errors or complete answers, never a partial 200", async () => {
+    // lead-service reads in 100-address batches. instantly-service is down
+    // (connection refused → `fetch failed`) for the first 10 batches' calls,
+    // then back. postmark stays up throughout.
+    let instantlyDown = true;
+    mockFetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("3011") && instantlyDown) {
+        return Promise.reject(new TypeError("fetch failed"));
+      }
+      const { items } = JSON.parse(init!.body as string) as { items: Array<{ email: string }> };
+      const scope = url.includes("3011") ? deliveredScope : emptyScope;
+      return Promise.resolve(mockProviderResponse(
+        items.map((i) => ({ email: i.email, byCampaign: null, campaign: scope, brand: null, global: emptyGlobal })),
+      ));
+    });
+
+    const batch = (n: number) =>
+      Array.from({ length: 100 }, (_, i) => ({ email: `b${n}-u${i}@acme.com` }));
+
+    const during = [];
+    for (let n = 0; n < 10; n++) {
+      during.push(await authedPost("/orgs/status").send({ campaignId: "camp_1", items: batch(n) }));
+    }
+    instantlyDown = false;
+    const after = await authedPost("/orgs/status").send({ campaignId: "camp_1", items: batch(10) });
+
+    for (const res of during) {
+      expect(res.status).toBe(502);
+      expect(res.body.results).toBeUndefined();
+    }
+    expect(after.status).toBe(200);
+    expect(after.body.results).toHaveLength(100);
+    expect(after.body.results.every((r: { broadcast?: { campaign: { contacted: boolean } } }) =>
+      r.broadcast?.campaign.contacted === true)).toBe(true);
+  });
+
+  it("rides out a restart shorter than the retry window with a complete answer", async () => {
+    let instantlyCalls = 0;
+    mockFetch.mockImplementation((url: string) => {
+      if (url.includes("3011") && instantlyCalls++ === 0) {
+        return Promise.reject(new TypeError("fetch failed"));
+      }
+      return Promise.resolve(mockProviderResponse([
+        { email: "john@acme.com", byCampaign: null, campaign: deliveredScope, brand: null, global: emptyGlobal },
+      ]));
+    });
+
+    const res = await authedPost("/orgs/status")
+      .send({ campaignId: "camp_1", items: [{ email: "john@acme.com" }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].broadcast.campaign.contacted).toBe(true);
+  });
+
+  it("returns 502 when a provider answers for only some of the requested addresses", async () => {
+    padMissingRows = false;
+    const items = Array.from({ length: 100 }, (_, i) => ({ email: `u${i}@acme.com` }));
+    mockFetch.mockImplementation((url: string) => {
+      const answered = url.includes("3011") ? items.slice(0, 99) : items;
+      return Promise.resolve(mockProviderResponse(
+        answered.map((i) => ({ email: i.email, byCampaign: null, campaign: emptyScope, brand: null, global: emptyGlobal })),
+      ));
+    });
+
+    const res = await authedPost("/orgs/status").send({ campaignId: "camp_1", items });
+
+    expect(res.status).toBe(502);
+    expect(res.body.details).toContain("instantly-service");
+    expect(res.body.details).toContain("1 of 100");
   });
 
   // --- Header forwarding (tracing only) ---
@@ -747,8 +850,9 @@ describe("POST /orgs/status", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.results[0].email).toBe("nobody@acme.com");
-    expect(res.body.results[0].broadcast).toBeUndefined();
-    expect(res.body.results[0].transactional).toBeUndefined();
+    // Each provider answers an unknown address with a row carrying no scopes.
+    expect(res.body.results[0].broadcast.campaign).toBeNull();
+    expect(res.body.results[0].transactional.campaign).toBeNull();
     expect(res.body.results[0]).not.toHaveProperty("leadId");
   });
 });
@@ -804,6 +908,7 @@ describe("StatusRequestSchema", () => {
 describe("POST /orgs/status — replyKind + disqualified passthrough", () => {
   beforeEach(() => {
     mockFetch.mockReset();
+    padMissingRows = true;
   });
 
   function scopeWithKind(replyKind: string | null, disqualified: boolean) {

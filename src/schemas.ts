@@ -1022,7 +1022,7 @@ registry.registerPath({
     "",
     "Non-applicable fields are always present but set to `null`.",
     "",
-    "Returns status from both broadcast (Instantly) and transactional (Postmark) providers. If one provider fails, the other's results are still returned. If both fail, returns 502.",
+    "Returns status from both broadcast (Instantly) and transactional (Postmark) providers. Both are required and each must answer for every requested address: if either provider fails or omits any requested address, the whole read returns 502. A partial answer is never served as a 200, because a missing provider block reads as \"never contacted\".",
     "",
     "**Headers** (`x-brand-id`, `x-campaign-id`, etc.) are tracing/logging only — they are forwarded to downstream services but do NOT influence filtering logic. Filtering is driven exclusively by body fields.",
   ].join("\n"),
@@ -1175,7 +1175,7 @@ registry.registerPath({
     },
     400: { description: "Invalid request — empty items or invalid email", content: errorContent },
     401: { description: "Unauthorized — missing or invalid X-API-Key", content: errorContent },
-    502: { description: "Upstream service error — both providers failed", content: errorContent },
+    502: { description: "Upstream service error — a provider failed or answered for only some of the requested addresses", content: errorContent },
   },
 });
 
