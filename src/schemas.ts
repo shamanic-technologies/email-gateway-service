@@ -176,12 +176,26 @@ export type SendResponse = z.infer<typeof SendResponseSchema>;
 export const GroupByDimensionSchema = z.enum(["brandId", "campaignId", "workflowSlug", "featureSlug", "recipientEmail", "audienceId", "workflowDynastySlug", "featureDynastySlug", "day"]);
 export type GroupByDimension = z.infer<typeof GroupByDimensionSchema>;
 
+export const MAX_STATS_CAMPAIGN_IDS = 200;
+
 export const StatsQuerySchema = z
   .object({
     type: EmailTypeSchema.optional().describe("Filter by email channel type"),
     runIds: z.string().optional().describe("Comma-separated run IDs"),
     brandId: z.string().optional().describe("Comma-separated brand IDs to filter by"),
     campaignId: z.string().optional().describe("Filter by campaign ID"),
+    campaignIds: z
+      .string()
+      .optional()
+      .describe(
+        `Comma-separated campaign IDs (at most ${MAX_STATS_CAMPAIGN_IDS}) — typically every stored row of ONE campaign family. The answer is the SUM of the per-row answers: exactly what \`campaignId=<row>\` returns for each row, added together (per group key when \`groupBy\` is set), so it matches a caller that read each row and summed. A recipient contacted under two rows counts once per row, as it did row by row. Mutually exclusive with \`campaignId\`. Every row is read; if any read fails the whole request is a 502, never a partial sum.`,
+      ),
+    perCampaign: z
+      .enum(["true", "false"])
+      .optional()
+      .describe(
+        "With `campaignIds` only: when `true`, the response also carries `byCampaign`, one entry per requested id holding that row's own answer in the same shape as the combined one (byte-equal to a `campaignId=<row>` read). Refused without `campaignIds`.",
+      ),
     audienceId: z.string().optional().describe("Filter by audience attribution (broadcast only). Combine with groupBy=workflowSlug to split one audience's engagement outcomes per workflow at recipient grain."),
     workflowSlugs: z.string().optional().describe("Comma-separated workflow slugs to filter by"),
     featureSlugs: z.string().optional().describe("Comma-separated feature slugs to filter by"),
@@ -194,12 +208,17 @@ export const StatsQuerySchema = z
 
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
-export const StatsResponseSchema = z
-  .object({
-    transactional: ChannelStatsSchema.optional().describe("Stats for transactional emails"),
-    broadcast: ChannelStatsSchema.optional().describe("Stats for broadcast emails"),
-  })
-  .openapi("StatsResponse");
+const FlatStatsBodySchema = z.object({
+  transactional: ChannelStatsSchema.optional().describe("Stats for transactional emails"),
+  broadcast: ChannelStatsSchema.optional().describe("Stats for broadcast emails"),
+});
+
+const BY_CAMPAIGN_DESCRIPTION =
+  "Present only on a `campaignIds` read with `perCampaign=true`: one entry per requested campaign id, holding that row's own answer in the same shape as the combined one. The combined figures are the sum of these entries.";
+
+export const StatsResponseSchema = FlatStatsBodySchema.extend({
+  byCampaign: z.record(z.string(), FlatStatsBodySchema).optional().describe(BY_CAMPAIGN_DESCRIPTION),
+}).openapi("StatsResponse");
 
 export type StatsResponse = z.infer<typeof StatsResponseSchema>;
 
@@ -213,11 +232,13 @@ export const StatsGroupSchema = z
 
 export type StatsGroup = z.infer<typeof StatsGroupSchema>;
 
-export const GroupedStatsResponseSchema = z
-  .object({
-    groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension."),
-  })
-  .openapi("GroupedStatsResponse", {
+const GroupedStatsBodySchema = z.object({
+  groups: z.array(StatsGroupSchema).describe("One entry per unique value of the groupBy dimension."),
+});
+
+export const GroupedStatsResponseSchema = GroupedStatsBodySchema.extend({
+  byCampaign: z.record(z.string(), GroupedStatsBodySchema).optional().describe(BY_CAMPAIGN_DESCRIPTION),
+}).openapi("GroupedStatsResponse", {
     description: "Returned instead of StatsResponse when the groupBy query parameter is set.",
   });
 
