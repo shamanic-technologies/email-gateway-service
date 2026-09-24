@@ -54,6 +54,35 @@ This is the mirror of the broadcast-only strip below: there postmark has no such
 dimension so stripping is correct; here the dimension is transactional-only so
 naming it on the other channel is an error.
 
+## A read that fans out to BOTH providers fails WHOLE — never a 200 with one provider missing
+
+`POST /orgs/status` and the no-`type` paths of `/stats` (flat, grouped,
+dynasty-grouped) call instantly-service AND postmark-service. Both are required:
+if either rejects (5xx, `fetch failed`, timeout), the whole read is a 502. For
+`/orgs/status` each provider must also answer for EVERY requested address (both
+map `items` 1:1 and echo `item.email` verbatim; "no data" is a row with null
+scopes, never an absent row), so a truncated answer is a 502 too.
+
+Why: a consumer reads an absent `broadcast` block as "never contacted", so a
+200 with one provider dropped is a partial answer that LOOKS complete. The old
+code used `Promise.allSettled` + `console.warn` and served whatever arrived. On
+2026-09-24 (06:45–07:10 UTC) instantly-service redeployed, ten of lead-service's
+100-address batches came back 200 with no broadcast evidence, and a customer's
+`contacted` count dropped by exactly 1,000 for one features-service refresh.
+The prod log showed 232 such swallowed failures on `/orgs/status` in 72h (148×
+`500 Failed to get delivery status`, 70× `fetch failed`, 14× timeout) and ~87
+on grouped `/public/stats` — every one a silent partial.
+
+Do NOT reintroduce `allSettled` / `.catch(e => e)` / an `{ error }` block on a
+two-provider read. A caller that wants one channel passes `type=`. The only
+provider-side tolerance kept is postmark answering a grouped read non-grouped
+(it lacks some dimensions); instantly doing so is a 502.
+
+The one network retry in each client (500ms) rides out a sub-second blip; a
+longer restart surfaces as 502 and the caller keeps its last good figure.
+`tests/status.test.ts` simulates a 10-batch bulk read across an instantly
+restart and asserts every response is a 502 or complete.
+
 ## Stats passthrough — broadcast-only filters/groupBys must be STRIPPED for postmark, never forwarded
 
 The `/stats` route is a passthrough, but "passthrough" does NOT mean "forward every filter to both providers." A filter/groupBy dimension that one provider genuinely has NO concept of must be stripped before that provider, or the response is incoherent. Postmark (transactional) has no `timezone`/day-calendar grouping, no per-`audienceId` attribution — so those are **broadcast-only** and handled by `withoutBroadcastOnlyFilters` (strips `timezone` + `audienceId` before postmark) and `isBroadcastOnlyGroupBy` (`day`/`audienceId` → `handleBroadcastOnlyGrouped`, transactional returns empty groups). This is NOT "working around missing backend data" — postmark truly has no such dimension, so returning nothing for its side is correct; forwarding the filter instead makes postmark drop the unknown param and return UNFILTERED transactional stats presented alongside audience/day-scoped broadcast stats (a self-contradictory secondary surface = a bug). **When adding a new stats dimension, first ask "does postmark have this dimension?" If no, add it to the broadcast-only strip/route set — do NOT pure-forward it.** Cost 2026-07-06 (audienceId, #170→#171): shipped a pure-passthrough forwarding `audienceId` to both providers to main/prod; incoherent transactional output; #171 reverted onto the broadcast-only pattern (twin's #168, already on staging). When postmark-service#160 ships per-audience transactional stats, remove `audienceId` from the broadcast-only strip.

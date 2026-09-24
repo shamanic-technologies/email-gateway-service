@@ -300,7 +300,9 @@ describe("GET /orgs/stats", () => {
       expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
-    it("returns error for broadcast when Instantly fails", async () => {
+    // Both providers are required: a 200 carrying one channel is a partial
+    // answer a consumer summing channels reads as a real drop.
+    it("returns 502 when Instantly fails, never transactional-only", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
         if (url.includes("3011"))
@@ -314,12 +316,12 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats");
 
-      expect(res.status).toBe(200);
-      expect(res.body.transactional.emailStats.sent).toBe(100);
-      expect(res.body.broadcast.error).toBeDefined();
+      expect(res.status).toBe(502);
+      expect(res.body.details).toContain("instantly-service");
+      expect(res.body.transactional).toBeUndefined();
     });
 
-    it("returns error for transactional when Postmark fails", async () => {
+    it("returns 502 when Postmark fails, never broadcast-only", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010"))
           return Promise.resolve({
@@ -333,12 +335,12 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats");
 
-      expect(res.status).toBe(200);
-      expect(res.body.transactional.error).toBeDefined();
-      expect(res.body.broadcast.emailStats.sent).toBe(80);
+      expect(res.status).toBe(502);
+      expect(res.body.details).toContain("postmark-service");
+      expect(res.body.broadcast).toBeUndefined();
     });
 
-    it("returns errors for both when both fail", async () => {
+    it("returns 502 when both fail", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010"))
           return Promise.resolve({
@@ -357,9 +359,7 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats");
 
-      expect(res.status).toBe(200);
-      expect(res.body.transactional.error).toBeDefined();
-      expect(res.body.broadcast.error).toBeDefined();
+      expect(res.status).toBe(502);
     });
   });
 
@@ -509,8 +509,8 @@ describe("GET /orgs/stats", () => {
 
     it("forwards featureSlugs on /public/stats without identity headers", async () => {
       mockFetch.mockImplementation((url: string) => {
-        if (url.includes("3010")) return Promise.resolve(mockPostmarkStats());
-        if (url.includes("3011")) return Promise.resolve(mockInstantlyStats());
+        if (url.includes("3010")) return Promise.resolve(mockGroupedPostmark([{ key: "wf-a" }]));
+        if (url.includes("3011")) return Promise.resolve(mockGroupedInstantly([{ key: "wf-a" }]));
         return Promise.reject(new Error("Unexpected URL"));
       });
 
@@ -793,7 +793,7 @@ describe("GET /orgs/stats", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("returns groups from successful provider when other fails (grouped mode)", async () => {
+    it("returns 502 when one provider fails, never the other's groups as the total (grouped mode)", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010"))
           return Promise.resolve({
@@ -810,11 +810,9 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats?groupBy=brandId");
 
-      expect(res.status).toBe(200);
-      expect(res.body.groups).toHaveLength(1);
-      expect(res.body.groups[0].key).toBe("brand_1");
-      expect(res.body.groups[0].broadcast.emailStats.sent).toBe(40);
-      expect(res.body.groups[0].transactional).toBeUndefined();
+      expect(res.status).toBe(502);
+      expect(res.body.details).toContain("postmark-service");
+      expect(res.body.groups).toBeUndefined();
     });
 
     it("passes through grouped reply buckets as-is from provider", async () => {
@@ -833,7 +831,7 @@ describe("GET /orgs/stats", () => {
       expect(group.broadcast.recipientStats.repliesDetail).toEqual({ ...ZERO_DETAIL, notInterested: 1, outOfOffice: 1 });
     });
 
-    it("returns empty groups when both providers fail (grouped mode)", async () => {
+    it("returns 502 when both providers fail (grouped mode)", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("3010"))
           return Promise.resolve({
@@ -852,8 +850,21 @@ describe("GET /orgs/stats", () => {
 
       const res = await authedGet("/orgs/stats?groupBy=brandId");
 
-      expect(res.status).toBe(200);
-      expect(res.body.groups).toEqual([]);
+      expect(res.status).toBe(502);
+      expect(res.body.groups).toBeUndefined();
+    });
+
+    it("returns 502 when Instantly times out, never transactional groups as the total (grouped mode)", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010")) return Promise.resolve(mockGroupedPostmark([{ key: "wf-a" }]));
+        if (url.includes("3011")) return Promise.reject(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await serviceAuthGet("/public/stats?groupBy=workflowSlug&featureSlugs=sales-cold-email-outreach");
+
+      expect(res.status).toBe(502);
+      expect(res.body.details).toContain("instantly-service");
     });
   });
 
@@ -1110,6 +1121,30 @@ describe("GET /orgs/stats", () => {
   });
 
   describe("dynasty slug groupBy", () => {
+    it("returns 502 when Instantly fails, never transactional-only dynasty groups (no type)", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("workflow:3021") && url.includes("/workflows/dynasties"))
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                dynasties: [
+                  { workflowDynastySlug: "cold-email", workflowDynastyName: "Cold Email", workflowSlugs: ["cold-email"] },
+                ],
+              }),
+          });
+        if (url.includes("3010")) return Promise.resolve(mockGroupedPostmark([{ key: "cold-email" }]));
+        if (url.includes("3011")) return Promise.reject(new TypeError("fetch failed"));
+        return Promise.reject(new Error(`Unexpected URL: ${url}`));
+      });
+
+      const res = await authedGet("/orgs/stats?groupBy=workflowDynastySlug");
+
+      expect(res.status).toBe(502);
+      expect(res.body.details).toContain("instantly-service");
+      expect(res.body.groups).toBeUndefined();
+    });
+
     it("regroups by workflowDynastySlug (transactional)", async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes("workflow:3021") && url.includes("/workflows/dynasties"))
