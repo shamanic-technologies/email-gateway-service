@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
-import { StatsQuerySchema, OperationStatsQuerySchema, PublicEngagementLatencyQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
+import { StatsQuerySchema, MAX_STATS_CAMPAIGN_IDS, OperationStatsQuerySchema, PublicEngagementLatencyQuerySchema, ChannelStats, RecipientStats, EmailStats, RepliesDetail } from "../schemas";
 import type { OrgContext } from "../middleware/requireOrgId";
 import { extractOrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
@@ -89,15 +89,35 @@ function addChannelStats(a: ChannelStats, b: ChannelStats): ChannelStats {
   };
 }
 
-function parseStatsInput(req: Request): { success: true; type?: string; filters: Record<string, unknown> } | { success: false; error: unknown } {
+type StatsInput = {
+  success: true;
+  type?: string;
+  filters: Record<string, unknown>;
+  // Set on a campaign-family read: every row is read with `campaignId=<row>`.
+  campaignIds?: string[];
+  perCampaign: boolean;
+};
+
+function parseStatsInput(req: Request): StatsInput | { success: false; error: unknown } {
   const parsed = StatsQuerySchema.safeParse(req.query);
   if (!parsed.success) return { success: false, error: z.flattenError(parsed.error) };
-  const { type, runIds, workflowSlugs, featureSlugs, ...rest } = parsed.data;
+  const { type, runIds, workflowSlugs, featureSlugs, campaignIds: rawCampaignIds, perCampaign, ...rest } = parsed.data;
   const filters: Record<string, unknown> = { ...rest };
   if (runIds) filters.runIds = runIds.split(",").map((s) => s.trim());
   if (workflowSlugs) filters.workflowSlugs = workflowSlugs.split(",").map((s) => s.trim()).join(",");
   if (featureSlugs) filters.featureSlugs = featureSlugs.split(",").map((s) => s.trim()).join(",");
-  return { success: true, type, filters };
+
+  if (rawCampaignIds === undefined) {
+    if (perCampaign !== undefined) return { success: false, error: "perCampaign is only accepted together with campaignIds" };
+    return { success: true, type, filters, perCampaign: false };
+  }
+  if (rest.campaignId !== undefined) return { success: false, error: "campaignId and campaignIds are mutually exclusive" };
+  const campaignIds = parseCommaSeparatedSlugs(rawCampaignIds);
+  if (campaignIds.length === 0) return { success: false, error: "campaignIds must name at least one campaign" };
+  if (campaignIds.length > MAX_STATS_CAMPAIGN_IDS) {
+    return { success: false, error: `campaignIds accepts at most ${MAX_STATS_CAMPAIGN_IDS} ids (got ${campaignIds.length})` };
+  }
+  return { success: true, type, filters, campaignIds, perCampaign: perCampaign === "true" };
 }
 
 function parseCommaSeparatedSlugs(raw: string): string[] {
@@ -225,6 +245,101 @@ function extractPartialContext(req: Request): OrgContext | undefined {
   };
 }
 
+type StatsBody = Record<string, unknown>;
+type DynastyCache = Map<string, ReturnType<typeof dynastyClient.fetchWorkflowDynasties>>;
+
+// How many campaign rows a family read has in flight at once. Each row costs at
+// most one read per provider, so this bounds the gateway at 2x sockets. Measured
+// on prod (2026-09-24, a 47-row family): 16 in flight answered in ~70-190ms.
+const CAMPAIGN_FAMILY_CONCURRENCY = 16;
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/**
+ * Add two provider answers field by field. Numbers add; objects add key by key
+ * over the union of their keys (so a field one provider version serves and
+ * another does not — `notSending`, a new reply kind — is carried, not dropped);
+ * `stepStats` arrays add per `step`. Anything else keeps the first value seen.
+ */
+function sumDeep(a: unknown, b: unknown): unknown {
+  if (a === undefined || a === null) return b;
+  if (b === undefined || b === null) return a;
+  if (typeof a === "number" && typeof b === "number") return a + b;
+  if (Array.isArray(a) && Array.isArray(b)) return sumByStep(a, b);
+  if (typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) {
+    const out: Record<string, unknown> = { ...(a as Record<string, unknown>) };
+    for (const [key, value] of Object.entries(b as Record<string, unknown>)) out[key] = sumDeep(out[key], value);
+    return out;
+  }
+  return a;
+}
+
+function sumByStep(a: unknown[], b: unknown[]): unknown[] {
+  const byStep = new Map<unknown, unknown>();
+  for (const entry of [...a, ...b]) {
+    const step = (entry as { step?: unknown } | null)?.step;
+    if (step === undefined) throw new Error("cannot add a stats array whose entries carry no step");
+    const existing = byStep.get(step);
+    // `step` is the key, not a count: keep it rather than adding it to itself.
+    byStep.set(step, existing === undefined ? entry : { ...(sumDeep(existing, entry) as object), step });
+  }
+  return Array.from(byStep.values()).sort((x, y) => Number((x as { step: number }).step) - Number((y as { step: number }).step));
+}
+
+/** Sum per-row bodies into one body of the same shape (flat or grouped). */
+function combineBodies(bodies: StatsBody[]): StatsBody {
+  if (bodies.some((body) => Array.isArray(body.groups))) {
+    const merged = new Map<string, Record<string, unknown>>();
+    for (const body of bodies) {
+      if (!Array.isArray(body.groups)) throw new Error("campaign rows answered in different shapes (grouped and flat)");
+      for (const group of body.groups as Array<Record<string, unknown>>) {
+        const key = String(group.key);
+        const existing = merged.get(key);
+        merged.set(key, existing ? { ...(sumDeep(existing, group) as Record<string, unknown>), key } : group);
+      }
+    }
+    return { groups: Array.from(merged.values()) };
+  }
+  return bodies.reduce<StatsBody>((acc, body) => sumDeep(acc, body) as StatsBody, {});
+}
+
+async function computeStatsBody(
+  type: string | undefined,
+  inputFilters: Record<string, unknown>,
+  resolvedFilters: Record<string, unknown>,
+  ctx: OrgContext | undefined,
+  dynastyCache?: DynastyCache,
+): Promise<StatsBody> {
+  const filters: Record<string, unknown> = { ...resolvedFilters, ...(ctx?.orgId && { orgId: ctx.orgId }), ...(ctx?.userId && { userId: ctx.userId }) };
+
+  if (filters.groupBy) {
+    if (isDynastyGroupBy(inputFilters.groupBy)) {
+      return handleDynastyGrouped(type, filters, inputFilters.groupBy as "workflowDynastySlug" | "featureDynastySlug", ctx, dynastyCache);
+    }
+    return handleGrouped(type, filters, ctx);
+  }
+  return handleFlat(type, filters, ctx);
+}
+
+function emptyBody(type: string | undefined, grouped: boolean): StatsBody {
+  if (grouped) return { groups: [] };
+  const response: StatsBody = {};
+  if (!type || type === "transactional") response.transactional = { ...ZERO_CHANNEL_STATS };
+  if (!type || type === "broadcast") response.broadcast = { ...ZERO_CHANNEL_STATS };
+  return response;
+}
+
 async function statsHandler(req: Request, res: Response) {
   const input = parseStatsInput(req);
   if (!input.success) {
@@ -234,35 +349,43 @@ async function statsHandler(req: Request, res: Response) {
 
   // For org-scoped routes, ctx comes from middleware. For public routes, try to extract from headers.
   const ctx: OrgContext | undefined = res.locals.orgContext ?? extractOrgContext(req) ?? extractPartialContext(req);
-  const { type } = input;
+  const { type, campaignIds } = input;
 
   try {
-    // Resolve dynasty filters
+    // Resolve dynasty filters (once, whatever the number of campaign rows)
     const resolvedFilters = await resolveDynastyFilters(input.filters, ctx);
 
-    // If dynasty slug resolved to empty → return zero stats immediately
-    if (resolvedFilters.__empty) {
-      if (input.filters.groupBy) {
-        res.json({ groups: [] });
-      } else {
-        const response: Record<string, unknown> = {};
-        if (!type || type === "transactional") response.transactional = { ...ZERO_CHANNEL_STATS };
-        if (!type || type === "broadcast") response.broadcast = { ...ZERO_CHANNEL_STATS };
-        res.json(response);
+    if (!campaignIds) {
+      // If dynasty slug resolved to empty → return zero stats immediately
+      if (resolvedFilters.__empty) {
+        res.json(emptyBody(type, Boolean(input.filters.groupBy)));
+        return;
       }
+      res.json(await computeStatsBody(type, input.filters, resolvedFilters, ctx));
       return;
     }
 
-    const filters: Record<string, unknown> = { ...resolvedFilters, ...(ctx?.orgId && { orgId: ctx.orgId }), ...(ctx?.userId && { userId: ctx.userId }) };
-
-    if (filters.groupBy) {
-      if (isDynastyGroupBy(input.filters.groupBy)) {
-        return await handleDynastyGrouped(res, type, filters, input.filters.groupBy as "workflowDynastySlug" | "featureDynastySlug", ctx);
-      }
-      return await handleGrouped(res, type, filters, ctx);
+    // Campaign-family read: the SAME read a caller makes with `campaignId=<row>`,
+    // once per row, then added. Summing per row (rather than asking a provider
+    // for the rows as one set) is what keeps the figures identical to the
+    // per-row answers: recipient counts are distinct WITHIN a row, so a
+    // recipient under two rows counts once per row in both. Promise.all: one
+    // failed row fails the whole read — a partial sum reads as a real drop.
+    let perRow: StatsBody[];
+    if (resolvedFilters.__empty) {
+      perRow = campaignIds.map(() => emptyBody(type, Boolean(input.filters.groupBy)));
+    } else {
+      const dynastyCache: DynastyCache = new Map();
+      perRow = await mapWithConcurrency(campaignIds, CAMPAIGN_FAMILY_CONCURRENCY, (campaignId) =>
+        computeStatsBody(type, input.filters, { ...resolvedFilters, campaignId }, ctx, dynastyCache),
+      );
     }
 
-    return await handleFlat(res, type, filters, ctx);
+    const body = combineBodies(perRow);
+    if (input.perCampaign) {
+      body.byCampaign = Object.fromEntries(campaignIds.map((id, index) => [id, perRow[index]]));
+    }
+    res.json(body);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Stats failed: ${message}`);
@@ -400,21 +523,18 @@ async function publicEngagementLatencyHandler(req: Request, res: Response) {
 }
 
 async function handleFlat(
-  res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
   ctx?: OrgContext,
-) {
+): Promise<StatsBody> {
   if (type === "transactional") {
     const raw = await postmarkClient.getStats(withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0], ctx);
-    res.json({ transactional: toChannelStats(raw as ProviderStatsFlat) });
-    return;
+    return { transactional: toChannelStats(raw as ProviderStatsFlat) };
   }
 
   if (type === "broadcast") {
     const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx);
-    res.json({ broadcast: toChannelStats(raw as ProviderStatsFlat) });
-    return;
+    return { broadcast: toChannelStats(raw as ProviderStatsFlat) };
   }
 
   // No type specified: aggregate both. Both are required — a provider that
@@ -425,20 +545,19 @@ async function handleFlat(
     instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx),
   ]);
 
-  res.json({
+  return {
     transactional: toChannelStats(postmarkRaw as ProviderStatsFlat),
     broadcast: toChannelStats(instantlyRaw as ProviderStatsFlat),
-  });
+  };
 }
 
 async function handleGrouped(
-  res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
   ctx?: OrgContext,
-) {
+): Promise<StatsBody> {
   if (isBroadcastOnlyGroupBy(filters)) {
-    return await handleBroadcastOnlyGrouped(res, type, filters, ctx);
+    return await handleBroadcastOnlyGrouped(type, filters, ctx);
   }
 
   const postmarkFilters = withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0];
@@ -447,29 +566,25 @@ async function handleGrouped(
   if (type === "transactional") {
     const raw = await postmarkClient.getStats(postmarkFilters, ctx);
     if (!isGrouped(raw)) {
-      res.json({ groups: [] });
-      return;
+      return { groups: [] };
     }
     const groups = raw.groups.map((g) => ({
       key: g.key,
       transactional: { recipientStats: g.recipientStats, emailStats: g.emailStats } as ChannelStats,
     }));
-    res.json({ groups });
-    return;
+    return { groups };
   }
 
   if (type === "broadcast") {
     const raw = await instantlyClient.getStats(instantlyFilters, ctx);
     if (!isGrouped(raw)) {
-      res.json({ groups: [] });
-      return;
+      return { groups: [] };
     }
     const groups = raw.groups.map((g) => ({
       key: g.key,
       broadcast: { recipientStats: g.recipientStats, emailStats: g.emailStats } as ChannelStats,
     }));
-    res.json({ groups });
-    return;
+    return { groups };
   }
 
   // No type: merge groups from both providers by key. A provider failure
@@ -502,50 +617,56 @@ async function handleGrouped(
     ...value,
   }));
 
-  res.json({ groups });
+  return { groups };
 }
 
 async function handleBroadcastOnlyGrouped(
-  res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
   ctx?: OrgContext,
-) {
+): Promise<StatsBody> {
   if (type === "transactional") {
-    res.json({ groups: [] });
-    return;
+    return { groups: [] };
   }
 
   const raw = await instantlyClient.getStats(filters as Parameters<typeof instantlyClient.getStats>[0], ctx);
   if (!isGrouped(raw)) {
-    res.json({ groups: [] });
-    return;
+    return { groups: [] };
   }
 
   const groups = raw.groups.map((g) => ({
     key: g.key,
     broadcast: { recipientStats: g.recipientStats, emailStats: g.emailStats } as ChannelStats,
   }));
-  res.json({ groups });
+  return { groups };
 }
 
 async function handleDynastyGrouped(
-  res: Response,
   type: string | undefined,
   filters: Record<string, unknown>,
   dynastyGroupBy: "workflowDynastySlug" | "featureDynastySlug",
   ctx?: OrgContext,
-) {
+  dynastyCache?: DynastyCache,
+): Promise<StatsBody> {
   // Rewrite groupBy for downstream providers
   const providerGroupBy = rewriteGroupByForProvider(dynastyGroupBy);
   const providerFilters = { ...filters, groupBy: providerGroupBy };
   const postmarkFilters = withoutBroadcastOnlyFilters(providerFilters) as Parameters<typeof postmarkClient.getStats>[0];
   const instantlyFilters = providerFilters as Parameters<typeof instantlyClient.getStats>[0];
 
-  // Fetch the dynasty map
-  const fetchDynasties = dynastyGroupBy === "workflowDynastySlug"
+  // Fetch the dynasty map — once per request, however many campaign rows share it
+  const fetchUncached = dynastyGroupBy === "workflowDynastySlug"
     ? dynastyClient.fetchWorkflowDynasties
     : dynastyClient.fetchFeatureDynasties;
+  const fetchDynasties: typeof fetchUncached = (headers) => {
+    if (!dynastyCache) return fetchUncached(headers);
+    let pending = dynastyCache.get(dynastyGroupBy);
+    if (!pending) {
+      pending = fetchUncached(headers);
+      dynastyCache.set(dynastyGroupBy, pending);
+    }
+    return pending;
+  };
 
   const identityHeaders = ctx?.userId && ctx?.runId ? { orgId: ctx.orgId, userId: ctx.userId, runId: ctx.runId } : undefined;
 
@@ -556,12 +677,10 @@ async function handleDynastyGrouped(
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
     if (!isGrouped(raw)) {
-      res.json({ groups: [] });
-      return;
+      return { groups: [] };
     }
     const regrouped = regroupByDynasty(raw.groups, slugMap);
-    res.json({ groups: regrouped.map((g) => ({ key: g.key, transactional: g.channelStats })) });
-    return;
+    return { groups: regrouped.map((g) => ({ key: g.key, transactional: g.channelStats })) };
   }
 
   if (type === "broadcast") {
@@ -571,12 +690,10 @@ async function handleDynastyGrouped(
     ]);
     const slugMap = dynastyClient.buildSlugToDynastyMap(dynasties);
     if (!isGrouped(raw)) {
-      res.json({ groups: [] });
-      return;
+      return { groups: [] };
     }
     const regrouped = regroupByDynasty(raw.groups, slugMap);
-    res.json({ groups: regrouped.map((g) => ({ key: g.key, broadcast: g.channelStats })) });
-    return;
+    return { groups: regrouped.map((g) => ({ key: g.key, broadcast: g.channelStats })) };
   }
 
   // No type: merge both providers
@@ -612,7 +729,7 @@ async function handleDynastyGrouped(
     ...value,
   }));
 
-  res.json({ groups });
+  return { groups };
 }
 
 export default router;
