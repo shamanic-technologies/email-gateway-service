@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";
 import { app } from "../src/index";
+import { withDeliveryRates } from "../src/lib/delivery-rate";
 
 vi.mock("../src/lib/register-providers", () => ({
   registerProviderRequirements: vi.fn().mockResolvedValue(undefined),
@@ -87,6 +88,8 @@ function naiveSum(a: unknown, b: unknown): unknown {
   if (Array.isArray(a)) return a.map((x, i) => ({ ...(naiveSum(x, (b as unknown[])[i]) as object), step: (x as { step: number }).step }));
   const out: Record<string, unknown> = {};
   for (const key of new Set([...Object.keys(a as object), ...Object.keys(b as object)])) {
+    // A rate does not add; it is re-derived from the summed counts below.
+    if (key === "deliveryRate") continue;
     out[key] = naiveSum((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key]);
   }
   return out;
@@ -105,7 +108,7 @@ describe("GET /orgs/stats?campaignIds= (campaign family in one read)", () => {
       expect(res.status).toBe(200);
       perRow.push(res.body);
     }
-    const expected = perRow.reduce((acc, body) => naiveSum(acc, body));
+    const expected = withDeliveryRates(perRow.reduce((acc, body) => naiveSum(acc, body)));
 
     const family = await authedGet("/orgs/stats?brandId=b1&campaignIds=camp_a,camp_b,camp_c");
     expect(family.status).toBe(200);
@@ -114,6 +117,8 @@ describe("GET /orgs/stats?campaignIds= (campaign family in one read)", () => {
     expect(family.body.broadcast.recipientStats.notSending).toBe(111);
     expect(family.body.broadcast.emailStats.stepStats).toEqual([expect.objectContaining({ step: 1, sent: 222 })]);
     expect(family.body.transactional.emailStats.sent).toBe(444);
+    // The family rate is delivered/sent of the SUMMED counts, never a sum of row rates.
+    expect(family.body.broadcast.recipientStats.deliveryRate).toBe(1);
     expect(family.body.byCampaign).toBeUndefined();
   });
 
