@@ -6,6 +6,7 @@ import { extractOrgContext } from "../middleware/requireOrgId";
 import * as postmarkClient from "../lib/postmark-client";
 import * as instantlyClient from "../lib/instantly-client";
 import * as dynastyClient from "../lib/dynasty-client";
+import { withDeliveryRates } from "../lib/delivery-rate";
 import type {
   ProviderStatsFlat,
   ProviderStatsGrouped,
@@ -358,10 +359,10 @@ async function statsHandler(req: Request, res: Response) {
     if (!campaignIds) {
       // If dynasty slug resolved to empty → return zero stats immediately
       if (resolvedFilters.__empty) {
-        res.json(emptyBody(type, Boolean(input.filters.groupBy)));
+        res.json(withDeliveryRates(emptyBody(type, Boolean(input.filters.groupBy))));
         return;
       }
-      res.json(await computeStatsBody(type, input.filters, resolvedFilters, ctx));
+      res.json(withDeliveryRates(await computeStatsBody(type, input.filters, resolvedFilters, ctx)));
       return;
     }
 
@@ -385,7 +386,8 @@ async function statsHandler(req: Request, res: Response) {
     if (input.perCampaign) {
       body.byCampaign = Object.fromEntries(campaignIds.map((id, index) => [id, perRow[index]]));
     }
-    res.json(body);
+    // Rates last: they are derived from the summed counts and never summed.
+    res.json(withDeliveryRates(body));
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Stats failed: ${message}`);
@@ -457,7 +459,7 @@ async function operationStatsHandler(req: Request, res: Response) {
       recipientsMatched: raw.recipientsMatched,
       firstMessageAt: raw.firstMessageAt,
       lastMessageAt: raw.lastMessageAt,
-      transactional: { recipientStats: raw.recipientStats, emailStats: raw.emailStats },
+      transactional: withDeliveryRates({ recipientStats: raw.recipientStats, emailStats: raw.emailStats }),
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Unknown error";

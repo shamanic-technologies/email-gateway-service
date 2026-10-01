@@ -463,6 +463,13 @@
                       "outOfOffice"
                     ],
                     "description": "Granular reply breakdown by classification"
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -477,9 +484,9 @@
                   "repliesNegative",
                   "repliesNeutral",
                   "repliesAutoReply",
-                  "repliesDetail"
-                ],
-                "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                  "repliesDetail",
+                  "deliveryRate"
+                ]
               },
               "emailStats": {
                 "type": "object",
@@ -609,6 +616,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -623,10 +637,17 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
+                        "repliesDetail",
+                        "deliveryRate"
                       ]
-                    },
-                    "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                    }
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -635,9 +656,9 @@
                   "opened",
                   "clicked",
                   "bounced",
-                  "unsubscribed"
-                ],
-                "description": "Email-level stats (COUNT *)"
+                  "unsubscribed",
+                  "deliveryRate"
+                ]
               }
             },
             "required": [
@@ -756,6 +777,13 @@
                       "outOfOffice"
                     ],
                     "description": "Granular reply breakdown by classification"
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -770,9 +798,9 @@
                   "repliesNegative",
                   "repliesNeutral",
                   "repliesAutoReply",
-                  "repliesDetail"
-                ],
-                "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                  "repliesDetail",
+                  "deliveryRate"
+                ]
               },
               "emailStats": {
                 "type": "object",
@@ -902,6 +930,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -916,10 +951,17 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
+                        "repliesDetail",
+                        "deliveryRate"
                       ]
-                    },
-                    "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                    }
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -928,9 +970,9 @@
                   "opened",
                   "clicked",
                   "bounced",
-                  "unsubscribed"
-                ],
-                "description": "Email-level stats (COUNT *)"
+                  "unsubscribed",
+                  "deliveryRate"
+                ]
               }
             },
             "required": [
@@ -1054,6 +1096,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -1068,9 +1117,9 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
-                      ],
-                      "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                        "repliesDetail",
+                        "deliveryRate"
+                      ]
                     },
                     "emailStats": {
                       "type": "object",
@@ -1200,6 +1249,13 @@
                                   "outOfOffice"
                                 ],
                                 "description": "Granular reply breakdown by classification"
+                              },
+                              "deliveryRate": {
+                                "type": "number",
+                                "nullable": true,
+                                "minimum": 0,
+                                "maximum": 1,
+                                "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                               }
                             },
                             "required": [
@@ -1214,10 +1270,17 @@
                               "repliesNegative",
                               "repliesNeutral",
                               "repliesAutoReply",
-                              "repliesDetail"
+                              "repliesDetail",
+                              "deliveryRate"
                             ]
-                          },
-                          "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                          }
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -1226,9 +1289,9 @@
                         "opened",
                         "clicked",
                         "bounced",
-                        "unsubscribed"
-                      ],
-                      "description": "Email-level stats (COUNT *)"
+                        "unsubscribed",
+                        "deliveryRate"
+                      ]
                     }
                   },
                   "required": [
@@ -1347,6 +1410,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -1361,9 +1431,9 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
-                      ],
-                      "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                        "repliesDetail",
+                        "deliveryRate"
+                      ]
                     },
                     "emailStats": {
                       "type": "object",
@@ -1493,6 +1563,13 @@
                                   "outOfOffice"
                                 ],
                                 "description": "Granular reply breakdown by classification"
+                              },
+                              "deliveryRate": {
+                                "type": "number",
+                                "nullable": true,
+                                "minimum": 0,
+                                "maximum": 1,
+                                "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                               }
                             },
                             "required": [
@@ -1507,10 +1584,17 @@
                               "repliesNegative",
                               "repliesNeutral",
                               "repliesAutoReply",
-                              "repliesDetail"
+                              "repliesDetail",
+                              "deliveryRate"
                             ]
-                          },
-                          "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                          }
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -1519,9 +1603,9 @@
                         "opened",
                         "clicked",
                         "bounced",
-                        "unsubscribed"
-                      ],
-                      "description": "Email-level stats (COUNT *)"
+                        "unsubscribed",
+                        "deliveryRate"
+                      ]
                     }
                   },
                   "required": [
@@ -1688,6 +1772,13 @@
                       "outOfOffice"
                     ],
                     "description": "Granular reply breakdown by classification"
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -1702,9 +1793,9 @@
                   "repliesNegative",
                   "repliesNeutral",
                   "repliesAutoReply",
-                  "repliesDetail"
-                ],
-                "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                  "repliesDetail",
+                  "deliveryRate"
+                ]
               },
               "emailStats": {
                 "type": "object",
@@ -1834,6 +1925,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -1848,10 +1946,17 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
+                        "repliesDetail",
+                        "deliveryRate"
                       ]
-                    },
-                    "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                    }
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -1860,9 +1965,9 @@
                   "opened",
                   "clicked",
                   "bounced",
-                  "unsubscribed"
-                ],
-                "description": "Email-level stats (COUNT *)"
+                  "unsubscribed",
+                  "deliveryRate"
+                ]
               }
             },
             "required": [
@@ -1981,6 +2086,13 @@
                       "outOfOffice"
                     ],
                     "description": "Granular reply breakdown by classification"
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -1995,9 +2107,9 @@
                   "repliesNegative",
                   "repliesNeutral",
                   "repliesAutoReply",
-                  "repliesDetail"
-                ],
-                "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                  "repliesDetail",
+                  "deliveryRate"
+                ]
               },
               "emailStats": {
                 "type": "object",
@@ -2127,6 +2239,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -2141,10 +2260,17 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
+                        "repliesDetail",
+                        "deliveryRate"
                       ]
-                    },
-                    "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                    }
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -2153,9 +2279,9 @@
                   "opened",
                   "clicked",
                   "bounced",
-                  "unsubscribed"
-                ],
-                "description": "Email-level stats (COUNT *)"
+                  "unsubscribed",
+                  "deliveryRate"
+                ]
               }
             },
             "required": [
@@ -2308,6 +2434,13 @@
                       "outOfOffice"
                     ],
                     "description": "Granular reply breakdown by classification"
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -2322,9 +2455,9 @@
                   "repliesNegative",
                   "repliesNeutral",
                   "repliesAutoReply",
-                  "repliesDetail"
-                ],
-                "description": "Recipient-level stats (COUNT DISTINCT lead)"
+                  "repliesDetail",
+                  "deliveryRate"
+                ]
               },
               "emailStats": {
                 "type": "object",
@@ -2454,6 +2587,13 @@
                             "outOfOffice"
                           ],
                           "description": "Granular reply breakdown by classification"
+                        },
+                        "deliveryRate": {
+                          "type": "number",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 1,
+                          "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                         }
                       },
                       "required": [
@@ -2468,10 +2608,17 @@
                         "repliesNegative",
                         "repliesNeutral",
                         "repliesAutoReply",
-                        "repliesDetail"
+                        "repliesDetail",
+                        "deliveryRate"
                       ]
-                    },
-                    "description": "Per-step breakdown (instantly broadcast only; empty/omitted for postmark transactional)"
+                    }
+                  },
+                  "deliveryRate": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
                   }
                 },
                 "required": [
@@ -2480,9 +2627,9 @@
                   "opened",
                   "clicked",
                   "bounced",
-                  "unsubscribed"
-                ],
-                "description": "Email-level stats (COUNT *)"
+                  "unsubscribed",
+                  "deliveryRate"
+                ]
               }
             },
             "required": [

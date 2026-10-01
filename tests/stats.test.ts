@@ -206,11 +206,13 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.recipientStats).toEqual({
+        deliveryRate: 0.95,
         contacted: 100, sent: 100, delivered: 95, opened: 40, bounced: 3, clicked: 10, unsubscribed: 0,
         repliesPositive: 3, repliesNegative: 0, repliesNeutral: 0, repliesAutoReply: 1,
         repliesDetail: { ...ZERO_DETAIL, interested: 2, meetingBooked: 1, outOfOffice: 1, unsubscribe: 2 },
       });
       expect(res.body.transactional.emailStats).toEqual({
+        deliveryRate: 0.95,
         sent: 100, delivered: 95, opened: 40, clicked: 10, bounced: 3, unsubscribed: 0,
       });
       expect(res.body.broadcast).toBeUndefined();
@@ -250,11 +252,13 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.broadcast.recipientStats).toEqual({
+        deliveryRate: 70 / 75,
         contacted: 85, sent: 75, delivered: 70, opened: 30, bounced: 5, clicked: 3, unsubscribed: 0,
         repliesPositive: 0, repliesNegative: 1, repliesNeutral: 0, repliesAutoReply: 2,
         repliesDetail: { ...ZERO_DETAIL, notInterested: 1, outOfOffice: 2 },
       });
       expect(res.body.broadcast.emailStats).toEqual({
+        deliveryRate: 75 / 80,
         sent: 80, delivered: 75, opened: 30, clicked: 3, bounced: 5, unsubscribed: 0,
       });
       expect(res.body.transactional).toBeUndefined();
@@ -949,7 +953,10 @@ describe("GET /orgs/stats", () => {
       const res = await authedGet("/orgs/stats?type=broadcast");
 
       expect(res.status).toBe(200);
-      expect(res.body.broadcast.emailStats.stepStats).toEqual(providerSteps);
+      expect(res.body.broadcast.emailStats.stepStats).toEqual(
+        providerSteps.map((s) => ({ ...s, deliveryRate: s.delivered / s.sent })),
+      );
+      expect(res.body.broadcast.emailStats.stepStats.map((s: { deliveryRate: number }) => s.deliveryRate)).toEqual([0.9, 0.9, 1]);
       expect(res.body.broadcast.emailStats.sent).toBe(80);
     });
 
@@ -977,7 +984,7 @@ describe("GET /orgs/stats", () => {
 
       expect(res.status).toBe(200);
       expect(res.body.transactional.emailStats.stepStats).toBeUndefined();
-      expect(res.body.broadcast.emailStats.stepStats).toEqual(providerSteps);
+      expect(res.body.broadcast.emailStats.stepStats).toEqual([{ ...providerSteps[0], deliveryRate: 0.9 }]);
     });
   });
 

@@ -66,6 +66,35 @@ export type EmailStats = z.infer<typeof EmailStatsSchema>;
 export const ChannelStatsSchema = RawChannelStats;
 export type ChannelStats = z.infer<typeof ChannelStatsSchema>;
 
+// --- Served stats: the contract counts + the delivery rate derived from them ---
+// `deliveryRate` is computed HERE (src/lib/delivery-rate.ts), not read from a
+// provider: a displayed rate belongs to the producer of the counts it divides,
+// so no consumer re-derives it. Extended locally (not a contract fork), same
+// pattern as ScopedStatusSchema below; no `.openapi(name)`, see the Zod 4 caveat.
+
+const DeliveryRateSchema = z
+  .number()
+  .min(0)
+  .max(1)
+  .nullable()
+  .describe(
+    "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats.",
+  );
+
+export const ServedStepStatsSchema = RawStepStats.extend({ deliveryRate: DeliveryRateSchema });
+
+export const ServedEmailStatsSchema = RawEmailStats.extend({
+  deliveryRate: DeliveryRateSchema,
+  stepStats: z.array(ServedStepStatsSchema).optional(),
+});
+
+export const ServedRecipientStatsSchema = RawRecipientStats.extend({ deliveryRate: DeliveryRateSchema });
+
+export const ServedChannelStatsSchema = z.object({
+  recipientStats: ServedRecipientStatsSchema,
+  emailStats: ServedEmailStatsSchema,
+});
+
 export const StatusScopeSchema = RawStatusScope;
 export type StatusScope = z.infer<typeof StatusScopeSchema>;
 
@@ -209,8 +238,8 @@ export const StatsQuerySchema = z
 export type StatsQuery = z.infer<typeof StatsQuerySchema>;
 
 const FlatStatsBodySchema = z.object({
-  transactional: ChannelStatsSchema.optional().describe("Stats for transactional emails"),
-  broadcast: ChannelStatsSchema.optional().describe("Stats for broadcast emails"),
+  transactional: ServedChannelStatsSchema.optional().describe("Stats for transactional emails"),
+  broadcast: ServedChannelStatsSchema.optional().describe("Stats for broadcast emails"),
 });
 
 const BY_CAMPAIGN_DESCRIPTION =
@@ -225,8 +254,8 @@ export type StatsResponse = z.infer<typeof StatsResponseSchema>;
 export const StatsGroupSchema = z
   .object({
     key: z.string().describe("The value of the groupBy dimension for this bucket."),
-    transactional: ChannelStatsSchema.optional().describe("Transactional (Postmark) stats for this group."),
-    broadcast: ChannelStatsSchema.optional().describe("Broadcast (Instantly) stats for this group."),
+    transactional: ServedChannelStatsSchema.optional().describe("Transactional (Postmark) stats for this group."),
+    broadcast: ServedChannelStatsSchema.optional().describe("Broadcast (Instantly) stats for this group."),
   })
   .openapi("StatsGroup");
 
@@ -307,7 +336,7 @@ export const OperationStatsResponseSchema = z
     // Present only when matched is true. Not `.openapi()`-tagged: ChannelStats
     // comes from the shared contract package, whose instances predate this
     // module's Zod extension (see the Zod 4 caveat in CLAUDE.md).
-    transactional: ChannelStatsSchema.optional(),
+    transactional: ServedChannelStatsSchema.optional(),
   })
   .openapi("OperationStatsResponse");
 
