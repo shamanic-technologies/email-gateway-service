@@ -648,6 +648,12 @@
                     "minimum": 0,
                     "maximum": 1,
                     "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                  },
+                  "queued": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                   }
                 },
                 "required": [
@@ -962,6 +968,12 @@
                     "minimum": 0,
                     "maximum": 1,
                     "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                  },
+                  "queued": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                   }
                 },
                 "required": [
@@ -1281,6 +1293,12 @@
                           "minimum": 0,
                           "maximum": 1,
                           "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                        },
+                        "queued": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 0,
+                          "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                         }
                       },
                       "required": [
@@ -1595,6 +1613,12 @@
                           "minimum": 0,
                           "maximum": 1,
                           "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                        },
+                        "queued": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 0,
+                          "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                         }
                       },
                       "required": [
@@ -1957,6 +1981,12 @@
                     "minimum": 0,
                     "maximum": 1,
                     "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                  },
+                  "queued": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                   }
                 },
                 "required": [
@@ -2271,6 +2301,12 @@
                     "minimum": 0,
                     "maximum": 1,
                     "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                  },
+                  "queued": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                   }
                 },
                 "required": [
@@ -2619,6 +2655,12 @@
                     "minimum": 0,
                     "maximum": 1,
                     "description": "Share of sent that were delivered, as a fraction in [0, 1] (0.976 = 97.6% delivered): `delivered / sent` from the counts in this same object. Null when `sent` is 0 (nothing sent, no rate to state) or when `delivered` exceeds `sent` (the counts contradict each other and no rate is invented). Lead with this figure when reporting stats."
+                  },
+                  "queued": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "description": "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`."
                   }
                 },
                 "required": [

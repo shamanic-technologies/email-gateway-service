@@ -72,6 +72,26 @@ function addRecipientStats(a: RecipientStats, b: RecipientStats): RecipientStats
   };
 }
 
+/**
+ * `emailStats.queued` (broadcast only): emails scheduled and not yet sent right
+ * now, a snapshot instantly-service serves on every read except groupBy=day.
+ * `null` = the producer could not read its queue — UNKNOWN, never a 0. So a sum
+ * is exact only when both sides are numbers; one unknown side makes the sum
+ * unknown, and a side that LACKS the field while the other carries it is
+ * treated the same (a member that should have answered did not). Both sides
+ * without it (groupBy=day, transactional) stays absent: no 0 is invented.
+ * Returns the key to spread (`{}` = absent).
+ */
+function addQueued(a: object, b: object): { queued?: number | null } {
+  const aHas = "queued" in a;
+  const bHas = "queued" in b;
+  if (!aHas && !bHas) return {};
+  const qa = (a as { queued?: unknown }).queued;
+  const qb = (b as { queued?: unknown }).queued;
+  if (typeof qa === "number" && typeof qb === "number") return { queued: qa + qb };
+  return { queued: null };
+}
+
 function addEmailStats(a: EmailStats, b: EmailStats): EmailStats {
   return {
     sent: a.sent + b.sent,
@@ -80,6 +100,7 @@ function addEmailStats(a: EmailStats, b: EmailStats): EmailStats {
     clicked: a.clicked + b.clicked,
     bounced: a.bounced + b.bounced,
     unsubscribed: a.unsubscribed + b.unsubscribed,
+    ...addQueued(a, b),
   };
 }
 
@@ -215,8 +236,20 @@ function regroupByDynasty(
   for (const g of groups) {
     const dynastyKey = slugToDynastyMap.get(g.key) ?? g.key;
     const stats: ChannelStats = { recipientStats: g.recipientStats, emailStats: g.emailStats };
-    const existing = dynastyGroups.get(dynastyKey) ?? { ...ZERO_CHANNEL_STATS };
-    dynastyGroups.set(dynastyKey, addChannelStats(existing, stats));
+    const existing = dynastyGroups.get(dynastyKey);
+    if (existing) {
+      dynastyGroups.set(dynastyKey, addChannelStats(existing, stats));
+      continue;
+    }
+    // First slug of the dynasty: normalised onto the zero shape, but its own
+    // `queued` (or its absence) is kept — the zero carries none, and adding onto
+    // it would read as a member missing the field and null the sum.
+    const first = addChannelStats(ZERO_CHANNEL_STATS, stats);
+    const { queued: _zeroSide, ...emailStats } = first.emailStats as EmailStats & { queued?: number | null };
+    dynastyGroups.set(dynastyKey, {
+      recipientStats: first.recipientStats,
+      emailStats: { ...emailStats, ...("queued" in stats.emailStats ? { queued: (stats.emailStats as { queued?: number | null }).queued ?? null } : {}) },
+    });
   }
   return Array.from(dynastyGroups.entries()).map(([key, channelStats]) => ({ key, channelStats }));
 }
@@ -280,8 +313,13 @@ function sumDeep(a: unknown, b: unknown): unknown {
   if (Array.isArray(a) && Array.isArray(b)) return sumByStep(a, b);
   if (typeof a === "object" && typeof b === "object" && !Array.isArray(a) && !Array.isArray(b)) {
     const out: Record<string, unknown> = { ...(a as Record<string, unknown>) };
-    for (const [key, value] of Object.entries(b as Record<string, unknown>)) out[key] = sumDeep(out[key], value);
-    return out;
+    for (const [key, value] of Object.entries(b as Record<string, unknown>)) {
+      if (key !== "queued") out[key] = sumDeep(out[key], value);
+    }
+    // `queued` is not a plain count: null means unknown and must propagate,
+    // where the generic rule above would let the other side's number through.
+    delete out.queued;
+    return Object.assign(out, addQueued(a, b));
   }
   return a;
 }
@@ -337,7 +375,9 @@ function emptyBody(type: string | undefined, grouped: boolean): StatsBody {
   if (grouped) return { groups: [] };
   const response: StatsBody = {};
   if (!type || type === "transactional") response.transactional = { ...ZERO_CHANNEL_STATS };
-  if (!type || type === "broadcast") response.broadcast = { ...ZERO_CHANNEL_STATS };
+  // Nothing in scope (dynasty resolved to no slug) → nothing waiting either:
+  // broadcast states queued 0, as the producer would for an empty scope.
+  if (!type || type === "broadcast") response.broadcast = { ...ZERO_CHANNEL_STATS, emailStats: { ...ZERO_EMAIL_STATS, queued: 0 } };
   return response;
 }
 
