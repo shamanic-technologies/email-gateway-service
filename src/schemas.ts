@@ -83,8 +83,19 @@ const DeliveryRateSchema = z
 
 export const ServedStepStatsSchema = RawStepStats.extend({ deliveryRate: DeliveryRateSchema });
 
+const QueuedEmailsSchema = z
+  .number()
+  .int()
+  .min(0)
+  .nullable()
+  .optional()
+  .describe(
+    "Broadcast only. Emails scheduled and not yet sent RIGHT NOW for this scope: every remaining sequence step counted (same grain as `sent`), live sequences only (stopped, paused, completed, replied or bounced sequences never count). A current snapshot, not dated. Relayed from instantly-service under the same name. 0 = nothing waiting; null = the provider could not read its queue (unknown, never read as 0). On a campaign-family read (`campaignIds=`) it is the exact sum of the rows, and null if ANY row's value is null or missing. Per group for groupBy campaignId|brandId|workflowSlug|featureSlug|leadEmail|audienceId and the dynasty groupBys (summed the same way). ABSENT on groupBy=day (a snapshot has no day) and on every transactional block (Postmark sends immediately and has no queue). The gateway serves no combined broadcast+transactional total, so there is no merged figure: read it on `broadcast.emailStats`.",
+  );
+
 export const ServedEmailStatsSchema = RawEmailStats.extend({
   deliveryRate: DeliveryRateSchema,
+  queued: QueuedEmailsSchema,
   stepStats: z.array(ServedStepStatsSchema).optional(),
 });
 
