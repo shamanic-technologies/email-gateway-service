@@ -176,7 +176,11 @@ const TransactionalSendSchema = SendBaseSchema.extend({
   messageStream: z
     .string()
     .optional()
-    .describe("Postmark message stream ID. If omitted, postmark-service uses its configured default."),
+    .describe("Legacy. Forwarded, but postmark-service resolves its stream ids server-side and ignores this field. To choose how the mail is delivered, use `stream`."),
+  stream: z
+    .enum(["broadcast", "transactional"])
+    .optional()
+    .describe("How this ONE email is delivered. `transactional` = person-to-person mail meant to be answered like a normal email: sent on the Postmark transactional (outbound) stream, so no List-Unsubscribe header, AND the gateway does not append its visible Unsubscribe footer. Reply-To stays exactly as you set it. Never use it for mailing lists, newsletters or anything a recipient can ask to stop receiving. `broadcast` or omitted = today's behaviour: Postmark broadcast stream (List-Unsubscribe header) plus the Unsubscribe footer. Transactional only."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({
@@ -189,6 +193,11 @@ const BroadcastSendSchema = SendBaseSchema.extend({
     .refine(() => false, "cc is transactional-only: a broadcast sequence has no visible-copy recipient")
     .optional()
     .describe("Not accepted on a broadcast send. Instantly drives a per-lead cold-email sequence and exposes no visible-copy recipient, so naming one is refused rather than silently dropped."),
+  stream: z
+    .string()
+    .refine(() => false, "stream is transactional-only: a broadcast send goes through Instantly, which has no Postmark stream")
+    .optional()
+    .describe("Not accepted on a broadcast send. The Postmark stream choice only exists on the transactional channel, so naming one here is refused rather than silently dropped."),
   timezone: z.string().nullish().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."),
 });
 

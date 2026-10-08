@@ -50,7 +50,7 @@ router.post("/send", async (req: Request, res: Response) => {
 
   try {
     if (body.type === "transactional") {
-      const htmlWithSignature = appendSignature(body.htmlBody, body.type);
+      const htmlWithSignature = appendSignature(body.htmlBody, body.type, body.stream === "transactional");
 
       const result = await postmarkClient.sendEmail({
         orgId: ctx.orgId,
@@ -72,6 +72,7 @@ router.post("/send", async (req: Request, res: Response) => {
         inReplyTo: body.inReplyTo,
         references: body.references,
         messageStream: body.messageStream,
+        stream: body.stream,
       }, ctx);
 
       console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
