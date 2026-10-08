@@ -14,8 +14,14 @@ export function buildSignature(type: EmailType): string {
   return buildDefaultFooter(type);
 }
 
-export function appendSignature(htmlBody: string | undefined, type: EmailType): string | undefined {
+/**
+ * `personToPerson` = the caller asked for Postmark's transactional stream: a
+ * one-to-one mail meant to be answered. It carries no unsubscribe footer (and
+ * `{{{pm:unsubscribe}}}` only resolves on a broadcast stream anyway).
+ */
+export function appendSignature(htmlBody: string | undefined, type: EmailType, personToPerson = false): string | undefined {
   if (!htmlBody) return undefined;
+  if (personToPerson) return htmlBody;
   const footer = buildSignature(type);
   if (!footer) return htmlBody;
   return htmlBody + footer;

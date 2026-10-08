@@ -560,6 +560,59 @@ describe("POST /orgs/send", () => {
       expect(postmarkHeaders["x-run-id"]).toBe("run_1");
     });
 
+    describe("person-to-person delivery (stream)", () => {
+      function okSend() {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_p2p" }),
+        });
+      }
+
+      it("stream=transactional: forwards the stream and appends NO unsubscribe footer", async () => {
+        okSend();
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ stream: "transactional", replyTo: "prospect@acme.com" })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.stream).toBe("transactional");
+        expect(body.htmlBody).toBe("<p>Welcome</p>");
+        expect(body.htmlBody).not.toContain("{{{pm:unsubscribe}}}");
+        expect(body.replyTo).toBe("prospect@acme.com");
+      });
+
+      it("omitted: no stream key forwarded and the footer is appended, as today", async () => {
+        okSend();
+        await authedPost("/orgs/send").send(buildTransactionalBody());
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect("stream" in body).toBe(false);
+        expect(body.htmlBody).toBe("<p>Welcome</p>" + buildDefaultFooter("transactional"));
+      });
+
+      it("stream=broadcast: forwarded and the footer is kept", async () => {
+        okSend();
+        await authedPost("/orgs/send").send(buildTransactionalBody({ stream: "broadcast" }));
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.stream).toBe("broadcast");
+        expect(body.htmlBody).toContain("{{{pm:unsubscribe}}}");
+      });
+
+      it("refuses an unknown stream value with a 400", async () => {
+        const res = await authedPost("/orgs/send").send(buildTransactionalBody({ stream: "outbound" }));
+        expect(res.status).toBe(400);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it("refuses stream on a broadcast send rather than dropping it", async () => {
+        const res = await authedPost("/orgs/send").send(buildBroadcastBody({ stream: "transactional" }));
+        expect(res.status).toBe(400);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+    });
+
     describe("threading fields (inReplyTo, references, messageStream)", () => {
       it("forwards inReplyTo, references, and messageStream to postmark-service when provided", async () => {
         mockFetch.mockResolvedValueOnce({
@@ -1293,6 +1346,10 @@ describe("appendSignature", () => {
     expect(result).toContain("<p>Hello</p>");
     expect(result).toContain("{{{pm:unsubscribe}}}");
     expect(result).not.toContain("Kevin Lourd");
+  });
+
+  it("appends nothing for a person-to-person transactional send", () => {
+    expect(appendSignature("<p>Hello</p>", "transactional", true)).toBe("<p>Hello</p>");
   });
 
   it("returns original htmlBody for broadcast", () => {
