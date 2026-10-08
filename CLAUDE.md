@@ -54,6 +54,24 @@ This is the mirror of the broadcast-only strip below: there postmark has no such
 dimension so stripping is correct; here the dimension is transactional-only so
 naming it on the other channel is an error.
 
+## Person-to-person delivery — `stream: "transactional"` drops the footer AND switches the Postmark stream, together
+
+Every Postmark send defaults to the BROADCAST stream (List-Unsubscribe header,
+Gmail's "Unsubscribe" link by the sender) and this gateway appends a visible
+`{{{pm:unsubscribe}}}` footer to every transactional body. Both make a mail
+look like a newsletter. A transactional caller sending a mail meant to be
+ANSWERED like a normal email (instantly-service's "answer it yourself" email,
+Reply-To = the prospect) passes `stream: "transactional"`: forwarded verbatim
+to postmark-service's own `stream` (outbound stream, no List-Unsubscribe) and
+NO footer appended. The two go together on purpose: `{{{pm:unsubscribe}}}`
+only resolves on a broadcast stream, so a footer on the outbound stream would
+be a dead link. Omitted / `broadcast` = byte-identical to before (no `stream`
+key forwarded when omitted). Broadcast-channel sends refuse the field (400),
+same pattern as `cc`. Mailing lists and marketing must never pass it.
+
+The older `messageStream` field is legacy: postmark-service resolves stream ids
+server-side and strips it. Do not "fix" person-to-person through it.
+
 ## A read that fans out to BOTH providers fails WHOLE — never a 200 with one provider missing
 
 `POST /orgs/status` and the no-`type` paths of `/stats` (flat, grouped,

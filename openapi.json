@@ -219,7 +219,15 @@
               },
               "messageStream": {
                 "type": "string",
-                "description": "Postmark message stream ID. If omitted, postmark-service uses its configured default."
+                "description": "Legacy. Forwarded, but postmark-service resolves its stream ids server-side and ignores this field. To choose how the mail is delivered, use `stream`."
+              },
+              "stream": {
+                "type": "string",
+                "enum": [
+                  "broadcast",
+                  "transactional"
+                ],
+                "description": "How this ONE email is delivered. `transactional` = person-to-person mail meant to be answered like a normal email: sent on the Postmark transactional (outbound) stream, so no List-Unsubscribe header, AND the gateway does not append its visible Unsubscribe footer. Reply-To stays exactly as you set it. Never use it for mailing lists, newsletters or anything a recipient can ask to stop receiving. `broadcast` or omitted = today's behaviour: Postmark broadcast stream (List-Unsubscribe header) plus the Unsubscribe footer. Transactional only."
               }
             },
             "required": [
@@ -306,6 +314,10 @@
               "cc": {
                 "type": "string",
                 "description": "Not accepted on a broadcast send. Instantly drives a per-lead cold-email sequence and exposes no visible-copy recipient, so naming one is refused rather than silently dropped."
+              },
+              "stream": {
+                "type": "string",
+                "description": "Not accepted on a broadcast send. The Postmark stream choice only exists on the transactional channel, so naming one here is refused rather than silently dropped."
               },
               "timezone": {
                 "type": "string",

@@ -90,6 +90,7 @@ export async function sendEmail(body: {
   inReplyTo?: string;
   references?: string;
   messageStream?: string;
+  stream?: "broadcast" | "transactional";
 }, ctx?: OrgContext) {
   return request<{
     success: boolean;
