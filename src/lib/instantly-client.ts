@@ -19,6 +19,23 @@ const TIMEOUT_MS = 10_000;
 const SEND_TIMEOUT_MS = 60_000;
 const RETRY_DELAY_MS = 500;
 
+/**
+ * An HTTP answer from instantly-service that was not 2xx. Keeps the status and
+ * the raw body so a route can tell a refusal (4xx: the sender decided, e.g.
+ * 409 `recent_brand_contact`) from an outage (5xx), instead of flattening both
+ * into one message string.
+ */
+export class InstantlyHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly bodyText: string,
+  ) {
+    super(message);
+    this.name = "InstantlyHttpError";
+  }
+}
+
 async function request<T>(
   path: string,
   options: {
@@ -61,8 +78,10 @@ async function request<T>(
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(
-          `instantly-service ${method} ${path}: ${response.status} - ${errorText}`
+        throw new InstantlyHttpError(
+          `instantly-service ${method} ${path}: ${response.status} - ${errorText}`,
+          response.status,
+          errorText,
         );
       }
 

@@ -135,11 +135,49 @@ router.post("/send", async (req: Request, res: Response) => {
       return;
     }
   } catch (error: unknown) {
+    // A 4xx from instantly-service is the SENDER'S ANSWER about this lead, not
+    // an outage: 409 `recent_brand_contact` (3-month per-brand re-contact
+    // window), 409 `lead_opted_out`, 409 `lead_not_a_prospect`, 402
+    // `insufficient_credits`, 400/422. Nothing was sent and nothing was billed.
+    // Round-trip it byte-equal (status + body, `code` included) so a caller can
+    // skip the lead and move on. Flattening it into a 502 made every workflow
+    // read a refusal as a broken sender, fail the run, and get the same lead
+    // re-served next run, forever (RECONTACT-LOOP-1011). 5xx and network
+    // failures stay a 502. Not cached under the idempotency key: the refusal
+    // is the sender's to repeat, and a retry asks it again.
+    if (
+      error instanceof instantlyClient.InstantlyHttpError &&
+      error.status >= 400 &&
+      error.status < 500
+    ) {
+      const refusal = parseRefusalBody(error.bodyText);
+      const code = typeof refusal.code === "string" ? refusal.code : "none";
+      console.warn(`[email-gateway] Refused by instantly-service: status=${error.status} code=${code} to=${body.to}`);
+      traceEvent(ctx, "send.refused", `type=${body.type} to=${body.to} status=${error.status} code=${code}`);
+      res.status(error.status).json(refusal);
+      return;
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] Failed: ${message}`);
     traceEvent(ctx, "send.error", `type=${body.type} to=${body.to} error=${message}`);
     res.status(502).json({ error: "Upstream service error", details: message });
   }
 });
+
+/**
+ * instantly-service answers its refusals in JSON. A non-JSON 4xx body (a proxy
+ * page, an empty body) is still a 4xx, so it is wrapped rather than dropped.
+ */
+function parseRefusalBody(bodyText: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(bodyText);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // not JSON: wrapped below
+  }
+  return { error: bodyText || "Refused by instantly-service" };
+}
 
 export default router;
