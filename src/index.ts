@@ -5,6 +5,7 @@ import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import { requireOrgId } from "./middleware/requireOrgId";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
+import platformSendRoutes from "./routes/platform-send";
 import statusRoutes from "./routes/status";
 import statsRoutes, { publicStatsRouter } from "./routes/stats";
 import webhooksRoutes from "./routes/webhooks";
@@ -27,6 +28,9 @@ app.use("/inbound", apiKeyAuth, inboundRoutes);
 
 // Public routes with apiKeyAuth only (no identity headers required)
 app.use("/public", apiKeyAuth, publicStatsRouter);
+
+// Org-less platform-paid transactional send (apiKeyAuth only, refuses org identity)
+app.use("/platform", apiKeyAuth, platformSendRoutes);
 
 // Org-scoped routes (apiKeyAuth + requireOrgId)
 app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
