@@ -41,6 +41,25 @@ export const ErrorResponseSchema = z
   })
   .openapi("ErrorResponse");
 
+/**
+ * A broadcast send the SENDER refused for this lead (instantly-service 4xx),
+ * round-tripped byte-equal. A business answer about one lead, never an outage:
+ * skip the lead, keep the campaign going. The body is the sender's, so every
+ * field it serves is kept (loose object); only `error` and `code` are named here.
+ */
+export const SendRefusalSchema = z
+  .looseObject({
+    error: z.string().describe("Human-readable reason, the sender's wording."),
+    code: z
+      .string()
+      .optional()
+      .describe(
+        "The sender's machine code. Known today: `recent_brand_contact` (409, emailed for this brand inside the 3-month window; expires: `lastEmailedAt` + `windowInterval`), `lead_opted_out` (409, org-wide, never expires), `lead_not_a_prospect` (409, permanent for the brand), `insufficient_credits` (402, org-level). The vocabulary is instantly-service's; refer to its openapi.json.",
+      ),
+    details: z.string().optional().describe("Free-text detail from the sender."),
+  })
+  .openapi("SendRefusal");
+
 // --- Shared cross-provider schemas (imported from email-domain-contract) ---
 // Re-exported as-is. The OpenAPI generator inlines them where they're referenced
 // (no $ref name) because zod-to-openapi v8's `.openapi(name)` cannot be applied
@@ -804,6 +823,10 @@ const errorContent = {
   "application/json": { schema: ErrorResponseSchema },
 };
 
+const refusalContent = {
+  "application/json": { schema: SendRefusalSchema },
+};
+
 registry.registerPath({
   method: "get",
   path: "/health",
@@ -908,9 +931,12 @@ registry.registerPath({
         },
       },
     },
-    400: { description: "Invalid request", content: errorContent },
+    400: { description: "Invalid request (gateway validation, or the sender's own 400 round-tripped)", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
-    502: { description: "Upstream service error", content: errorContent },
+    402: { description: "Broadcast: the sender refused, org lacks credits (`code: insufficient_credits`). Nothing sent, nothing billed.", content: refusalContent },
+    409: { description: "Broadcast: the sender refused THIS LEAD (`code`: `recent_brand_contact` | `lead_opted_out` | `lead_not_a_prospect`, sender's body byte-equal). Nothing sent, nothing billed. A per-lead outcome: skip the lead, do not fail the run, do not retry it.", content: refusalContent },
+    422: { description: "Broadcast: the sender refused (e.g. API key not configured), body byte-equal.", content: refusalContent },
+    502: { description: "Upstream service error: the sender failed (5xx, network, timeout). Only this status means the sender is broken.", content: errorContent },
   },
 });
 

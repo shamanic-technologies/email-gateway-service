@@ -192,6 +192,101 @@ describe("POST /orgs/send", () => {
       expect(res.body.error).toBe("Upstream service error");
     });
 
+    it("round-trips a 409 recent_brand_contact refusal byte-equal instead of a 502", async () => {
+      const refusal = {
+        error: "Recently contacted for this brand",
+        code: "recent_brand_contact",
+        details: "janderson@nuspinechiropractic.com was already emailed for brand b1 at 2026-07-16T13:10:12.068Z, inside the 3 months re-contact window. No email was sent and nothing was billed.",
+        brandId: "b1",
+        lastEmailedAt: "2026-07-16T13:10:12.068Z",
+        windowInterval: "3 months",
+      };
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: () => Promise.resolve(JSON.stringify(refusal)),
+      });
+
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual(refusal);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("round-trips a 409 lead_opted_out refusal with its code", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: () => Promise.resolve(JSON.stringify({ error: "Lead has opted out", code: "lead_opted_out", channel: "email", statedAt: "2026-09-01T00:00:00.000Z" })),
+      });
+
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      expect(res.status).toBe(409);
+      expect(res.body.code).toBe("lead_opted_out");
+      expect(res.body.channel).toBe("email");
+    });
+
+    it("round-trips a 402 insufficient_credits refusal", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 402,
+        text: () => Promise.resolve(JSON.stringify({ error: "Insufficient credits", code: "insufficient_credits", balance_cents: 0, required_cents: 30 })),
+      });
+
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      expect(res.status).toBe(402);
+      expect(res.body.code).toBe("insufficient_credits");
+    });
+
+    it("wraps a non-JSON 4xx body rather than dropping it", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: () => Promise.resolve("conflict"),
+      });
+
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      expect(res.status).toBe(409);
+      expect(res.body).toEqual({ error: "conflict" });
+    });
+
+    it("does not cache a refusal under the idempotency key", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: () => Promise.resolve(JSON.stringify({ error: "Recently contacted for this brand", code: "recent_brand_contact" })),
+      });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const body = buildBroadcastBody({ idempotencyKey: "refusal-key" });
+      const res1 = await authedPost("/orgs/send").send(body);
+      const res2 = await authedPost("/orgs/send").send(body);
+
+      expect(res1.status).toBe(409);
+      expect(res2.status).toBe(200);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it("still answers 502 on an instantly-service 503", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        text: () => Promise.resolve(JSON.stringify({ error: "Service Unavailable", code: "x" })),
+      });
+
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      expect(res.status).toBe(502);
+      expect(res.body.error).toBe("Upstream service error");
+    });
+
     it("passes correct payload with sequence to instantly-service", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
