@@ -189,6 +189,10 @@ been inert for its whole life — first reading `/stats?runIds=` (a silent zero)
 then this read while it was 502ing on the withdrawn provider route. It must send
 `operationRunId` to get a verdict.
 
+## An org-less send is `POST /platform/send` — transactional only, never an invented org
+
+The sign-up code mail (client-service, before any org or user exists) has nobody to bill, and a placeholder org id is banned fleet-wide; authorizing a brand-new org would also create its billing account and grant the welcome gift. So `/platform/send` (`routes/platform-send.ts`, apiKeyAuth only, mounted OUTSIDE `requireOrgId`) relays to postmark-service `POST /internal/platform-send` with `payer: "platform"` and `stream: "transactional"` stated explicitly (postmark refuses an org-less send without the payer and defaults to its broadcast stream). It refuses, with a named 400 and nothing sent: any `type` but `transactional` (`platform_send_transactional_only`; Instantly has no org-less send) and any `x-org-id`/`x-user-id` (`platform_send_org_identity_refused`), so an org-bearing caller cannot dodge its own bill here. An org-bearing caller that wants platform-paid passes `payer` on `/orgs/send`; absent = no key forwarded, byte-identical to before. No `traceEvent` on this route: there is no org run to trace into, postmark-service owns the platform run.
+
 ## The prod container is `distribute-email-gateway-service-1`, not `distribute-email-gateway-1`
 
 The service key in `docker-compose.yml` carries the repo's full name, so the

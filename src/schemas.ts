@@ -200,6 +200,10 @@ const TransactionalSendSchema = SendBaseSchema.extend({
     .enum(["broadcast", "transactional"])
     .optional()
     .describe("How this ONE email is delivered. `transactional` = person-to-person mail meant to be answered like a normal email: sent on the Postmark transactional (outbound) stream, so no List-Unsubscribe header, AND the gateway does not append its visible Unsubscribe footer. Reply-To stays exactly as you set it. Never use it for mailing lists, newsletters or anything a recipient can ask to stop receiving. `broadcast` or omitted = today's behaviour: Postmark broadcast stream (List-Unsubscribe header) plus the Unsubscribe footer. Transactional only."),
+  payer: z
+    .enum(["org", "platform"])
+    .optional()
+    .describe("Who pays for this ONE send. `platform` = a platform-initiated mail the org did not ask for (lifecycle, account, billing notice): postmark-service skips the org's credit gate and declares the spend on an org-less platform run, so no customer is charged. `org` = billed to `x-org-id`. Omitted = no `payer` key forwarded, postmark-service decides exactly as before (org, unless the tag is a known platform lifecycle tag). Transactional only. For a send with NO organisation at all, use `POST /platform/send`."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({
@@ -217,6 +221,11 @@ const BroadcastSendSchema = SendBaseSchema.extend({
     .refine(() => false, "stream is transactional-only: a broadcast send goes through Instantly, which has no Postmark stream")
     .optional()
     .describe("Not accepted on a broadcast send. The Postmark stream choice only exists on the transactional channel, so naming one here is refused rather than silently dropped."),
+  payer: z
+    .string()
+    .refine(() => false, "payer is transactional-only: a broadcast send is always billed to the org")
+    .optional()
+    .describe("Not accepted on a broadcast send. Only the transactional channel can be platform-paid, so naming a payer here is refused rather than silently dropped."),
   timezone: z.string().nullish().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."),
 });
 
@@ -225,6 +234,57 @@ export const SendRequestSchema = z
   .openapi("SendRequest");
 
 export type SendRequest = z.infer<typeof SendRequestSchema>;
+
+// --- POST /platform/send (org-less, platform-paid) ---
+
+export const PLATFORM_SEND_TRANSACTIONAL_ONLY = "platform_send_transactional_only";
+export const PLATFORM_SEND_ORG_IDENTITY_REFUSED = "platform_send_org_identity_refused";
+
+export const PlatformSendRequestSchema = z
+  .object({
+    type: z.literal("transactional").describe("Must be `transactional`. Only the transactional provider (Postmark) can send with no organisation; `broadcast` (Instantly) is refused with 400 `code: platform_send_transactional_only`."),
+    to: z.string().email("to must be a valid email address").describe("Recipient email address"),
+    subject: z.string().min(1).describe("Email subject line"),
+    htmlBody: z.string().optional().describe("HTML email body. Sent exactly as given: no Unsubscribe footer is appended (person-to-person transactional stream)."),
+    textBody: z.string().optional().describe("Plain text email body"),
+    from: z.string().optional().describe("Sender address, e.g. \"distribute.you <hello@distribute.you>\". If omitted, postmark-service resolves the platform's default sender."),
+    replyTo: z.string().email().optional().describe("Reply-to email address"),
+    tag: z.string().optional().describe("Email tag for categorization (e.g. `signup-code`)"),
+    metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
+    stream: z
+      .literal("transactional")
+      .optional()
+      .describe("Always the Postmark transactional (outbound) stream: no List-Unsubscribe header, no footer. Omitted = `transactional`; any other value is a 400. An org-less send has no org broadcast stream to opt out of."),
+    idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. A repeat of a key that already succeeded returns the cached response with `deduplicated: true` and sends nothing."),
+  })
+  .refine((d) => Boolean(d.htmlBody || d.textBody), { message: "Either htmlBody or textBody is required", path: ["htmlBody"] })
+  .openapi("PlatformSendRequest");
+
+export type PlatformSendRequest = z.infer<typeof PlatformSendRequestSchema>;
+
+export const PlatformSendResponseSchema = z
+  .object({
+    success: z.literal(true).describe("Always true on a 200: the email was accepted by Postmark. A send that did not go out is never a 200."),
+    provider: z.literal("transactional").describe("Always `transactional` (Postmark)"),
+    payer: z.literal("platform").describe("Always `platform`: the spend is declared on an org-less platform run, no organisation is authorized or charged."),
+    messageId: z.string().describe("Postmark message ID"),
+    runId: z.string().optional().describe("The org-less platform run postmark-service declared the send cost on"),
+    deduplicated: z.boolean().optional().describe("True if returned from the idempotency cache (email was not re-sent)"),
+  })
+  .openapi("PlatformSendResponse");
+
+export const PlatformSendRefusalSchema = z
+  .object({
+    error: z.string().describe("Human-readable reason"),
+    code: z.enum([PLATFORM_SEND_TRANSACTIONAL_ONLY, PLATFORM_SEND_ORG_IDENTITY_REFUSED]).describe("`platform_send_transactional_only`: `type` was not `transactional` (e.g. `broadcast`), only Postmark may send org-less. `platform_send_org_identity_refused`: the request carried `x-org-id` or `x-user-id`; an org-less send names nobody, use `POST /orgs/send` (optionally with `payer: platform`) for an org-bearing send."),
+  })
+  .openapi("PlatformSendRefusal");
+
+export const PlatformSendHeadersSchema = z.object({
+  "x-run-id": z.string().optional().describe("Caller's run ID, forwarded to postmark-service as the send's parent run"),
+  "x-workflow-slug": z.string().optional().describe("Workflow slug for tracking (optional)"),
+  "x-feature-slug": z.string().optional().describe("Feature slug for tracking (optional)"),
+});
 
 export const SendResponseSchema = z
   .object({
@@ -937,6 +997,51 @@ registry.registerPath({
     409: { description: "Broadcast: the sender refused THIS LEAD (`code`: `recent_brand_contact` | `lead_opted_out` | `lead_not_a_prospect`, sender's body byte-equal). Nothing sent, nothing billed. A per-lead outcome: skip the lead, do not fail the run, do not retry it.", content: refusalContent },
     422: { description: "Broadcast: the sender refused (e.g. API key not configured), body byte-equal.", content: refusalContent },
     502: { description: "Upstream service error: the sender failed (5xx, network, timeout). Only this status means the sender is broken.", content: errorContent },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/platform/send",
+  tags: ["Email Routing"],
+  summary: "Send ONE org-less, platform-paid transactional email",
+  description: "Send one transactional (Postmark) email with NO organisation and NO user, paid by the platform. For mail sent before any account exists, e.g. the one-time sign-up code client-service emails to an address before creating the org. Relayed to postmark-service's org-less platform-paid send: the spend is declared and priced on an org-less platform run; no organisation is authorized, created or charged. Always on the Postmark transactional (outbound) stream, body sent as given (no Unsubscribe footer).\n\nAuth: `x-api-key` only. Must NOT carry `x-org-id` or `x-user-id` (400 `platform_send_org_identity_refused`); an org-bearing platform-paid send is `POST /orgs/send` with `payer: \"platform\"`. Only `type: \"transactional\"` is accepted: anything else, e.g. `broadcast`, is 400 `platform_send_transactional_only`.\n\nFailure is loud: 200 means Postmark accepted the email; any send that did not go out is a non-2xx.",
+  security: [{ apiKey: [] }],
+  request: {
+    headers: PlatformSendHeadersSchema,
+    body: {
+      content: {
+        "application/json": {
+          schema: PlatformSendRequestSchema,
+          examples: {
+            signupCode: {
+              summary: "Sign-up code before any account exists",
+              value: {
+                type: "transactional",
+                to: "agent@example.com",
+                subject: "Your distribute.you sign-up code: 482913",
+                htmlBody: "<p>Your code is <strong>482913</strong>. It expires in 10 minutes.</p>",
+                textBody: "Your code is 482913. It expires in 10 minutes.",
+                tag: "signup-code",
+                idempotencyKey: "signup-code:9b1d6c2e",
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  responses: {
+    200: {
+      description: "Accepted by Postmark, platform-paid",
+      content: { "application/json": { schema: PlatformSendResponseSchema } },
+    },
+    400: {
+      description: "Refused: `code: platform_send_transactional_only` (type is not `transactional`, e.g. broadcast) or `code: platform_send_org_identity_refused` (x-org-id / x-user-id present); or body validation failed (`error: Invalid request` + `details`, no `code`). Nothing sent.",
+      content: { "application/json": { schema: z.union([PlatformSendRefusalSchema, ErrorResponseSchema]) } },
+    },
+    401: { description: "Unauthorized (missing or wrong x-api-key)", content: errorContent },
+    502: { description: "Upstream service error: postmark-service failed or refused (any non-2xx, network, timeout). The email was not sent.", content: errorContent },
   },
 });
 

@@ -15,11 +15,18 @@ const RETRY_DELAY_MS = 500;
 
 async function request<T>(
   path: string,
-  options: { method?: string; body?: unknown; ctx?: OrgContext; nullOn404Code?: string } = {}
+  options: {
+    method?: string;
+    body?: unknown;
+    ctx?: OrgContext;
+    nullOn404Code?: string;
+    /** Full header set, replacing the org-context headers (org-less platform send). */
+    headers?: Record<string, string>;
+  } = {}
 ): Promise<T> {
   const { method = "GET", body, ctx, nullOn404Code } = options;
   const fullUrl = `${url}${path}`;
-  const headers = buildServiceHeaders(apiKey, ctx);
+  const headers = options.headers ?? buildServiceHeaders(apiKey, ctx);
   const jsonBody = body ? JSON.stringify(body) : undefined;
 
   let lastError: Error | undefined;
@@ -91,6 +98,7 @@ export async function sendEmail(body: {
   references?: string;
   messageStream?: string;
   stream?: "broadcast" | "transactional";
+  payer?: "org" | "platform";
 }, ctx?: OrgContext) {
   return request<{
     success: boolean;
@@ -100,6 +108,50 @@ export async function sendEmail(body: {
     errorCode?: number;
     message?: string;
   }>("/orgs/send", { method: "POST", body, ctx });
+}
+
+/** Tracking headers an org-less platform send may carry. No org, no user, ever. */
+export interface PlatformSendContext {
+  runId?: string;
+  workflowSlug?: string;
+  featureSlug?: string;
+}
+
+export const PLATFORM_SEND_PATH = "/internal/platform-send";
+
+/**
+ * postmark-service's org-less, platform-paid send. No `x-org-id` and no
+ * `x-user-id` reach it: the spend is declared on a platform run and no
+ * customer org is authorized or charged (no billing account is created for a
+ * brand-new org, so no welcome credit is granted either).
+ */
+export async function sendPlatformEmail(body: {
+  to: string;
+  subject: string;
+  htmlBody?: string;
+  textBody?: string;
+  from?: string;
+  replyTo?: string;
+  tag?: string;
+  metadata?: Record<string, string>;
+}, ctx: PlatformSendContext) {
+  const headers = buildServiceHeaders(apiKey);
+  if (ctx.runId) headers["x-run-id"] = ctx.runId;
+  if (ctx.workflowSlug) headers["x-workflow-slug"] = ctx.workflowSlug;
+  if (ctx.featureSlug) headers["x-feature-slug"] = ctx.featureSlug;
+  return request<{
+    success: boolean;
+    messageId?: string;
+    submittedAt?: string;
+    sendingId?: string;
+    runId?: string;
+  }>(PLATFORM_SEND_PATH, {
+    method: "POST",
+    // postmark-service refuses an org-less send that is not explicitly
+    // platform-paid, and defaults to its broadcast stream: both are stated.
+    body: { ...body, payer: "platform", stream: "transactional" },
+    headers,
+  });
 }
 
 // Re-export shared provider types from instantly-client
