@@ -123,6 +123,29 @@
           "error"
         ]
       },
+      "SendRefusal": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Human-readable reason, the sender's wording."
+          },
+          "code": {
+            "type": "string",
+            "description": "The sender's machine code. Known today: `recent_brand_contact` (409, emailed for this brand inside the 3-month window; expires: `lastEmailedAt` + `windowInterval`), `lead_opted_out` (409, org-wide, never expires), `lead_not_a_prospect` (409, permanent for the brand), `insufficient_credits` (402, org-level). The vocabulary is instantly-service's; refer to its openapi.json."
+          },
+          "details": {
+            "type": "string",
+            "description": "Free-text detail from the sender."
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": {
+          "nullable": true
+        }
+      },
       "SendRequest": {
         "oneOf": [
           {
@@ -4282,7 +4305,7 @@
             }
           },
           "400": {
-            "description": "Invalid request",
+            "description": "Invalid request (gateway validation, or the sender's own 400 round-tripped)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4301,8 +4324,38 @@
               }
             }
           },
+          "402": {
+            "description": "Broadcast: the sender refused, org lacks credits (`code: insufficient_credits`). Nothing sent, nothing billed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendRefusal"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Broadcast: the sender refused THIS LEAD (`code`: `recent_brand_contact` | `lead_opted_out` | `lead_not_a_prospect`, sender's body byte-equal). Nothing sent, nothing billed. A per-lead outcome: skip the lead, do not fail the run, do not retry it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendRefusal"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Broadcast: the sender refused (e.g. API key not configured), body byte-equal.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendRefusal"
+                }
+              }
+            }
+          },
           "502": {
-            "description": "Upstream service error",
+            "description": "Upstream service error: the sender failed (5xx, network, timeout). Only this status means the sender is broken.",
             "content": {
               "application/json": {
                 "schema": {

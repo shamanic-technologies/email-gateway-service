@@ -21,6 +21,12 @@ Email gateway - routes emails to Postmark (transactional) or Instantly (broadcas
 - `tests/` — Test files (`*.test.ts`)
 - `openapi.json` — Auto-generated, do NOT edit manually
 
+## A sender's 4xx on a broadcast send is a REFUSAL, round-tripped — only a 5xx/network failure is a 502
+
+instantly-service refuses a send for a lead with a 4xx and a machine `code`: 409 `recent_brand_contact` (emailed for this brand inside its 3-month window; body carries `brandId`, `lastEmailedAt`, `windowInterval`), 409 `lead_opted_out`, 409 `lead_not_a_prospect`, 402 `insufficient_credits`, 422/400. Nothing is sent, nothing billed. `/send` forwards that status and body byte-equal (`InstantlyHttpError` in `lib/instantly-client.ts`, caught in `routes/send.ts`); a non-JSON 4xx body is wrapped as `{ error }`. A refusal is not cached under the idempotency key.
+
+Why: the old catch-all turned every refusal into `502 Upstream service error`. Windmill read it as an outage, failed the run, and lead-service re-served the same unsent leads next run: Perky's whole funnel froze for hours on 7 people emailed in July (RECONTACT-LOOP-1011, 2026-10-11). Do NOT fold 4xx back into 502. The transactional (postmark) leg still answers 502 on any error.
+
 ## A visible copy is a different instrument from a blind one — `cc` is transactional-only and every address is validated
 
 `cc` (transactional sends) is a comma-separated email list forwarded verbatim to
