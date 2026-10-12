@@ -53,6 +53,19 @@ Fail loud. If any subscriber returns non-2xx or the request errors, `POST /inbou
 
 Fields pass through to `postmark-service` unchanged. Omit for current default behavior.
 
+## Org-less platform-paid send (`POST /platform/send`)
+
+One transactional (Postmark) email with **no organisation and no user**, paid by the
+platform. For mail sent before any account exists, e.g. the 6-digit sign-up code
+client-service emails before it creates the org.
+
+- Auth: `x-api-key` only. `x-org-id` / `x-user-id` are refused (400 `platform_send_org_identity_refused`).
+- Body: `type: "transactional"` (anything else, e.g. `broadcast`, is 400 `platform_send_transactional_only`), `to`, `subject`, `htmlBody` and/or `textBody`, optional `from`, `replyTo`, `tag`, `metadata`, `idempotencyKey`, `stream` (only `transactional`).
+- Relayed to postmark-service `POST /internal/platform-send` with `payer: "platform"` and `stream: "transactional"`: platform keys, no credit authorization, cost declared on an org-less platform run. Body sent as given, no Unsubscribe footer.
+- 200 `{ success: true, provider: "transactional", payer: "platform", messageId, runId? }`. Any send that did not go out is a 502.
+
+An org-bearing transactional send on `POST /orgs/send` can also pass `payer: "platform" | "org"`; omitted = no `payer` forwarded, unchanged behaviour. Broadcast refuses `payer`.
+
 ## Reading one send operation back (`/stats/by-operation`)
 
 `GET /orgs/stats/by-operation` and `GET /public/stats/by-operation` answer how one
