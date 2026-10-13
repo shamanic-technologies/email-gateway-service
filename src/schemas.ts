@@ -152,7 +152,7 @@ const SendBaseSchema = z.object({
   replyTo: z.string().email().optional().describe("Reply-to email address"),
   tag: z.string().optional().describe("Email tag for categorization"),
   metadata: z.record(z.string(), z.string()).optional().describe("Custom metadata key-value pairs"),
-  idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."),
+  idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Keys are stored durably for 7 days, so a repeat after a restart or redeploy is still a duplicate. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."),
 });
 
 export const SequenceStepSchema = z
@@ -255,7 +255,7 @@ export const PlatformSendRequestSchema = z
       .literal("transactional")
       .optional()
       .describe("Always the Postmark transactional (outbound) stream: no List-Unsubscribe header, no footer. Omitted = `transactional`; any other value is a 400. An org-less send has no org broadcast stream to opt out of."),
-    idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. A repeat of a key that already succeeded returns the cached response with `deduplicated: true` and sends nothing."),
+    idempotencyKey: z.string().optional().describe("Unique key to prevent duplicate sends. A repeat of a key that already succeeded returns the cached response with `deduplicated: true` and sends nothing. Remembered for 7 days across restarts."),
   })
   .refine((d) => Boolean(d.htmlBody || d.textBody), { message: "Either htmlBody or textBody is required", path: ["htmlBody"] })
   .openapi("PlatformSendRequest");

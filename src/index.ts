@@ -13,6 +13,7 @@ import inboundRoutes from "./routes/inbound";
 import manualQualificationsRoutes from "./routes/manual-qualifications";
 import optOutsRoutes from "./routes/opt-outs";
 import { registerProviderRequirements } from "./lib/register-providers";
+import { ensureSchema as ensureIdempotencySchema, startCleanup as startIdempotencyCleanup } from "./lib/idempotency-store";
 
 const app = express();
 
@@ -40,13 +41,24 @@ app.use("/orgs", apiKeyAuth, requireOrgId, manualQualificationsRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, optOutsRoutes);
 
 if (process.env.NODE_ENV !== "test" && !process.env.VITEST) {
-  app.listen(config.port, () => {
-    console.log(`[email-gateway] running on port ${config.port}`);
-    registerProviderRequirements().catch((err) => {
-      console.error("[email-gateway] Provider registration failed:", err.message);
+  // One CREATE TABLE IF NOT EXISTS: O(1), safe before listen. A DB that is
+  // unreachable at boot fails the deploy loud rather than serving sends that
+  // cannot remember their idempotency keys.
+  ensureIdempotencySchema()
+    .then(() => {
+      startIdempotencyCleanup();
+      app.listen(config.port, () => {
+        console.log(`[email-gateway] running on port ${config.port}`);
+        registerProviderRequirements().catch((err) => {
+          console.error("[email-gateway] Provider registration failed:", err.message);
+          process.exit(1);
+        });
+      });
+    })
+    .catch((err: unknown) => {
+      console.error(`[email-gateway] FATAL: idempotency schema setup failed: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     });
-  });
 }
 
 export { app };

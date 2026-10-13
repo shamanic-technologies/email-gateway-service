@@ -72,9 +72,9 @@ function authedPost(path: string) {
 }
 
 describe("POST /orgs/send", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockFetch.mockReset();
-    idempotencyStore.clear();
+    await idempotencyStore.clear();
   });
 
   describe("broadcast (Instantly)", () => {

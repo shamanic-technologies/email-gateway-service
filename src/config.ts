@@ -13,6 +13,12 @@ if (!apiKey) {
   process.exit(1);
 }
 
+const databaseUrl = process.env.EMAIL_GATEWAY_SERVICE_DATABASE_URL;
+if (!databaseUrl) {
+  console.error("[email-gateway] FATAL: EMAIL_GATEWAY_SERVICE_DATABASE_URL env var is missing");
+  process.exit(1);
+}
+
 let inboundSubscriptions: ResolvedSubscription[] = [];
 try {
   const parsed = parseSubscriptions(process.env.EMAIL_GATEWAY_SUBSCRIPTIONS);
@@ -26,6 +32,7 @@ try {
 export const config = {
   port: Number(process.env.PORT) || 3009,
   apiKey,
+  databaseUrl,
 
   postmark: {
     url: process.env.POSTMARK_SERVICE_URL || "http://localhost:3010",
