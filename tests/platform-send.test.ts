@@ -47,9 +47,9 @@ function okPostmark(messageId = "pm-msg-1") {
 }
 
 describe("POST /platform/send (org-less, platform-paid)", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockFetch.mockReset();
-    idempotencyStore.clear();
+    await idempotencyStore.clear();
   });
 
   it("relays to postmark-service's org-less send with NO org/user headers", async () => {

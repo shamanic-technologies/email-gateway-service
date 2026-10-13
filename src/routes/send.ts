@@ -30,7 +30,17 @@ router.post("/send", async (req: Request, res: Response) => {
 
   // Idempotency check — return cached result if key was already processed
   if (body.idempotencyKey) {
-    const cached = idempotencyStore.get(body.idempotencyKey);
+    let cached: idempotencyStore.StoredEntry | undefined;
+    try {
+      cached = await idempotencyStore.get(body.idempotencyKey);
+    } catch (error: unknown) {
+      // Cannot tell whether this key already sent: refuse rather than risk a
+      // second email. The caller retries; nothing went out.
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error(`[email-gateway] send idempotency read failed key=${body.idempotencyKey}: ${message}`);
+      res.status(502).json({ error: "Idempotency store unavailable", details: message });
+      return;
+    }
     if (cached) {
       console.log(`[email-gateway] idempotency hit key=${body.idempotencyKey} to=${body.to}`);
       traceEvent(ctx, "send.idempotency-hit", `key=${body.idempotencyKey} to=${body.to}`);
@@ -81,7 +91,7 @@ router.post("/send", async (req: Request, res: Response) => {
       traceEvent(ctx, "send.transactional.ok", `messageId=${result.messageId} to=${body.to}`);
       const response = { success: true, provider: "transactional" as const, messageId: result.messageId };
       if (body.idempotencyKey) {
-        idempotencyStore.set(body.idempotencyKey, 200, response);
+        await idempotencyStore.remember(body.idempotencyKey, 200, response);
       }
       res.json(response);
       return;
@@ -118,7 +128,7 @@ router.post("/send", async (req: Request, res: Response) => {
           deduplicated: true,
         };
         if (body.idempotencyKey) {
-          idempotencyStore.set(body.idempotencyKey, 200, response);
+          await idempotencyStore.remember(body.idempotencyKey, 200, response);
         }
         res.json(response);
         return;
@@ -131,7 +141,7 @@ router.post("/send", async (req: Request, res: Response) => {
         campaignId: result.campaignId,
       };
       if (body.idempotencyKey) {
-        idempotencyStore.set(body.idempotencyKey, 200, response);
+        await idempotencyStore.remember(body.idempotencyKey, 200, response);
       }
       res.json(response);
       return;

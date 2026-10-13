@@ -21,6 +21,14 @@ Email gateway - routes emails to Postmark (transactional) or Instantly (broadcas
 - `tests/` — Test files (`*.test.ts`)
 - `openapi.json` — Auto-generated, do NOT edit manually
 
+## An idempotency key is remembered in Postgres, 7 days — never in process memory
+
+`/orgs/send` and `/platform/send` record every key whose send SUCCEEDED in the `idempotency_keys` table of the gateway's own DB (`EMAIL_GATEWAY_SERVICE_DATABASE_URL`, table created at boot by `ensureSchema`, expired rows deleted hourly). A repeat of the key answers the stored response + `deduplicated: true` and sends nothing. Refusals (sender 4xx) and 502s are not recorded: a retry asks again.
+
+Why: campaign-service redelivers a trigger occurrence when its run did not complete (same occurrence id, up to 6 runs over ~3h45) and workflow-service keys its sends on it. The old in-memory map was wiped by every redeploy (the box redeploys on each merge to main), so a redelivered run mailed the same person twice (REDELIVERY-IDEMPOTENCY-1014).
+
+Failure directions are deliberate: a key READ that fails answers 502 and sends nothing (cannot prove it did not already send); a key WRITE that fails after the email went out is logged (`idempotency record FAILED after a sent email`) and the 200 still served, because a 502 there would make the caller retry and send twice. Tests run the real SQL on pg-mem (`tests/setup-db.ts`).
+
 ## A sender's 4xx on a broadcast send is a REFUSAL, round-tripped — only a 5xx/network failure is a 502
 
 instantly-service refuses a send for a lead with a 4xx and a machine `code`: 409 `recent_brand_contact` (emailed for this brand inside its 3-month window; body carries `brandId`, `lastEmailedAt`, `windowInterval`), 409 `lead_opted_out`, 409 `lead_not_a_prospect`, 402 `insufficient_credits`, 422/400. Nothing is sent, nothing billed. `/send` forwards that status and body byte-equal (`InstantlyHttpError` in `lib/instantly-client.ts`, caught in `routes/send.ts`); a non-JSON 4xx body is wrapped as `{ error }`. A refusal is not cached under the idempotency key.

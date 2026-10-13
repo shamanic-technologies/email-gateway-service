@@ -198,7 +198,7 @@
               },
               "idempotencyKey": {
                 "type": "string",
-                "description": "Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."
+                "description": "Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Keys are stored durably for 7 days, so a repeat after a restart or redeploy is still a duplicate. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."
               },
               "type": {
                 "type": "string",
@@ -317,7 +317,7 @@
               },
               "idempotencyKey": {
                 "type": "string",
-                "description": "Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."
+                "description": "Unique key to prevent duplicate sends. If a send with the same key already succeeded, the cached response is returned with `deduplicated: true` and no email is re-sent. Keys are stored durably for 7 days, so a repeat after a restart or redeploy is still a duplicate. Use a value unique per send attempt — e.g. the run ID, or a composite like `{runId}:{nodeId}` when a single workflow run triggers multiple sends."
               },
               "type": {
                 "type": "string",
@@ -519,7 +519,7 @@
           },
           "idempotencyKey": {
             "type": "string",
-            "description": "Unique key to prevent duplicate sends. A repeat of a key that already succeeded returns the cached response with `deduplicated: true` and sends nothing."
+            "description": "Unique key to prevent duplicate sends. A repeat of a key that already succeeded returns the cached response with `deduplicated: true` and sends nothing. Remembered for 7 days across restarts."
           }
         },
         "required": [
