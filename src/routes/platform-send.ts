@@ -49,7 +49,17 @@ router.post("/send", async (req: Request, res: Response) => {
   const body = parsed.data;
 
   if (body.idempotencyKey) {
-    const cached = idempotencyStore.get(body.idempotencyKey);
+    let cached: idempotencyStore.StoredEntry | undefined;
+    try {
+      cached = await idempotencyStore.get(body.idempotencyKey);
+    } catch (error: unknown) {
+      // Cannot tell whether this key already sent: refuse rather than risk a
+      // second email. The caller retries; nothing went out.
+      const message = error instanceof Error ? error.message : "Unknown error";
+      console.error(`[email-gateway] platform-send idempotency read failed key=${body.idempotencyKey}: ${message}`);
+      res.status(502).json({ error: "Idempotency store unavailable", details: message });
+      return;
+    }
     if (cached) {
       console.log(`[email-gateway] platform-send idempotency hit key=${body.idempotencyKey}`);
       res.status(cached.statusCode).json({ ...cached.response, deduplicated: true });
@@ -89,7 +99,7 @@ router.post("/send", async (req: Request, res: Response) => {
       messageId: result.messageId,
       ...(result.runId ? { runId: result.runId } : {}),
     };
-    if (body.idempotencyKey) idempotencyStore.set(body.idempotencyKey, 200, response);
+    if (body.idempotencyKey) await idempotencyStore.remember(body.idempotencyKey, 200, response);
     console.log(`[email-gateway] platform-send ok messageId=${result.messageId}`);
     res.json(response);
   } catch (error: unknown) {
