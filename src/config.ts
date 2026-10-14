@@ -62,5 +62,9 @@ export const config = {
     url: process.env.RUNS_SERVICE_URL || "",
     apiKey: process.env.RUNS_SERVICE_API_KEY || "",
   },
+  google: {
+    url: process.env.GOOGLE_SERVICE_URL || "",
+    apiKey: process.env.GOOGLE_SERVICE_API_KEY || "",
+  },
   inboundSubscriptions,
 } as const;
