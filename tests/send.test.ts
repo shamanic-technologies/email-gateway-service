@@ -376,6 +376,33 @@ describe("POST /orgs/send", () => {
       expect(body).not.toHaveProperty("timezone");
     });
 
+    it("forwards followUp: true to instantly-service (NEVER-NO-FOLLOWUP-1014)", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(buildBroadcastBody({ followUp: true }));
+
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.followUp).toBe(true);
+    });
+
+    it("omits followUp downstream when absent or false (a normal send)", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(buildBroadcastBody());
+      await authedPost("/orgs/send").send(buildBroadcastBody({ followUp: false }));
+
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).not.toHaveProperty("followUp");
+      expect(JSON.parse(mockFetch.mock.calls[1][1].body)).not.toHaveProperty("followUp");
+    });
+
     it("rejects a malformed timezone (non-string)", async () => {
       const res = await authedPost("/orgs/send").send(
         buildBroadcastBody({ timezone: 42 })
