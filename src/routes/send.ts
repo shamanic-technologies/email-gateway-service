@@ -115,6 +115,8 @@ router.post("/send", async (req: Request, res: Response) => {
         // Omit the field so instantly-service applies its own default timezone.
         timezone: body.timezone ?? undefined,
         sequence: body.sequence,
+        // A follow-up of the brand's own outreach: instantly-service's contract.
+        ...(body.followUp === true ? { followUp: true } : {}),
       }, ctx, body.idempotencyKey);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);

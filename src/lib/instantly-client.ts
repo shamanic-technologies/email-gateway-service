@@ -127,6 +127,9 @@ export async function atomicSend(body: {
     bodyText?: string;
     daysSinceLastStep: number;
   }>;
+  // A follow-up of the brand's own earlier outreach (instantly-service skips
+  // its re-contact window for it). Absent = a normal send.
+  followUp?: boolean;
 }, ctx?: OrgContext, idempotencyKey?: string) {
   // The send is non-idempotent (creates a campaign) and makes ~5 sequential
   // Instantly.ai calls. Use the longer send timeout, disable auto-retry, and
