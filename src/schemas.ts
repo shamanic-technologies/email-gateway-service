@@ -227,7 +227,7 @@ const BroadcastSendSchema = SendBaseSchema.extend({
     .optional()
     .describe("Not accepted on a broadcast send. Only the transactional channel can be platform-paid, so naming a payer here is refused rather than silently dropped."),
   timezone: z.string().nullish().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."),
-  followUp: z.boolean().optional().describe("`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json."),
+  followUp: z.boolean().optional().describe("`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json. RIGHT-MOMENT-OR-LATER-1014: when the person's latest exchange with the brand (x-brand-id) is a Gmail thread of a mailbox the org connected, newer than the brand's latest Instantly exchange (last email delivered, a reply), the email is sent by google-service as a reply IN that Gmail thread, from the address they wrote to / were answered from (`transport: gmail` on the 200; `subject` is then `Re: <thread subject>`, step 1 only, a multi-step sequence is refused 422 `follow_up_gmail_single_email`). google-service refusals are round-tripped: 403 `google_send_permission_missing` (the org owner must reconnect Google with send access; never a fallback to a cold mailbox), 404 `thread_not_found`, 422 `from_address_not_send_as`. A standing `lead_opted_out` / `lead_not_a_prospect` refuses 409 before Gmail."),
 });
 
 export const SendRequestSchema = z
@@ -295,6 +295,9 @@ export const SendResponseSchema = z
     campaignId: z.string().optional().describe("Instantly campaign ID (broadcast only)"),
     error: z.string().optional().describe("Error message if send failed"),
     deduplicated: z.boolean().optional().describe("True if this response was returned from the idempotency cache (email was not re-sent)"),
+    transport: z.literal("gmail").optional().describe("Present only when a `followUp` broadcast was sent as a reply in the person's Gmail thread (google-service); `messageId` is then the Gmail message id. Absent = the provider named in `provider` sent it."),
+    threadId: z.string().optional().describe("Gmail thread id (transport gmail only)"),
+    from: z.string().optional().describe("The address the Gmail reply was sent from (transport gmail only)"),
   })
   .openapi("SendResponse");
 
@@ -995,6 +998,8 @@ registry.registerPath({
     400: { description: "Invalid request (gateway validation, or the sender's own 400 round-tripped)", content: errorContent },
     401: { description: "Unauthorized", content: errorContent },
     402: { description: "Broadcast: the sender refused, org lacks credits (`code: insufficient_credits`). Nothing sent, nothing billed.", content: refusalContent },
+    403: { description: "Broadcast followUp answered in a Gmail thread: google-service refused, `code: google_send_permission_missing` (the connected Google account lacks send permission; the org owner must reconnect Google with send access). Nothing sent.", content: refusalContent },
+    404: { description: "Broadcast followUp answered in a Gmail thread: google-service refused (`code: thread_not_found` | `no_google_account_connected`). Nothing sent.", content: refusalContent },
     409: { description: "Broadcast: the sender refused THIS LEAD (`code`: `recent_brand_contact` | `lead_opted_out` | `lead_not_a_prospect`, sender's body byte-equal). Nothing sent, nothing billed. A per-lead outcome: skip the lead, do not fail the run, do not retry it.", content: refusalContent },
     422: { description: "Broadcast: the sender refused (e.g. API key not configured), body byte-equal.", content: refusalContent },
     502: { description: "Upstream service error: the sender failed (5xx, network, timeout). Only this status means the sender is broken.", content: errorContent },

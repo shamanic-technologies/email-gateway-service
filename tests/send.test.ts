@@ -18,6 +18,7 @@ vi.mock("../src/config", () => ({
     postmark: { url: "http://localhost:3010", apiKey: "pm-key" },
     instantly: { url: "http://localhost:3011", apiKey: "inst-key" },
     brand: { url: "http://localhost:3005", apiKey: "brand-key" },
+    google: { url: "http://localhost:3012", apiKey: "google-key" },
     key: { url: "", apiKey: "" },
     runs: { url: "", apiKey: "" },
   },
@@ -377,6 +378,12 @@ describe("POST /orgs/send", () => {
     });
 
     it("forwards followUp: true to instantly-service (NEVER-NO-FOLLOWUP-1014)", async () => {
+      // No Gmail thread with the person: the follow-up stays on Instantly.
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve(JSON.stringify({ error: "none", reason: "no_messages" })),
+      });
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () =>
@@ -385,7 +392,8 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(buildBroadcastBody({ followUp: true }));
 
-      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(mockFetch.mock.calls[0][0]).toContain("/orgs/google/threads/latest");
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body);
       expect(body.followUp).toBe(true);
     });
 

@@ -35,6 +35,14 @@ instantly-service refuses a send for a lead with a 4xx and a machine `code`: 409
 
 Why: the old catch-all turned every refusal into `502 Upstream service error`. Windmill read it as an outage, failed the run, and lead-service re-served the same unsent leads next run: Perky's whole funnel froze for hours on 7 people emailed in July (RECONTACT-LOOP-1011, 2026-10-11). Do NOT fold 4xx back into 502. The transactional (postmark) leg still answers 502 on any error.
 
+## A `followUp: true` broadcast lands in the person's LATEST thread, Instantly or Gmail (RIGHT-MOMENT-OR-LATER-1014)
+
+Owner 2026-10-14: when it is the right moment to write, the follow-up is a reply IN the thread the person wrote in last, FROM the address they wrote to / were answered from. `src/lib/follow-up-route.ts` decides, only for `followUp: true` with an `x-brand-id` (every other send is byte-identical to before):
+- google-service `GET /orgs/google/threads/latest?email=` (mirror read) names the Gmail thread of the org's connected mailboxes and its `lastMessageAt`; its 404 `no_google_account_connected` / `no_messages` = instantly, as before.
+- instantly-service `/orgs/status` in brand mode (per brand of the header) gives the brand's latest Instantly exchange: max of `lastDeliveredAt` and `firstRepliedAt` over the brand scope and every `byCampaign` row. A `queued` step = instantly decides (`brand_sequence_queued`). Gmail wins ONLY when strictly newer.
+- Gmail wins: a standing `sendRefusal` (`lead_opted_out`, `lead_not_a_prospect`) refuses 409 here; else google-service `POST /orgs/google/thread-replies` sends step 1 (a multi-step sequence is 422 `follow_up_gmail_single_email`). 200 carries `transport: "gmail"`, `threadId`, `from`; remembered under the idempotency key like any send. Its 4xx refusals round-trip (403 `google_send_permission_missing`: the org owner must reconnect Google with send access; never a fallback to a cold mailbox).
+- A failed READ (google-service or instantly status) is a 502, never "no thread": guessing would send a stranger's email. Env `GOOGLE_SERVICE_URL` / `GOOGLE_SERVICE_API_KEY`. No metered cost on the Gmail transport (the account's own grant). Guard `tests/follow-up-gmail.test.ts`.
+
 ## A visible copy is a different instrument from a blind one — `cc` is transactional-only and every address is validated
 
 `cc` (transactional sends) is a comma-separated email list forwarded verbatim to
