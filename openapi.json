@@ -358,6 +358,10 @@
                 "type": "string",
                 "nullable": true,
                 "description": "Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."
+              },
+              "followUp": {
+                "type": "boolean",
+                "description": "`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json."
               }
             },
             "required": [
