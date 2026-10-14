@@ -8,6 +8,8 @@ import * as instantlyClient from "../lib/instantly-client";
 import { appendSignature } from "../lib/signature";
 import * as idempotencyStore from "../lib/idempotency-store";
 import { traceEvent } from "../lib/trace-event";
+import { resolveFollowUpRoute } from "../lib/follow-up-route";
+import * as googleClient from "../lib/google-client";
 
 const router = Router();
 
@@ -97,6 +99,59 @@ router.post("/send", async (req: Request, res: Response) => {
       return;
     }
 
+    if (body.type === "broadcast" && body.followUp === true) {
+      // A follow-up lands in the thread the person wrote in last, from the
+      // address they wrote to (RIGHT-MOMENT-OR-LATER-1014). When that thread is
+      // in a Gmail mailbox the org connected, google-service replies in it;
+      // otherwise instantly-service continues its own thread, as before.
+      const route = await resolveFollowUpRoute(body.to, ctx);
+      traceEvent(
+        ctx,
+        "send.follow-up.route",
+        `to=${body.to} transport=${route.transport}${route.transport === "instantly" ? ` reason=${route.reason}` : ""}${route.transport === "gmail" ? ` thread=${route.thread.threadId} from=${route.thread.fromAddress}` : ""}`,
+      );
+      if (route.transport === "refused") {
+        console.warn(`[email-gateway] follow-up refused before Gmail: code=${String(route.body.code)} to=${body.to}`);
+        res.status(route.status).json(route.body);
+        return;
+      }
+      if (route.transport === "gmail") {
+        if (body.sequence.length !== 1) {
+          res.status(422).json({
+            error: "A follow-up answered in a Gmail thread is ONE email",
+            code: "follow_up_gmail_single_email",
+            details: `${body.to}'s latest exchange is in a Gmail thread; a ${body.sequence.length}-step sequence cannot be sent there. Nothing was sent.`,
+          });
+          return;
+        }
+        const step = body.sequence[0];
+        const sent = await googleClient.replyInGmailThread(
+          {
+            to: body.to,
+            threadId: route.thread.threadId,
+            bodyHtml: step.bodyHtml,
+            ...(step.bodyText ? { bodyText: step.bodyText } : {}),
+          },
+          ctx,
+        );
+        console.log(`[email-gateway] gmail thread reply: thread=${sent.threadId} from=${sent.from} to=${sent.to} message=${sent.gmailMessageId}`);
+        traceEvent(ctx, "send.broadcast.gmail.ok", `thread=${sent.threadId} from=${sent.from} message=${sent.gmailMessageId}`);
+        const response = {
+          success: true,
+          provider: "broadcast" as const,
+          transport: "gmail" as const,
+          messageId: sent.gmailMessageId,
+          threadId: sent.threadId,
+          from: sent.from,
+        };
+        if (body.idempotencyKey) {
+          await idempotencyStore.remember(body.idempotencyKey, 200, response);
+        }
+        res.json(response);
+        return;
+      }
+    }
+
     if (body.type === "broadcast") {
       const bccList = body.bcc
         ? body.bcc.split(",").map((e) => e.trim()).filter((e) => e.length > 0)
@@ -168,6 +223,20 @@ router.post("/send", async (req: Request, res: Response) => {
       const code = typeof refusal.code === "string" ? refusal.code : "none";
       console.warn(`[email-gateway] Refused by instantly-service: status=${error.status} code=${code} to=${body.to}`);
       traceEvent(ctx, "send.refused", `type=${body.type} to=${body.to} status=${error.status} code=${code}`);
+      res.status(error.status).json(refusal);
+      return;
+    }
+    // google-service's named refusals (no send permission, thread gone, From
+    // not a send-as) come back the same way: status + body, nothing sent.
+    if (
+      error instanceof googleClient.GoogleHttpError &&
+      error.status >= 400 &&
+      error.status < 500
+    ) {
+      const refusal = parseRefusalBody(error.bodyText);
+      const code = typeof refusal.code === "string" ? refusal.code : "none";
+      console.warn(`[email-gateway] Refused by google-service: status=${error.status} code=${code} to=${body.to}`);
+      traceEvent(ctx, "send.refused", `type=${body.type} to=${body.to} status=${error.status} code=${code} transport=gmail`);
       res.status(error.status).json(refusal);
       return;
     }

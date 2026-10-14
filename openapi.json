@@ -100,6 +100,21 @@
           "deduplicated": {
             "type": "boolean",
             "description": "True if this response was returned from the idempotency cache (email was not re-sent)"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "gmail"
+            ],
+            "description": "Present only when a `followUp` broadcast was sent as a reply in the person's Gmail thread (google-service); `messageId` is then the Gmail message id. Absent = the provider named in `provider` sent it."
+          },
+          "threadId": {
+            "type": "string",
+            "description": "Gmail thread id (transport gmail only)"
+          },
+          "from": {
+            "type": "string",
+            "description": "The address the Gmail reply was sent from (transport gmail only)"
           }
         },
         "required": [
@@ -361,7 +376,7 @@
               },
               "followUp": {
                 "type": "boolean",
-                "description": "`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json."
+                "description": "`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json. RIGHT-MOMENT-OR-LATER-1014: when the person's latest exchange with the brand (x-brand-id) is a Gmail thread of a mailbox the org connected, newer than the brand's latest Instantly exchange (last email delivered, a reply), the email is sent by google-service as a reply IN that Gmail thread, from the address they wrote to / were answered from (`transport: gmail` on the 200; `subject` is then `Re: <thread subject>`, step 1 only, a multi-step sequence is refused 422 `follow_up_gmail_single_email`). google-service refusals are round-tripped: 403 `google_send_permission_missing` (the org owner must reconnect Google with send access; never a fallback to a cold mailbox), 404 `thread_not_found`, 422 `from_address_not_send_as`. A standing `lead_opted_out` / `lead_not_a_prospect` refuses 409 before Gmail."
               }
             },
             "required": [
@@ -4473,6 +4488,26 @@
           },
           "402": {
             "description": "Broadcast: the sender refused, org lacks credits (`code: insufficient_credits`). Nothing sent, nothing billed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendRefusal"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Broadcast followUp answered in a Gmail thread: google-service refused, `code: google_send_permission_missing` (the connected Google account lacks send permission; the org owner must reconnect Google with send access). Nothing sent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendRefusal"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Broadcast followUp answered in a Gmail thread: google-service refused (`code: thread_not_found` | `no_google_account_connected`). Nothing sent.",
             "content": {
               "application/json": {
                 "schema": {
