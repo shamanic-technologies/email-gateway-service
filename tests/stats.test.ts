@@ -742,9 +742,37 @@ describe("GET /orgs/stats", () => {
       expect(byKey.get("b@acme.com").broadcast.recipientStats.repliesPositive).toBe(0);
 
       const params = new URL(mockFetch.mock.calls[0][0]).searchParams;
-      expect(params.get("groupBy")).toBe("recipientEmail");
+      // instantly-service accepts `leadEmail`, never `recipientEmail` (400 → 502 in prod, 2026-10-18)
+      expect(params.get("groupBy")).toBe("leadEmail");
       expect(params.get("brandId")).toBe("brand_1");
       expect(params.get("featureSlugs")).toBe("active_goal_feature");
+    });
+
+    it("groupBy=recipientEmail with no type: instantly gets leadEmail, postmark recipientEmail, groups merge by address", async () => {
+      mockFetch.mockImplementation((url: string) => {
+        if (url.includes("3010"))
+          return Promise.resolve(mockGroupedPostmark([{ key: "a@acme.com" }, { key: "c@acme.com" }]));
+        if (url.includes("3011"))
+          return Promise.resolve(mockGroupedInstantly([{ key: "a@acme.com" }, { key: "b@acme.com" }]));
+        return Promise.reject(new Error("Unexpected URL"));
+      });
+
+      const res = await authedGet("/orgs/stats?campaignId=camp_1&groupBy=recipientEmail");
+
+      expect(res.status).toBe(200);
+      const byKey = new Map(res.body.groups.map((g: { key: string }) => [g.key, g]));
+      expect([...byKey.keys()].sort()).toEqual(["a@acme.com", "b@acme.com", "c@acme.com"]);
+      expect(byKey.get("a@acme.com").broadcast.emailStats.sent).toBe(40);
+      expect(byKey.get("a@acme.com").transactional.emailStats.sent).toBe(50);
+      expect(byKey.get("b@acme.com").broadcast.emailStats.sent).toBe(40);
+      expect(byKey.get("b@acme.com").transactional).toBeUndefined();
+      expect(byKey.get("c@acme.com").transactional.emailStats.sent).toBe(50);
+      expect(byKey.get("c@acme.com").broadcast).toBeUndefined();
+
+      const groupByOf = (port: string) =>
+        new URL(mockFetch.mock.calls.find((c) => String(c[0]).includes(port))![0]).searchParams.get("groupBy");
+      expect(groupByOf("3011")).toBe("leadEmail");
+      expect(groupByOf("3010")).toBe("recipientEmail");
     });
 
     it("forwards day grouping and timezone to Instantly for broadcast stats", async () => {
