@@ -214,6 +214,15 @@ function rewriteGroupByForProvider(groupBy: string): string {
   return groupBy;
 }
 
+// instantly-service names the per-recipient dimension `leadEmail`; postmark-service
+// and this gateway's callers name it `recipientEmail`. Both providers key each
+// group by the recipient ADDRESS, so only the outgoing dimension name differs:
+// translating it here lets the groups merge by key and the caller sees one name.
+function withInstantlyGroupBy(filters: Record<string, unknown>): Record<string, unknown> {
+  if (filters.groupBy !== "recipientEmail") return filters;
+  return { ...filters, groupBy: "leadEmail" };
+}
+
 // Grouping dimensions that only broadcast (Instantly) can produce. Postmark
 // (transactional) has no audience attribution and no local-calendar day grouping,
 // so these groupBys are routed to a broadcast-only handler.
@@ -603,7 +612,7 @@ async function handleGrouped(
   }
 
   const postmarkFilters = withoutBroadcastOnlyFilters(filters) as Parameters<typeof postmarkClient.getStats>[0];
-  const instantlyFilters = filters as Parameters<typeof instantlyClient.getStats>[0];
+  const instantlyFilters = withInstantlyGroupBy(filters) as Parameters<typeof instantlyClient.getStats>[0];
 
   if (type === "transactional") {
     const raw = await postmarkClient.getStats(postmarkFilters, ctx);
