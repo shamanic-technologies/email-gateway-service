@@ -17,6 +17,13 @@ const TIMEOUT_MS = 10_000;
 // exceeds the default 10s. Scope a longer timeout to send only (not the GET
 // stats/status calls, where 10s should stay tight enough to surface failures).
 const SEND_TIMEOUT_MS = 60_000;
+// POST /orgs/status (the gateway's delivery-status route): instantly-service's
+// first, uncached answer for a big brand takes ~16 s on the loaded box
+// (10,401 addresses, 2026-10-22), a cached one ~0.5 s. 10 s + one retry 502'd
+// every cold read at ~21 s AND started a second heavy computation on top of
+// the first. Wait as long as a send does, and never re-ask after a timeout:
+// the first computation is still running and fills instantly-service's cache.
+export const STATUS_READ_TIMEOUT_MS = 60_000;
 const RETRY_DELAY_MS = 500;
 
 /**
@@ -46,6 +53,10 @@ async function request<T>(
     // Non-idempotent mutations (the send) must NOT auto-retry — a retry of a
     // succeeded-server-side send creates a duplicate Instantly campaign.
     retry?: boolean;
+    // false = a call aborted on its own timeout is NOT retried (the upstream
+    // is still computing; a second ask doubles its load). Network errors such
+    // as a refused connection during a redeploy still get the one retry.
+    retryOnTimeout?: boolean;
     idempotencyKey?: string;
   } = {}
 ): Promise<T> {
@@ -55,6 +66,7 @@ async function request<T>(
     ctx,
     timeoutMs = TIMEOUT_MS,
     retry = true,
+    retryOnTimeout = true,
     idempotencyKey,
   } = options;
   const fullUrl = `${url}${path}`;
@@ -90,6 +102,7 @@ async function request<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
       // Only retry on network-level errors (fetch failed, timeout), not HTTP errors
       if (lastError.message.includes("instantly-service")) throw lastError;
+      if (!retryOnTimeout && isTimeout(lastError)) break;
       if (attempt < maxAttempts - 1) {
         await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
       }
@@ -99,6 +112,11 @@ async function request<T>(
   throw new Error(
     `instantly-service ${method} ${path}: ${lastError?.message ?? "fetch failed"} (url: ${url})`
   );
+}
+
+/** `AbortSignal.timeout` rejects with a DOMException named `TimeoutError`. */
+function isTimeout(error: Error): boolean {
+  return error.name === "TimeoutError" || error.name === "AbortError";
 }
 
 export interface AtomicSendResponse {
@@ -244,9 +262,12 @@ export async function getStatus(body: {
   brandId?: string;
   campaignId?: string;
   items: Array<{ email: string }>;
-}, ctx?: OrgContext) {
-  return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx });
+}, ctx?: OrgContext, options?: { timeoutMs?: number; retryOnTimeout?: boolean }) {
+  return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx, ...options });
 }
+
+/** The delivery-status route's read: long enough for a cold answer, no retry after a timeout. */
+export const STATUS_ROUTE_READ = { timeoutMs: STATUS_READ_TIMEOUT_MS, retryOnTimeout: false } as const;
 
 export async function forwardWebhook(body: unknown) {
   return request("/webhooks/instantly", { method: "POST", body });

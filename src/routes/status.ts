@@ -33,7 +33,7 @@ router.post("/status", async (req: Request, res: Response) => {
     // customer's `contacted` count dropped by exactly 1,000 for one refresh.
     // Refuse instead: the caller retries or keeps its last good figure.
     const [broadcast, transactional] = await Promise.all([
-      instantlyClient.getStatus(payload, ctx),
+      instantlyClient.getStatus(payload, ctx, instantlyClient.STATUS_ROUTE_READ),
       postmarkClient.getStatus(payload, ctx),
     ]);
 
