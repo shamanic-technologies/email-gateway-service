@@ -743,6 +743,74 @@ describe("POST /orgs/send", () => {
       });
     });
 
+    describe("outcome subject (cost accounting)", () => {
+      function okSend() {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ success: true, messageId: "pm_outcome" }),
+        });
+      }
+      const subject = { subjectService: "transactional-email-service", subjectId: "sub_123" };
+
+      it("forwards outcomeSubject and consumedOutcomeKeys verbatim to postmark-service", async () => {
+        okSend();
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ outcomeSubject: subject, consumedOutcomeKeys: ["email_checked", "message_written"] })
+        );
+
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.outcomeSubject).toEqual(subject);
+        expect(body.consumedOutcomeKeys).toEqual(["email_checked", "message_written"]);
+      });
+
+      it("omitted: neither key reaches postmark-service (body unchanged)", async () => {
+        okSend();
+        await authedPost("/orgs/send").send(buildTransactionalBody());
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect("outcomeSubject" in body).toBe(false);
+        expect("consumedOutcomeKeys" in body).toBe(false);
+      });
+
+      it("accepts consumedOutcomeKeys with a leadId and no outcomeSubject", async () => {
+        okSend();
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ leadId: "lead_1", consumedOutcomeKeys: ["email_checked"] })
+        );
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.consumedOutcomeKeys).toEqual(["email_checked"]);
+        expect("outcomeSubject" in body).toBe(false);
+      });
+
+      it("refuses consumedOutcomeKeys with neither outcomeSubject nor leadId (400, nothing sent)", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ consumedOutcomeKeys: ["email_checked"] })
+        );
+        expect(res.status).toBe(400);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it("refuses an incomplete outcomeSubject and more than 20 consumed keys", async () => {
+        const r1 = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ outcomeSubject: { subjectService: "transactional-email-service" } })
+        );
+        expect(r1.status).toBe(400);
+        const r2 = await authedPost("/orgs/send").send(
+          buildTransactionalBody({ outcomeSubject: subject, consumedOutcomeKeys: Array.from({ length: 21 }, (_, i) => `k${i}`) })
+        );
+        expect(r2.status).toBe(400);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+
+      it("refuses outcomeSubject on a broadcast send rather than dropping it", async () => {
+        const res = await authedPost("/orgs/send").send(buildBroadcastBody({ outcomeSubject: subject }));
+        expect(res.status).toBe(400);
+        expect(mockFetch).not.toHaveBeenCalled();
+      });
+    });
+
     describe("threading fields (inReplyTo, references, messageStream)", () => {
       it("forwards inReplyTo, references, and messageStream to postmark-service when provided", async () => {
         mockFetch.mockResolvedValueOnce({

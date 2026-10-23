@@ -87,6 +87,10 @@ router.post("/send", async (req: Request, res: Response) => {
         stream: body.stream,
         // Absent = no `payer` key on the wire: postmark-service decides as before.
         ...(body.payer ? { payer: body.payer } : {}),
+        // Cost accounting: the person this send reaches + what it consumed for
+        // them. Absent = no key on the wire, byte-identical to before.
+        ...(body.outcomeSubject ? { outcomeSubject: body.outcomeSubject } : {}),
+        ...(body.consumedOutcomeKeys ? { consumedOutcomeKeys: body.consumedOutcomeKeys } : {}),
       }, ctx);
 
       console.log(`[email-gateway] postmark response: messageId=${result.messageId}`);
