@@ -99,6 +99,8 @@ export async function sendEmail(body: {
   messageStream?: string;
   stream?: "broadcast" | "transactional";
   payer?: "org" | "platform";
+  outcomeSubject?: { subjectService: string; subjectId: string };
+  consumedOutcomeKeys?: string[];
 }, ctx?: OrgContext) {
   return request<{
     success: boolean;

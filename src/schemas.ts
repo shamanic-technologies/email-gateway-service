@@ -166,7 +166,14 @@ export const SequenceStepSchema = z
 
 export type SequenceStep = z.infer<typeof SequenceStepSchema>;
 
-const messageIdRegex = /^<[^<>\s]+@[^<>\s]+>$/;
+const OutcomeSubjectSchema = z
+  .object({
+    subjectService: z.string().min(1).describe("Service that owns the person (e.g. `transactional-email-service`, `lead-service`)"),
+    subjectId: z.string().min(1).describe("That service's id for the person"),
+  })
+  .openapi("OutcomeSubject");
+
+const messageIdRegex =/^<[^<>\s]+@[^<>\s]+>$/;
 
 const TransactionalSendSchema = SendBaseSchema.extend({
   type: z.literal("transactional").describe("Transactional email channel"),
@@ -204,6 +211,15 @@ const TransactionalSendSchema = SendBaseSchema.extend({
     .enum(["org", "platform"])
     .optional()
     .describe("Who pays for this ONE send. `platform` = a platform-initiated mail the org did not ask for (lifecycle, account, billing notice): postmark-service skips the org's credit gate and declares the spend on an org-less platform run, so no customer is charged. `org` = billed to `x-org-id`. Omitted = no `payer` key forwarded, postmark-service decides exactly as before (org, unless the tag is a known platform lifecycle tag). Transactional only. For a send with NO organisation at all, use `POST /platform/send`."),
+  outcomeSubject: OutcomeSubjectSchema
+    .optional()
+    .describe("The ONE person this send reaches (a newsletter subscriber, a campaign lead), named by the service that owns that person: `subjectService` (e.g. `transactional-email-service`, `lead-service`) + `subjectId` (that service's id for the person). Forwarded verbatim to postmark-service, which declares the `message_sent` outcome on the send's run for this subject (cost accounting). The gateway never decides who the person is. Omitted = no `outcomeSubject` key forwarded, byte-identical to before. Transactional only. postmark-service owns this contract: refer to its openapi.json (`SendEmailRequest`)."),
+  consumedOutcomeKeys: z
+    .array(z.string().min(1))
+    .min(1)
+    .max(20)
+    .optional()
+    .describe("Catalogue outcome keys (e.g. `email_checked`, `message_written`) this send CONSUMED for the same person as `outcomeSubject`. Forwarded verbatim to postmark-service, which declares them as the send run's inputs. Requires `outcomeSubject` or `leadId` (400 otherwise, nothing sent). 1 to 20 keys. Omitted = no key forwarded. Transactional only. The outcome catalogue is owned by runs-service/features-service: keys are not validated here, postmark-service refuses an unknown one."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({
@@ -226,12 +242,26 @@ const BroadcastSendSchema = SendBaseSchema.extend({
     .refine(() => false, "payer is transactional-only: a broadcast send is always billed to the org")
     .optional()
     .describe("Not accepted on a broadcast send. Only the transactional channel can be platform-paid, so naming a payer here is refused rather than silently dropped."),
+  outcomeSubject: z
+    .unknown()
+    .refine(() => false, "outcomeSubject is transactional-only: postmark-service is the provider that declares it")
+    .optional()
+    .describe("Not accepted on a broadcast send (Instantly declares its own outcomes per lead). Refused rather than silently dropped."),
+  consumedOutcomeKeys: z
+    .unknown()
+    .refine(() => false, "consumedOutcomeKeys is transactional-only: postmark-service is the provider that declares it")
+    .optional()
+    .describe("Not accepted on a broadcast send. Refused rather than silently dropped."),
   timezone: z.string().nullish().describe("Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."),
   followUp: z.boolean().optional().describe("`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json. RIGHT-MOMENT-OR-LATER-1014: when the person's latest exchange with the brand (x-brand-id) is a Gmail thread of a mailbox the org connected, newer than the brand's latest Instantly exchange (last email delivered, a reply), the email is sent by google-service as a reply IN that Gmail thread, from the address they wrote to / were answered from (`transport: gmail` on the 200; `subject` is then `Re: <thread subject>`, step 1 only, a multi-step sequence is refused 422 `follow_up_gmail_single_email`). google-service refusals are round-tripped: 403 `google_send_permission_missing` (the org owner must reconnect Google with send access; never a fallback to a cold mailbox), 404 `thread_not_found`, 422 `from_address_not_send_as`. A standing `lead_opted_out` / `lead_not_a_prospect` refuses 409 before Gmail."),
 });
 
 export const SendRequestSchema = z
   .discriminatedUnion("type", [TransactionalSendSchema, BroadcastSendSchema])
+  .refine(
+    (d) => d.type !== "transactional" || !d.consumedOutcomeKeys || Boolean(d.outcomeSubject || d.leadId),
+    { message: "consumedOutcomeKeys requires outcomeSubject or leadId: consumed outcomes belong to the person the send reaches", path: ["consumedOutcomeKeys"] }
+  )
   .openapi("SendRequest");
 
 export type SendRequest = z.infer<typeof SendRequestSchema>;
