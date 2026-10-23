@@ -274,6 +274,19 @@
                   "platform"
                 ],
                 "description": "Who pays for this ONE send. `platform` = a platform-initiated mail the org did not ask for (lifecycle, account, billing notice): postmark-service skips the org's credit gate and declares the spend on an org-less platform run, so no customer is charged. `org` = billed to `x-org-id`. Omitted = no `payer` key forwarded, postmark-service decides exactly as before (org, unless the tag is a known platform lifecycle tag). Transactional only. For a send with NO organisation at all, use `POST /platform/send`."
+              },
+              "outcomeSubject": {
+                "$ref": "#/components/schemas/OutcomeSubject"
+              },
+              "consumedOutcomeKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "maxItems": 20,
+                "description": "Catalogue outcome keys (e.g. `email_checked`, `message_written`) this send CONSUMED for the same person as `outcomeSubject`. Forwarded verbatim to postmark-service, which declares them as the send run's inputs. Requires `outcomeSubject` or `leadId` (400 otherwise, nothing sent). 1 to 20 keys. Omitted = no key forwarded. Transactional only. The outcome catalogue is owned by runs-service/features-service: keys are not validated here, postmark-service refuses an unknown one."
               }
             },
             "required": [
@@ -369,6 +382,12 @@
                 "type": "string",
                 "description": "Not accepted on a broadcast send. Only the transactional channel can be platform-paid, so naming a payer here is refused rather than silently dropped."
               },
+              "outcomeSubject": {
+                "description": "Not accepted on a broadcast send (Instantly declares its own outcomes per lead). Refused rather than silently dropped."
+              },
+              "consumedOutcomeKeys": {
+                "description": "Not accepted on a broadcast send. Refused rather than silently dropped."
+              },
               "timezone": {
                 "type": "string",
                 "nullable": true,
@@ -387,6 +406,26 @@
             ]
           }
         ]
+      },
+      "OutcomeSubject": {
+        "type": "object",
+        "properties": {
+          "subjectService": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Service that owns the person (e.g. `transactional-email-service`, `lead-service`)"
+          },
+          "subjectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "That service's id for the person"
+          }
+        },
+        "required": [
+          "subjectService",
+          "subjectId"
+        ],
+        "description": "The ONE person this send reaches (a newsletter subscriber, a campaign lead), named by the service that owns that person: `subjectService` (e.g. `transactional-email-service`, `lead-service`) + `subjectId` (that service's id for the person). Forwarded verbatim to postmark-service, which declares the `message_sent` outcome on the send's run for this subject (cost accounting). The gateway never decides who the person is. Omitted = no `outcomeSubject` key forwarded, byte-identical to before. Transactional only. postmark-service owns this contract: refer to its openapi.json (`SendEmailRequest`)."
       },
       "SequenceStep": {
         "type": "object",
