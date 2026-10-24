@@ -102,7 +102,7 @@ export interface GmailThreadReply {
 
 /** One reply in the thread. Not retried: a retry of a send that went through mails twice. */
 export async function replyInGmailThread(
-  body: { to: string; threadId: string; bodyHtml: string; bodyText?: string },
+  body: { to: string; threadId: string; bodyHtml: string; bodyText?: string; leadId?: string },
   ctx: OrgContext,
 ): Promise<GmailThreadReply> {
   return (await call("/orgs/google/thread-replies", {
