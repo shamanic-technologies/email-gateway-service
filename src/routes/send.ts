@@ -135,6 +135,9 @@ router.post("/send", async (req: Request, res: Response) => {
             threadId: route.thread.threadId,
             bodyHtml: step.bodyHtml,
             ...(step.bodyText ? { bodyText: step.bodyText } : {}),
+            // google-service declares the reply as this lead's message_sent in
+            // runs-service's ledger; absent = sent but undeclared, never guessed.
+            ...(body.leadId ? { leadId: body.leadId } : {}),
           },
           ctx,
         );
