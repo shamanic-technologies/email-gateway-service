@@ -200,6 +200,24 @@ describe("followUp: the person's latest thread is in a connected Google mailbox"
     expect(mockFetch).not.toHaveBeenCalled();
   });
 
+  it("names the send's lead to google-service so the reply is declared in the ledger", async () => {
+    serve(
+      latestThread(200, { thread: THREAD }),
+      instantlyStatus(statusRow(null)),
+      gmailReply(200, { sent: true, gmailMessageId: "g3", threadId: "T1", mailbox: "m", from: THREAD.fromAddress, to: PERSON, subject: "Re: Enquiry" }),
+    );
+    const res = await post(followUp({ leadId: "lead-42" }));
+    expect(res.status).toBe(200);
+    const reply = mockFetch.mock.calls.find((c) => c[0] === "http://google/orgs/google/thread-replies")!;
+    expect(JSON.parse(reply[1].body)).toEqual({
+      to: PERSON,
+      threadId: "T1",
+      bodyHtml: "<p>Hi again</p>",
+      bodyText: "Hi again",
+      leadId: "lead-42",
+    });
+  });
+
   it("replies in Gmail when the person was never emailed through Instantly", async () => {
     serve(
       latestThread(200, { thread: THREAD }),
