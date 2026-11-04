@@ -260,6 +260,18 @@ describe("followUp: the person's latest thread is in a connected Google mailbox"
     expect(calledUrls()).not.toContain("http://google/orgs/google/thread-replies");
   });
 
+  it("refuses a person the brand stated is not theirs before writing in Gmail (DUALIST-WA-SILENCE-EMAIL)", async () => {
+    serve(
+      latestThread(200, { thread: THREAD }),
+      instantlyStatus(statusRow({ lastDeliveredAt: null, sendRefusal: { code: "stated_not_to_brand", until: null } })),
+    );
+    const res = await post(followUp());
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("stated_not_to_brand");
+    expect(res.body.error).toBe("Stated not to be someone of this brand");
+    expect(calledUrls()).not.toContain("http://google/orgs/google/thread-replies");
+  });
+
   it("refuses a multi-step sequence: a Gmail reply is one email", async () => {
     serve(latestThread(200, { thread: THREAD }), instantlyStatus(statusRow(null)));
     const res = await post(
