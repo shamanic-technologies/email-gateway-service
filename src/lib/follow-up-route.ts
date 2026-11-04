@@ -23,7 +23,15 @@ export type FollowUpRoute =
 
 // The send gate's never-lapsing refusals (instantly-service owns them and
 // states them on the status read): honoured on the Gmail transport too.
-const STANDING_REFUSALS = new Set(["lead_opted_out", "lead_not_a_prospect"]);
+// `stated_not_to_brand` (DUALIST-WA-SILENCE-EMAIL): the brand's team stated in
+// crm-service that the person is not someone of the brand.
+const STANDING_REFUSALS = new Set(["lead_opted_out", "lead_not_a_prospect", "stated_not_to_brand"]);
+
+const REFUSAL_ERRORS: Record<string, string> = {
+  lead_opted_out: "Lead has opted out",
+  lead_not_a_prospect: "Lead is not a prospect",
+  stated_not_to_brand: "Stated not to be someone of this brand",
+};
 
 const later = (a: string | null, b: string | null | undefined): string | null => {
   if (!b) return a;
@@ -89,7 +97,7 @@ export async function resolveFollowUpRoute(to: string, ctx: OrgContext): Promise
       transport: "refused",
       status: 409,
       body: {
-        error: instantly.refusalCode === "lead_opted_out" ? "Lead has opted out" : "Lead is not a prospect",
+        error: REFUSAL_ERRORS[instantly.refusalCode] ?? instantly.refusalCode,
         code: instantly.refusalCode,
         details: `${to} carries a standing ${instantly.refusalCode} refusal. No email was sent.`,
       },
