@@ -411,6 +411,43 @@ describe("POST /orgs/send", () => {
       expect(JSON.parse(mockFetch.mock.calls[1][1].body)).not.toHaveProperty("followUp");
     });
 
+    it("forwards signature verbatim to instantly-service (SIGNATURE-TACTIC-1107)", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      const text = "{full_name}\nDoc Dinners {unknown} --";
+      const r1 = await authedPost("/orgs/send").send(buildBroadcastBody({ signature: { text } }));
+      const r2 = await authedPost("/orgs/send").send(buildBroadcastBody({ signature: "default" }));
+
+      expect(r1.status).toBe(200);
+      expect(r2.status).toBe(200);
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body).signature).toEqual({ text });
+      expect(JSON.parse(mockFetch.mock.calls[1][1].body).signature).toBe("default");
+    });
+
+    it("without signature the instantly-service call is byte-identical (no key, no default injected)", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () =>
+          Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+      });
+
+      await authedPost("/orgs/send").send(buildBroadcastBody());
+
+      const sent = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(sent).not.toHaveProperty("signature");
+      expect(Object.keys(sent).sort()).toEqual(["company", "firstName", "lastName", "sequence", "subject", "to"]);
+    });
+
+    it("refuses a signature of the wrong shape (400, nothing sent)", async () => {
+      const res = await authedPost("/orgs/send").send(buildBroadcastBody({ signature: "ours" }));
+      expect(res.status).toBe(400);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("rejects a malformed timezone (non-string)", async () => {
       const res = await authedPost("/orgs/send").send(
         buildBroadcastBody({ timezone: 42 })
