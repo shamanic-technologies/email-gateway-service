@@ -393,6 +393,29 @@
                 "nullable": true,
                 "description": "Recipient's IANA timezone (e.g. \"America/New_York\"), sourced from the lead. Forwarded to instantly-service so the cold-email sequence is scheduled in the prospect's local business hours. Absent OR explicitly null = \"we don't know this lead's timezone\" (many leads have no location at all): the field is omitted downstream and instantly-service falls back to its default timezone."
               },
+              "signature": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "default"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "text": {
+                        "type": "string",
+                        "description": "The signature lines as plain text, `\\n` between lines. Forwarded verbatim: instantly-service fills `{first_name}`/`{last_name}`/`{full_name}`/`{sender_email}` with the sending mailbox and cleans the rest (never refused here nor there)."
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  }
+                ],
+                "description": "WHO SIGNS this cold email, chosen by the script that wrote it (SIGNATURE-TACTIC-1107: competing scripts sign differently and their results are compared). `\"default\"` = our signature; `{ text }` = the script's own lines. Forwarded verbatim to instantly-service, which owns the meaning: the client's own brand signature wins over it, and a send that continues an earlier thread keeps THAT thread's signature. Absent = no key forwarded, exactly as before. A follow-up answered in a Gmail thread (`transport: gmail`) keeps that thread's signature: the field is not used there. instantly-service owns this contract: refer to its openapi.json."
+              },
               "followUp": {
                 "type": "boolean",
                 "description": "`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json. RIGHT-MOMENT-OR-LATER-1014: when the person's latest exchange with the brand (x-brand-id) is a Gmail thread of a mailbox the org connected, newer than the brand's latest Instantly exchange (last email delivered, a reply), the email is sent by google-service as a reply IN that Gmail thread, from the address they wrote to / were answered from (`transport: gmail` on the 200; `subject` is then `Re: <thread subject>`, step 1 only, a multi-step sequence is refused 422 `follow_up_gmail_single_email`). google-service refusals are round-tripped: 403 `google_send_permission_missing` (the org owner must reconnect Google with send access; never a fallback to a cold mailbox), 404 `thread_not_found`, 422 `from_address_not_send_as`. A standing `lead_opted_out` / `lead_not_a_prospect` refuses 409 before Gmail."
