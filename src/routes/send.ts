@@ -179,6 +179,9 @@ router.post("/send", async (req: Request, res: Response) => {
         sequence: body.sequence,
         // A follow-up of the brand's own outreach: instantly-service's contract.
         ...(body.followUp === true ? { followUp: true } : {}),
+        // Who signs, chosen by the script (SIGNATURE-TACTIC-1107): verbatim,
+        // instantly-service owns the meaning. Absent = no key on the wire.
+        ...(body.signature !== undefined ? { signature: body.signature } : {}),
       }, ctx, body.idempotencyKey);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);

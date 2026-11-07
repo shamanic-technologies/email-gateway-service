@@ -43,6 +43,10 @@ Owner 2026-10-14: when it is the right moment to write, the follow-up is a reply
 - Gmail wins: a standing `sendRefusal` (`lead_opted_out`, `lead_not_a_prospect`, `stated_not_to_brand` = the brand's team stated in crm-service the person is not theirs) refuses 409 here; else google-service `POST /orgs/google/thread-replies` sends step 1 (a multi-step sequence is 422 `follow_up_gmail_single_email`). 200 carries `transport: "gmail"`, `threadId`, `from`; remembered under the idempotency key like any send. The send's `leadId` (when given) is forwarded to google-service, which declares the reply as that lead's `message_sent` in runs-service's ledger (LEDGER-HISTORY-1024); absent = sent, undeclared. The gateway declares nothing itself. Its 4xx refusals round-trip (403 `google_send_permission_missing`: the org owner must reconnect Google with send access; never a fallback to a cold mailbox).
 - A failed READ (google-service or instantly status) is a 502, never "no thread": guessing would send a stranger's email. Env `GOOGLE_SERVICE_URL` / `GOOGLE_SERVICE_API_KEY`. No metered cost on the Gmail transport (the account's own grant). Guard `tests/follow-up-gmail.test.ts`.
 
+## `signature` on a broadcast send is the SCRIPT's choice, relayed verbatim (SIGNATURE-TACTIC-1107)
+
+Owner 2026-11-07: signing approaches compete as scripts. `BroadcastSendSchema.signature` = `"default"` | `{ text }`, shape-checked only, forwarded byte-equal to instantly-service `POST /orgs/send` (which owns the meaning, the precedence brand signature > script > ours, and cleans the text: never refused). Absent = no key on the wire, no default injected. The Gmail-thread follow-up path ignores it (a continued thread keeps its signature). This hop rebuilds the instantly call field by field: a new instantly send field that is not added here never reaches it. Guard: SIGNATURE-TACTIC tests in `tests/send.test.ts`.
+
 ## A visible copy is a different instrument from a blind one — `cc` is transactional-only and every address is validated
 
 `cc` (transactional sends) is a comma-separated email list forwarded verbatim to

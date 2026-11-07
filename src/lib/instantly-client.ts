@@ -148,6 +148,9 @@ export async function atomicSend(body: {
   // A follow-up of the brand's own earlier outreach (instantly-service skips
   // its re-contact window for it). Absent = a normal send.
   followUp?: boolean;
+  // Who signs the email, chosen by the script (SIGNATURE-TACTIC-1107).
+  // instantly-service owns the meaning and cleans the text. Absent = no key.
+  signature?: "default" | { text: string };
 }, ctx?: OrgContext, idempotencyKey?: string) {
   // The send is non-idempotent (creates a campaign) and makes ~5 sequential
   // Instantly.ai calls. Use the longer send timeout, disable auto-retry, and
