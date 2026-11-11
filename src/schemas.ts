@@ -930,6 +930,21 @@ const refusalContent = {
   "application/json": { schema: SendRefusalSchema },
 };
 
+/** The sender received the send and never answered in time: the email may be out. */
+export const SendOutcomeUnknownSchema = z
+  .object({
+    error: z.string().describe("`Send outcome unknown`"),
+    code: z.literal("send_outcome_unknown"),
+    details: z.string().describe("Which hop timed out or dropped the connection"),
+  })
+  .openapi("SendOutcomeUnknown");
+
+const outcomeUnknownResponse = {
+  description:
+    "Send outcome UNKNOWN (`code: send_outcome_unknown`): the request reached the sender but no answer came back (our 60 s wait ran out, or the connection dropped). The email MAY have been sent: the gateway never re-sends in that case. A blind retry can mail the person twice; retry only with the same `idempotencyKey` once the sender's own records say it did not go out. Not remembered under the idempotency key.",
+  content: { "application/json": { schema: SendOutcomeUnknownSchema } },
+};
+
 registry.registerPath({
   method: "get",
   path: "/health",
@@ -1041,7 +1056,8 @@ registry.registerPath({
     404: { description: "Broadcast followUp answered in a Gmail thread: google-service refused (`code: thread_not_found` | `no_google_account_connected`). Nothing sent.", content: refusalContent },
     409: { description: "Broadcast: the sender refused THIS LEAD (`code`: `recent_brand_contact` | `lead_opted_out` | `lead_not_a_prospect`, sender's body byte-equal). Nothing sent, nothing billed. A per-lead outcome: skip the lead, do not fail the run, do not retry it.", content: refusalContent },
     422: { description: "Broadcast: the sender refused (e.g. API key not configured), body byte-equal.", content: refusalContent },
-    502: { description: "Upstream service error: the sender failed (5xx, network, timeout). Only this status means the sender is broken.", content: errorContent },
+    502: { description: "Upstream service error: the sender answered 5xx, or could not be reached at all (connection refused twice). The email was not sent. Only this status means the sender is broken.", content: errorContent },
+    504: outcomeUnknownResponse,
   },
 });
 
@@ -1086,7 +1102,8 @@ registry.registerPath({
       content: { "application/json": { schema: z.union([PlatformSendRefusalSchema, ErrorResponseSchema]) } },
     },
     401: { description: "Unauthorized (missing or wrong x-api-key)", content: errorContent },
-    502: { description: "Upstream service error: postmark-service failed or refused (any non-2xx, network, timeout). The email was not sent.", content: errorContent },
+    502: { description: "Upstream service error: postmark-service answered non-2xx, or could not be reached at all (connection refused twice). The email was not sent.", content: errorContent },
+    504: outcomeUnknownResponse,
   },
 });
 

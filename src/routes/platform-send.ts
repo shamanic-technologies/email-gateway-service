@@ -7,6 +7,7 @@ import {
 } from "../schemas";
 import * as postmarkClient from "../lib/postmark-client";
 import * as idempotencyStore from "../lib/idempotency-store";
+import { SendOutcomeUnknownError } from "../lib/send-fetch";
 
 /**
  * POST /platform/send — ONE transactional email with NO organisation and NO
@@ -103,6 +104,11 @@ router.post("/send", async (req: Request, res: Response) => {
     console.log(`[email-gateway] platform-send ok messageId=${result.messageId}`);
     res.json(response);
   } catch (error: unknown) {
+    if (error instanceof SendOutcomeUnknownError) {
+      console.error(`[email-gateway] platform-send outcome unknown: ${error.message}`);
+      res.status(504).json({ error: "Send outcome unknown", code: error.code, details: error.message });
+      return;
+    }
     const message = error instanceof Error ? error.message : "Unknown error";
     console.error(`[email-gateway] platform-send failed: ${message}`);
     res.status(502).json({ error: "Upstream service error", details: message });

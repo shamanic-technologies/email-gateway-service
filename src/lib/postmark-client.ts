@@ -1,6 +1,7 @@
 import { config } from "../config";
 import { buildServiceHeaders } from "./service-headers";
 import type { OrgContext } from "../middleware/requireOrgId";
+import { sendFetch } from "./send-fetch";
 import type {
   StatusScope,
   GlobalStatus,
@@ -22,15 +23,34 @@ async function request<T>(
     nullOn404Code?: string;
     /** Full header set, replacing the org-context headers (org-less platform send). */
     headers?: Record<string, string>;
+    /**
+     * A SEND (non-idempotent): goes through sendFetch, waits 60 s, retried
+     * only when the request provably never left; a timeout is never retried.
+     */
+    send?: boolean;
   } = {}
 ): Promise<T> {
-  const { method = "GET", body, ctx, nullOn404Code } = options;
+  const { method = "GET", body, ctx, nullOn404Code, send = false } = options;
   const fullUrl = `${url}${path}`;
   const headers = options.headers ?? buildServiceHeaders(apiKey, ctx);
   const jsonBody = body ? JSON.stringify(body) : undefined;
 
+  if (send) {
+    const response = await sendFetch(
+      fullUrl,
+      { method, headers, body: jsonBody },
+      `postmark-service ${method} ${path}`,
+    );
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`postmark-service ${method} ${path}: ${response.status} - ${errorText}`);
+    }
+    return response.json() as Promise<T>;
+  }
+
   let lastError: Error | undefined;
 
+  // Reads only: one retry on a network error or timeout (re-asking is harmless).
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const response = await fetch(fullUrl, {
@@ -109,7 +129,7 @@ export async function sendEmail(body: {
     sendingId?: string;
     errorCode?: number;
     message?: string;
-  }>("/orgs/send", { method: "POST", body, ctx });
+  }>("/orgs/send", { method: "POST", body, ctx, send: true });
 }
 
 /** Tracking headers an org-less platform send may carry. No org, no user, ever. */
@@ -153,6 +173,7 @@ export async function sendPlatformEmail(body: {
     // platform-paid, and defaults to its broadcast stream: both are stated.
     body: { ...body, payer: "platform", stream: "transactional" },
     headers,
+    send: true,
   });
 }
 

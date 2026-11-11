@@ -1,4 +1,5 @@
 import { config } from "../config";
+import { sendFetch } from "./send-fetch";
 import { buildServiceHeaders } from "./service-headers";
 import type { OrgContext } from "../middleware/requireOrgId";
 
@@ -45,14 +46,16 @@ function baseUrl(): string {
   return url;
 }
 
-async function call(path: string, init: { method: string; body?: unknown; ctx: OrgContext; timeoutMs: number }) {
+async function call(path: string, init: { method: string; body?: unknown; ctx: OrgContext; timeoutMs: number; send?: boolean }) {
   const url = `${baseUrl()}${path}`;
-  const res = await fetch(url, {
+  const request = {
     method: init.method,
     headers: buildServiceHeaders(config.google.apiKey, init.ctx),
     body: init.body === undefined ? undefined : JSON.stringify(init.body),
-    signal: AbortSignal.timeout(init.timeoutMs),
-  });
+  };
+  const res = init.send
+    ? await sendFetch(url, request, `google-service ${init.method} ${path}`, init.timeoutMs)
+    : await fetch(url, { ...request, signal: AbortSignal.timeout(init.timeoutMs) });
   const text = await res.text();
   if (!res.ok) {
     throw new GoogleHttpError(`google-service ${init.method} ${path}: ${res.status} - ${text}`, res.status, text);
@@ -100,7 +103,7 @@ export interface GmailThreadReply {
   subject: string;
 }
 
-/** One reply in the thread. Not retried: a retry of a send that went through mails twice. */
+/** One reply in the thread. Retried only when it provably never left (sendFetch): a retry of a send that went through mails twice. */
 export async function replyInGmailThread(
   body: { to: string; threadId: string; bodyHtml: string; bodyText?: string; leadId?: string },
   ctx: OrgContext,
@@ -110,5 +113,6 @@ export async function replyInGmailThread(
     body,
     ctx,
     timeoutMs: SEND_TIMEOUT_MS,
+    send: true,
   })) as GmailThreadReply;
 }
