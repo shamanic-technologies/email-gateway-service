@@ -33,7 +33,13 @@ Failure directions are deliberate: a key READ that fails answers 502 and sends n
 
 instantly-service refuses a send for a lead with a 4xx and a machine `code`: 409 `recent_brand_contact` (emailed for this brand inside its 3-month window; body carries `brandId`, `lastEmailedAt`, `windowInterval`), 409 `lead_opted_out`, 409 `lead_not_a_prospect`, 402 `insufficient_credits`, 422/400. Nothing is sent, nothing billed. `/send` forwards that status and body byte-equal (`InstantlyHttpError` in `lib/instantly-client.ts`, caught in `routes/send.ts`); a non-JSON 4xx body is wrapped as `{ error }`. A refusal is not cached under the idempotency key.
 
-Why: the old catch-all turned every refusal into `502 Upstream service error`. Windmill read it as an outage, failed the run, and lead-service re-served the same unsent leads next run: Perky's whole funnel froze for hours on 7 people emailed in July (RECONTACT-LOOP-1011, 2026-10-11). Do NOT fold 4xx back into 502. The transactional (postmark) leg still answers 502 on any error.
+Why: the old catch-all turned every refusal into `502 Upstream service error`. Windmill read it as an outage, failed the run, and lead-service re-served the same unsent leads next run: Perky's whole funnel froze for hours on 7 people emailed in July (RECONTACT-LOOP-1011, 2026-10-11). Do NOT fold 4xx back into 502. The transactional (postmark) leg answers 502 on any non-2xx (and 504 on an unknown outcome, next section).
+
+## A send is never repeated after it may have left — `sendFetch`, 60 s, 504 `send_outcome_unknown` (SIGNUP-EMAILS-1111)
+
+Every SEND (postmark `/orgs/send` + `/internal/platform-send`, instantly `/orgs/send`, google `/orgs/google/thread-replies`) goes through `src/lib/send-fetch.ts`: 60 s wait; retried once ONLY when the error proves the request never left (`ECONNREFUSED`, `ENOTFOUND`, `EAI_AGAIN`; twice = 502, not sent); any other failure (our timeout, reset/closed socket) throws `SendOutcomeUnknownError`, never retried, answered **504 `{ code: "send_outcome_unknown" }`** on `/orgs/send` and `/platform/send`, not remembered under the idempotency key. Reads keep their one retry.
+
+Why: the postmark client re-sent after its own 10 s timeout while postmark-service had already submitted to Postmark ~2 s in: a new client got two welcome emails while the caller was told 502, and 598 newsletter subscribers got one issue twice in 14 days (2026-11-11). Do NOT add a retry-on-timeout to any send, and do NOT fold the 504 into a 502 (a 502 says "not sent"). Guard `tests/send-no-repeat.test.ts`.
 
 ## A `followUp: true` broadcast lands in the person's LATEST thread, Instantly or Gmail (RIGHT-MOMENT-OR-LATER-1014)
 

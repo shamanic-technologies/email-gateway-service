@@ -1,5 +1,6 @@
 import { config } from "../config";
 import { buildServiceHeaders } from "./service-headers";
+import { sendFetch } from "./send-fetch";
 import type { OrgContext } from "../middleware/requireOrgId";
 import type {
   RecipientStats,
@@ -50,14 +51,13 @@ async function request<T>(
     body?: unknown;
     ctx?: OrgContext;
     timeoutMs?: number;
-    // Non-idempotent mutations (the send) must NOT auto-retry — a retry of a
-    // succeeded-server-side send creates a duplicate Instantly campaign.
-    retry?: boolean;
     // false = a call aborted on its own timeout is NOT retried (the upstream
     // is still computing; a second ask doubles its load). Network errors such
     // as a refused connection during a redeploy still get the one retry.
     retryOnTimeout?: boolean;
     idempotencyKey?: string;
+    /** A SEND: sendFetch (retried only when it provably never left, never on timeout). */
+    send?: boolean;
   } = {}
 ): Promise<T> {
   const {
@@ -65,9 +65,9 @@ async function request<T>(
     body,
     ctx,
     timeoutMs = TIMEOUT_MS,
-    retry = true,
     retryOnTimeout = true,
     idempotencyKey,
+    send = false,
   } = options;
   const fullUrl = `${url}${path}`;
   const headers = buildServiceHeaders(apiKey, ctx);
@@ -76,7 +76,21 @@ async function request<T>(
   if (idempotencyKey) headers["idempotency-key"] = idempotencyKey;
   const jsonBody = body ? JSON.stringify(body) : undefined;
 
-  const maxAttempts = retry ? 2 : 1;
+  if (send) {
+    const response = await sendFetch(fullUrl, { method, headers, body: jsonBody }, `instantly-service ${method} ${path}`, timeoutMs);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new InstantlyHttpError(
+        `instantly-service ${method} ${path}: ${response.status} - ${errorText}`,
+        response.status,
+        errorText,
+      );
+    }
+    return response.json() as Promise<T>;
+  }
+
+  // Non-send calls only (reads, idempotent): one retry on a network error.
+  const maxAttempts = 2;
   let lastError: Error | undefined;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -153,14 +167,15 @@ export async function atomicSend(body: {
   signature?: "default" | { text: string };
 }, ctx?: OrgContext, idempotencyKey?: string) {
   // The send is non-idempotent (creates a campaign) and makes ~5 sequential
-  // Instantly.ai calls. Use the longer send timeout, disable auto-retry, and
-  // forward the idempotency key so a downstream dedupe is possible.
+  // Instantly.ai calls. Longer send timeout, retried only when the request
+  // provably never left (sendFetch), and the idempotency key forwarded so a
+  // downstream dedupe is possible.
   return request<AtomicSendResponse>("/orgs/send", {
     method: "POST",
     body,
     ctx,
     timeoutMs: SEND_TIMEOUT_MS,
-    retry: false,
+    send: true,
     idempotencyKey,
   });
 }

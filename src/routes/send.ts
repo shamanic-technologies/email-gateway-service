@@ -10,6 +10,7 @@ import * as idempotencyStore from "../lib/idempotency-store";
 import { traceEvent } from "../lib/trace-event";
 import { resolveFollowUpRoute } from "../lib/follow-up-route";
 import * as googleClient from "../lib/google-client";
+import { SendOutcomeUnknownError } from "../lib/send-fetch";
 
 const router = Router();
 
@@ -248,6 +249,14 @@ router.post("/send", async (req: Request, res: Response) => {
       console.warn(`[email-gateway] Refused by google-service: status=${error.status} code=${code} to=${body.to}`);
       traceEvent(ctx, "send.refused", `type=${body.type} to=${body.to} status=${error.status} code=${code} transport=gmail`);
       res.status(error.status).json(refusal);
+      return;
+    }
+    // The request reached the sender and no answer came back: the email may be
+    // out. Never retried here; told apart from "not sent" (SIGNUP-EMAILS-1111).
+    if (error instanceof SendOutcomeUnknownError) {
+      console.error(`[email-gateway] Outcome unknown: ${error.message}`);
+      traceEvent(ctx, "send.outcome_unknown", `type=${body.type} to=${body.to} error=${error.message}`);
+      res.status(504).json({ error: "Send outcome unknown", code: error.code, details: error.message });
       return;
     }
     const message = error instanceof Error ? error.message : "Unknown error";

@@ -130,9 +130,11 @@ describe("POST /orgs/send", () => {
 
       const res = await authedPost("/orgs/send").send(buildBroadcastBody());
 
-      // Dispatched exactly once — no duplicate send.
+      // Dispatched exactly once — no duplicate send; the caller is told the
+      // outcome is unknown, distinct from a 502 "not sent".
       expect(mockFetch).toHaveBeenCalledTimes(1);
-      expect(res.status).toBe(502);
+      expect(res.status).toBe(504);
+      expect(res.body.code).toBe("send_outcome_unknown");
     });
 
     it("uses the scoped 60s timeout for the send so a >10s instantly multi-call latency does not false-time-out (not the default 10s)", async () => {
@@ -165,19 +167,16 @@ describe("POST /orgs/send", () => {
       expect(instantlyHeaders["idempotency-key"]).toBe("price-request:outlet_42");
     });
 
-    it("retries on timeout with a fresh AbortSignal (transactional)", async () => {
-      // First postmark call: timeout
-      mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted", "AbortError"));
-      // Retry: succeed
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve({ success: true, messageId: "pm_retry" }),
-      });
+    it("does NOT retry the transactional send on timeout: one POST, 504 send_outcome_unknown (SIGNUP-EMAILS-1111)", async () => {
+      // postmark-service may already have submitted to Postmark: a second POST
+      // mailed the person twice (598 newsletter duplicates, double welcome).
+      mockFetch.mockRejectedValueOnce(new DOMException("The operation was aborted due to timeout", "TimeoutError"));
 
       const res = await authedPost("/orgs/send").send(buildTransactionalBody());
 
-      expect(res.status).toBe(200);
-      expect(res.body.messageId).toBe("pm_retry");
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(res.status).toBe(504);
+      expect(res.body.code).toBe("send_outcome_unknown");
     });
 
     it("returns 502 when instantly-service is down", async () => {
