@@ -161,6 +161,30 @@
           "nullable": true
         }
       },
+      "SendOutcomeUnknown": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "`Send outcome unknown`"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "send_outcome_unknown"
+            ]
+          },
+          "details": {
+            "type": "string",
+            "description": "Which hop timed out or dropped the connection"
+          }
+        },
+        "required": [
+          "error",
+          "code",
+          "details"
+        ]
+      },
       "SendRequest": {
         "oneOf": [
           {
@@ -4599,11 +4623,21 @@
             }
           },
           "502": {
-            "description": "Upstream service error: the sender failed (5xx, network, timeout). Only this status means the sender is broken.",
+            "description": "Upstream service error: the sender answered 5xx, or could not be reached at all (connection refused twice). The email was not sent. Only this status means the sender is broken.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Send outcome UNKNOWN (`code: send_outcome_unknown`): the request reached the sender but no answer came back (our 60 s wait ran out, or the connection dropped). The email MAY have been sent: the gateway never re-sends in that case. A blind retry can mail the person twice; retry only with the same `idempotencyKey` once the sender's own records say it did not go out. Not remembered under the idempotency key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendOutcomeUnknown"
                 }
               }
             }
@@ -4717,11 +4751,21 @@
             }
           },
           "502": {
-            "description": "Upstream service error: postmark-service failed or refused (any non-2xx, network, timeout). The email was not sent.",
+            "description": "Upstream service error: postmark-service answered non-2xx, or could not be reached at all (connection refused twice). The email was not sent.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Send outcome UNKNOWN (`code: send_outcome_unknown`): the request reached the sender but no answer came back (our 60 s wait ran out, or the connection dropped). The email MAY have been sent: the gateway never re-sends in that case. A blind retry can mail the person twice; retry only with the same `idempotencyKey` once the sender's own records say it did not go out. Not remembered under the idempotency key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendOutcomeUnknown"
                 }
               }
             }
