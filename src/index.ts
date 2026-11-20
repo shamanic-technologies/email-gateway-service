@@ -5,6 +5,7 @@ import { apiKeyAuth } from "./middleware/apiKeyAuth";
 import { requireOrgId } from "./middleware/requireOrgId";
 import healthRoutes from "./routes/health";
 import sendRoutes from "./routes/send";
+import sendChecksRoutes from "./routes/send-checks";
 import platformSendRoutes from "./routes/platform-send";
 import statusRoutes from "./routes/status";
 import statsRoutes, { publicStatsRouter } from "./routes/stats";
@@ -35,6 +36,7 @@ app.use("/platform", apiKeyAuth, platformSendRoutes);
 
 // Org-scoped routes (apiKeyAuth + requireOrgId)
 app.use("/orgs", apiKeyAuth, requireOrgId, sendRoutes);
+app.use("/orgs", apiKeyAuth, requireOrgId, sendChecksRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, statusRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, statsRoutes);
 app.use("/orgs", apiKeyAuth, requireOrgId, manualQualificationsRoutes);
