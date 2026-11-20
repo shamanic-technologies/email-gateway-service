@@ -70,6 +70,75 @@
           "version"
         ]
       },
+      "SendCheckResponse": {
+        "type": "object",
+        "properties": {
+          "sendable": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "instantly",
+              "gmail"
+            ],
+            "description": "The route `POST /orgs/send` would take now"
+          },
+          "to": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "nullable": true,
+            "description": "Our verifier's verdict: `valid`, `catch_all` or `unknown`"
+          },
+          "reused": {
+            "type": "boolean",
+            "nullable": true,
+            "description": "true = a verdict under 30 days was reused (free); false = verified now, billed on the caller's run"
+          },
+          "verifiedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "sendable",
+          "transport",
+          "to",
+          "verdict",
+          "reused",
+          "verifiedAt"
+        ]
+      },
+      "SendCheckRequest": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "broadcast"
+            ],
+            "description": "Only `broadcast`: the checks of the email a script is about to write."
+          },
+          "to": {
+            "type": "string",
+            "minLength": 3,
+            "description": "The address `POST /orgs/send` would be asked to mail"
+          },
+          "followUp": {
+            "type": "boolean",
+            "description": "Same meaning as on `POST /orgs/send`: `true` picks the follow-up route (the person's latest thread, Instantly or Gmail) exactly as the send would."
+          }
+        },
+        "required": [
+          "type",
+          "to"
+        ]
+      },
       "SendResponse": {
         "type": "object",
         "properties": {
@@ -4372,6 +4441,125 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/orgs/send-checks": {
+      "post": {
+        "tags": [
+          "Email Routing"
+        ],
+        "summary": "Would POST /orgs/send refuse this person? Asked before a message is written",
+        "description": "Picks the route `POST /orgs/send` would take (refused, Gmail thread, instantly-service) and runs the send door's checks on the person on EVERY route: opt-out, not a prospect, stated not to the brand (x-brand-id), our verifier's verdict (instantly-service `POST /orgs/send-checks`; a verdict under 30 days is reused free, otherwise verified now and billed on x-run-id, then reused free by the send right after). A refusal answers the send's own status and body (409 `lead_opted_out` / `lead_not_a_prospect` / `stated_not_to_brand` / `email_not_verified`, 402 `insufficient_credits`, 502 `email_verification_unavailable` / `stated_not_to_brand_unreadable`). Nothing is written, reserved or sent.",
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal organization UUID from client-service"
+            },
+            "required": true,
+            "description": "Internal organization UUID from client-service",
+            "name": "x-org-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Internal user UUID from client-service"
+            },
+            "required": false,
+            "description": "Internal user UUID from client-service",
+            "name": "x-user-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Caller's run ID (used as parentRunId when creating own run)"
+            },
+            "required": false,
+            "description": "Caller's run ID (used as parentRunId when creating own run)",
+            "name": "x-run-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Campaign ID injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Campaign ID injected by workflow-service (optional, used for tracking)",
+            "name": "x-campaign-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")"
+            },
+            "required": false,
+            "description": "Comma-separated brand IDs injected by workflow-service (e.g. \"uuid1,uuid2,uuid3\")",
+            "name": "x-brand-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Workflow slug injected by workflow-service (optional, used for tracking)"
+            },
+            "required": false,
+            "description": "Workflow slug injected by workflow-service (optional, used for tracking)",
+            "name": "x-workflow-slug",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Feature slug for tracking (optional, propagated through the chain)"
+            },
+            "required": false,
+            "description": "Feature slug for tracking (optional, propagated through the chain)",
+            "name": "x-feature-slug",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The send would not refuse the person",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendCheckResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request"
+          },
+          "402": {
+            "description": "The org cannot pay to verify the address (the send's 402 body)"
+          },
+          "409": {
+            "description": "The send's own 409 refusal, same body"
+          },
+          "502": {
+            "description": "No verdict could be had, or a producer was unreadable: the send would not send either"
           }
         }
       }

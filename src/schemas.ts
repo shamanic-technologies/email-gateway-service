@@ -275,6 +275,27 @@ export const SendRequestSchema = z
 
 export type SendRequest = z.infer<typeof SendRequestSchema>;
 
+// --- POST /orgs/send-checks (SEND-CHECK-BEFORE-WRITE-1120) ---
+
+export const SendCheckRequestSchema = z
+  .object({
+    type: z.literal("broadcast").describe("Only `broadcast`: the checks of the email a script is about to write."),
+    to: z.string().min(3).describe("The address `POST /orgs/send` would be asked to mail"),
+    followUp: z.boolean().optional().describe("Same meaning as on `POST /orgs/send`: `true` picks the follow-up route (the person's latest thread, Instantly or Gmail) exactly as the send would."),
+  })
+  .openapi("SendCheckRequest");
+
+export const SendCheckResponseSchema = z
+  .object({
+    sendable: z.literal(true),
+    transport: z.enum(["instantly", "gmail"]).describe("The route `POST /orgs/send` would take now"),
+    to: z.string(),
+    verdict: z.string().nullable().describe("Our verifier's verdict: `valid`, `catch_all` or `unknown`"),
+    reused: z.boolean().nullable().describe("true = a verdict under 30 days was reused (free); false = verified now, billed on the caller's run"),
+    verifiedAt: z.string().nullable(),
+  })
+  .openapi("SendCheckResponse");
+
 // --- POST /platform/send (org-less, platform-paid) ---
 
 export const PLATFORM_SEND_TRANSACTIONAL_ONLY = "platform_send_transactional_only";
@@ -956,6 +977,31 @@ registry.registerPath({
       description: "Service is healthy",
       content: { "application/json": { schema: HealthResponseSchema } },
     },
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/orgs/send-checks",
+  tags: ["Email Routing"],
+  summary: "Would POST /orgs/send refuse this person? Asked before a message is written",
+  description:
+    "Picks the route `POST /orgs/send` would take (refused, Gmail thread, instantly-service) and runs the send door's checks on the person " +
+    "on EVERY route: opt-out, not a prospect, stated not to the brand (x-brand-id), our verifier's verdict (instantly-service `POST /orgs/send-checks`; " +
+    "a verdict under 30 days is reused free, otherwise verified now and billed on x-run-id, then reused free by the send right after). " +
+    "A refusal answers the send's own status and body (409 `lead_opted_out` / `lead_not_a_prospect` / `stated_not_to_brand` / `email_not_verified`, " +
+    "402 `insufficient_credits`, 502 `email_verification_unavailable` / `stated_not_to_brand_unreadable`). Nothing is written, reserved or sent.",
+  security: [{ apiKey: [] }],
+  request: {
+    headers: OrgScopedHeadersSchema,
+    body: { content: { "application/json": { schema: SendCheckRequestSchema } } },
+  },
+  responses: {
+    200: { description: "The send would not refuse the person", content: { "application/json": { schema: SendCheckResponseSchema } } },
+    400: { description: "Invalid request" },
+    402: { description: "The org cannot pay to verify the address (the send's 402 body)" },
+    409: { description: "The send's own 409 refusal, same body" },
+    502: { description: "No verdict could be had, or a producer was unreadable: the send would not send either" },
   },
 });
 

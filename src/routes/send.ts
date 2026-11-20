@@ -130,6 +130,12 @@ router.post("/send", async (req: Request, res: Response) => {
           return;
         }
         const step = body.sequence[0];
+        // ONE rule for every email route (SEND-CHECK-BEFORE-WRITE-1120): the
+        // checks instantly-service's door runs on the person (opt-out, not a
+        // prospect, stated not to the brand, our verifier's verdict, verified
+        // now when none < 30 days is held) are asked before Gmail mails them
+        // too. A refusal is an InstantlyHttpError, round-tripped below.
+        await instantlyClient.sendChecks(body.to, ctx);
         const sent = await googleClient.replyInGmailThread(
           {
             to: body.to,
