@@ -59,9 +59,17 @@ const statusRow = (brand: Record<string, unknown> | null, byCampaign: Record<str
 
 type Route = (url: string, init: { method?: string; body?: string }) => ReturnType<typeof json> | undefined;
 
+// SEND-CHECK-BEFORE-WRITE-1120: the door's person checks are asked before a
+// Gmail reply too. Passing by default; a test states a refusal by serving its
+// own `/orgs/send-checks` route first.
+const checkPass: Route = (url) =>
+  url === "http://instantly/orgs/send-checks"
+    ? json(200, { sendable: true, to: PERSON, verdict: "valid", reused: true, verifiedAt: "2026-11-01T00:00:00.000Z" })
+    : undefined;
+
 function serve(...routes: Route[]) {
   mockFetch.mockImplementation(async (url: string, init: { method?: string; body?: string } = {}) => {
-    for (const r of routes) {
+    for (const r of [...routes, checkPass]) {
       const out = r(url, init);
       if (out) return out;
     }
@@ -291,5 +299,101 @@ describe("followUp: the person's latest thread is in a connected Google mailbox"
     const res = await post(followUp());
     expect(res.status).toBe(502);
     expect(calledUrls()).not.toContain("http://instantly/orgs/send");
+  });
+});
+
+describe("one rule for every email route (SEND-CHECK-BEFORE-WRITE-1120)", () => {
+  const checkRefusal = (status: number, body: unknown): Route => (url) =>
+    url === "http://instantly/orgs/send-checks" ? json(status, body) : undefined;
+  const notVerified = {
+    error: "Email not verified",
+    code: "email_not_verified",
+    email: PERSON,
+    verdict: "invalid",
+    reason: "verdict_invalid",
+    verifiedAt: "2026-11-10T00:00:00.000Z",
+    until: "2026-12-10T00:00:00.000Z",
+    details: `${PERSON} was not sent: our verifier's verdict is invalid (verdict_invalid); only valid, catch_all and unknown addresses are ever emailed`,
+  };
+
+  it("an address our verifier judged invalid is never mailed through Gmail: the send's 409, verbatim", async () => {
+    serve(
+      latestThread(200, { thread: THREAD }),
+      instantlyStatus(statusRow({ lastDeliveredAt: null, queued: false })),
+      checkRefusal(409, notVerified),
+      gmailReply(200, { gmailMessageId: "g1", threadId: "T1", from: THREAD.fromAddress, to: PERSON }),
+    );
+    const res = await post(followUp());
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual(notVerified);
+    expect(calledUrls()).not.toContain("http://google/orgs/google/thread-replies");
+  });
+
+  it("asks the checks on the send's identity (run, user, brand) before the Gmail reply", async () => {
+    serve(
+      latestThread(200, { thread: THREAD }),
+      instantlyStatus(statusRow({ lastDeliveredAt: null, queued: false })),
+      gmailReply(200, { gmailMessageId: "g1", threadId: "T1", from: THREAD.fromAddress, to: PERSON }),
+    );
+    const res = await post(followUp());
+    expect(res.status).toBe(200);
+    const urls = calledUrls();
+    const checkAt = urls.indexOf("http://instantly/orgs/send-checks");
+    expect(checkAt).toBeGreaterThan(-1);
+    expect(checkAt).toBeLessThan(urls.indexOf("http://google/orgs/google/thread-replies"));
+    const call = mockFetch.mock.calls[checkAt];
+    expect(JSON.parse(call[1].body)).toEqual({ to: PERSON });
+    expect(call[1].headers).toMatchObject({ "x-org-id": "org_1", "x-user-id": "user_1", "x-run-id": "run_1", "x-brand-id": "brand_1" });
+  });
+
+  const check = (body: unknown) =>
+    request(app)
+      .post("/orgs/send-checks")
+      .set("X-API-Key", "test-api-key")
+      .set("x-org-id", "org_1")
+      .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
+      .set("x-brand-id", "brand_1")
+      .send(body);
+
+  it("POST /orgs/send-checks: the Gmail route, checked, nothing written or sent", async () => {
+    serve(latestThread(200, { thread: THREAD }), instantlyStatus(statusRow({ lastDeliveredAt: null, queued: false })));
+    const res = await check({ type: "broadcast", to: PERSON, followUp: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ sendable: true, transport: "gmail", to: PERSON, verdict: "valid", reused: true, verifiedAt: "2026-11-01T00:00:00.000Z" });
+    expect(calledUrls()).not.toContain("http://google/orgs/google/thread-replies");
+    expect(calledUrls()).not.toContain("http://instantly/orgs/send");
+  });
+
+  it("POST /orgs/send-checks: the instantly route answers the door's refusal verbatim", async () => {
+    serve(latestThread(404, { error: "x", reason: "no_messages" }), checkRefusal(409, notVerified));
+    const res = await check({ type: "broadcast", to: PERSON, followUp: true });
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual(notVerified);
+  });
+
+  it("POST /orgs/send-checks: a not-follow-up check goes straight to the door, Google never read", async () => {
+    serve();
+    const res = await check({ type: "broadcast", to: PERSON });
+    expect(res.status).toBe(200);
+    expect(res.body.transport).toBe("instantly");
+    expect(calledUrls()).toEqual(["http://instantly/orgs/send-checks"]);
+  });
+
+  it("POST /orgs/send-checks: a standing refusal before Gmail is the send's 409", async () => {
+    serve(
+      latestThread(200, { thread: THREAD }),
+      instantlyStatus(statusRow({ lastDeliveredAt: null, queued: false, sendRefusal: { code: "lead_opted_out", until: null } })),
+    );
+    const res = await check({ type: "broadcast", to: PERSON, followUp: true });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("lead_opted_out");
+  });
+
+  it("POST /orgs/send-checks: a 502 of the door (no verdict) is round-tripped, never read as sendable", async () => {
+    serve(checkRefusal(502, { error: "Email verification unavailable", code: "email_verification_unavailable", details: "x" }));
+    const res = await check({ type: "broadcast", to: PERSON });
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe("email_verification_unavailable");
   });
 });

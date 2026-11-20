@@ -284,6 +284,32 @@ export async function getStatus(body: {
   return request<{ results: StatusResult[] }>("/orgs/status", { method: "POST", body, ctx, ...options });
 }
 
+/** instantly-service `POST /orgs/send-checks`: the person passes the send's checks (any refusal throws InstantlyHttpError). */
+export interface SendCheckPass {
+  sendable: true;
+  to: string;
+  verdict: string | null;
+  reused: boolean | null;
+  verifiedAt: string | null;
+}
+
+/**
+ * The send door's checks on the person (opt-out, not a prospect, stated not to
+ * the brand, our verifier's verdict), owned by instantly-service and asked for
+ * EVERY email route, Gmail included (SEND-CHECK-BEFORE-WRITE-1120): one rule,
+ * one home. A refusal comes back as InstantlyHttpError with the send's own
+ * status and body. Never retried after a timeout (a verification may be billing).
+ */
+export async function sendChecks(to: string, ctx: OrgContext): Promise<SendCheckPass> {
+  return request<SendCheckPass>("/orgs/send-checks", {
+    method: "POST",
+    body: { to },
+    ctx,
+    timeoutMs: SEND_TIMEOUT_MS,
+    retryOnTimeout: false,
+  });
+}
+
 /** The delivery-status route's read: long enough for a cold answer, no retry after a timeout. */
 export const STATUS_ROUTE_READ = { timeoutMs: STATUS_READ_TIMEOUT_MS, retryOnTimeout: false } as const;
 

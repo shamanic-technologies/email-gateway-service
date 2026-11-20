@@ -41,6 +41,10 @@ Every SEND (postmark `/orgs/send` + `/internal/platform-send`, instantly `/orgs/
 
 Why: the postmark client re-sent after its own 10 s timeout while postmark-service had already submitted to Postmark ~2 s in: a new client got two welcome emails while the caller was told 502, and 598 newsletter subscribers got one issue twice in 14 days (2026-11-11). Do NOT add a retry-on-timeout to any send, and do NOT fold the 504 into a 502 (a 502 says "not sent"). Guard `tests/send-no-repeat.test.ts`.
 
+## ONE person rule for every email route; `POST /orgs/send-checks` asks it before a script writes (SEND-CHECK-BEFORE-WRITE-1120)
+
+instantly-service owns the send door's checks on the person (opt-out, not a prospect, stated not to the brand, our verifier's verdict: `invalid`/`risky` never mailed). Its `POST /orgs/send-checks` is called before EVERY Gmail follow-up (`instantlyClient.sendChecks` in `routes/send.ts`): the Gmail route used to mail addresses with no verdict at all (9 of 12 Gmail replies, 2026-11-06..19). Never re-implement a check here: a new route = one more call to it. `POST /orgs/send-checks` here picks the send's route (`resolveFollowUpRoute`) then asks the same checks, every instantly-service non-2xx round-tripped verbatim; scripts call it before their writer.
+
 ## A `followUp: true` broadcast lands in the person's LATEST thread, Instantly or Gmail (RIGHT-MOMENT-OR-LATER-1014)
 
 Owner 2026-10-14: when it is the right moment to write, the follow-up is a reply IN the thread the person wrote in last, FROM the address they wrote to / were answered from. `src/lib/follow-up-route.ts` decides, only for `followUp: true` with an `x-brand-id` (every other send is byte-identical to before):
