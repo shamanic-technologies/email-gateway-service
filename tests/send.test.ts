@@ -1028,13 +1028,43 @@ describe("POST /orgs/send", () => {
         expect(body.bcc).toBe("a@x.com,b@y.com");
       });
 
-      it("refuses cc on a broadcast send rather than silently dropping it", async () => {
+      it("forwards the script's cc on a broadcast send to instantly-service, with bcc (OUTREACH-3WAYS-1121)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
         const res = await authedPost("/orgs/send").send(
-          buildBroadcastBody({ cc: "rep@client.com" })
+          buildBroadcastBody({ cc: "signer@brand.com, rep@brand.com", bcc: "team@brand.com" })
+        );
+
+        expect(res.status).toBe(200);
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.cc).toEqual(["signer@brand.com", "rep@brand.com"]);
+        expect(body.bcc).toEqual(["team@brand.com"]);
+      });
+
+      it("sends no cc key on a broadcast send that names nobody (no default copy)", async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
+        await authedPost("/orgs/send").send(buildBroadcastBody());
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect("cc" in body).toBe(false);
+      });
+
+      it("refuses a broadcast cc with a malformed address, nothing sent", async () => {
+        const res = await authedPost("/orgs/send").send(
+          buildBroadcastBody({ cc: "signer@brand.com,oops" })
         );
 
         expect(res.status).toBe(400);
-        expect(res.body.error).toBe("Invalid request");
         expect(mockFetch).not.toHaveBeenCalled();
       });
     });

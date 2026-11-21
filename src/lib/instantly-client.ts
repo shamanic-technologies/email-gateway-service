@@ -148,6 +148,8 @@ export async function atomicSend(body: {
   company?: string;
   variables?: Record<string, string>;
   bcc?: string[];
+  // Visible-copy recipients the calling script named (OUTREACH-3WAYS-1121).
+  cc?: string[];
   subject: string;
   // Recipient's IANA timezone (from the lead). instantly-service uses it to
   // schedule the sequence in the prospect's local business hours; absent =
