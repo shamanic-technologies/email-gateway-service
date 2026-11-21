@@ -170,6 +170,9 @@ router.post("/send", async (req: Request, res: Response) => {
       const bccList = body.bcc
         ? body.bcc.split(",").map((e) => e.trim()).filter((e) => e.length > 0)
         : [];
+      const ccList = body.cc
+        ? body.cc.split(",").map((e) => e.trim()).filter((e) => e.length > 0)
+        : [];
 
       const result = await instantlyClient.atomicSend({
         leadId: body.leadId,
@@ -179,6 +182,9 @@ router.post("/send", async (req: Request, res: Response) => {
         company: body.recipientCompany,
         variables: metadata,
         bcc: bccList.length > 0 ? bccList : undefined,
+        // Visible copy named by the script (OUTREACH-3WAYS-1121): verbatim,
+        // never a default of ours. Absent = no key on the wire.
+        ...(ccList.length > 0 ? { cc: ccList } : {}),
         subject: body.subject,
         // Explicit null means "the lead has no known timezone" — same as absent.
         // Omit the field so instantly-service applies its own default timezone.

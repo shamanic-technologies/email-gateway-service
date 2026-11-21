@@ -57,38 +57,11 @@ Owner 2026-10-14: when it is the right moment to write, the follow-up is a reply
 
 Owner 2026-11-07: signing approaches compete as scripts. `BroadcastSendSchema.signature` = `"default"` | `{ text }`, shape-checked only, forwarded byte-equal to instantly-service `POST /orgs/send` (which owns the meaning, the precedence brand signature > script > ours, and cleans the text: never refused). Absent = no key on the wire, no default injected. The Gmail-thread follow-up path ignores it (a continued thread keeps its signature). This hop rebuilds the instantly call field by field: a new instantly send field that is not added here never reaches it. Guard: SIGNATURE-TACTIC tests in `tests/send.test.ts`.
 
-## A visible copy is a different instrument from a blind one — `cc` is transactional-only and every address is validated
+## A visible copy (`cc`) is the SCRIPT's choice, on both channels — every address validated, never a default of ours
 
-`cc` (transactional sends) is a comma-separated email list forwarded verbatim to
-postmark-service's own `cc`, which sets Postmark's `Cc` header: the address lands
-on a header every recipient of the message can see, and a reply-all reaches it.
-That reader-facing difference is the whole point and it is why `bcc` was not
-enough for the case that drove it — forwarding a prospect's reply thread to the
-agency inbox while copying the client's own sales rep. A rep on `Bcc` receives a
-mail addressed to somebody else (reads as mis-sent, gets ignored) and their
-reply-all reaches nobody on our side, so the thread goes silently private.
+`cc` is a comma-separated email list. Transactional: forwarded verbatim to postmark-service's `cc` (Postmark `Cc` header). Broadcast (OUTREACH-3WAYS-1121, owner 2026-11-21: cold emails copy the person they are signed as): split into an array and forwarded to instantly-service `POST /orgs/send` `cc`, beside `bcc`; instantly copies them on every step of that sequence. A visible copy differs from `bcc` on purpose: every recipient sees it and a reply-all reaches it (a rep on Bcc reads the mail as mis-sent and their reply-all reaches nobody).
 
-Two things differ from `bcc` deliberately, and neither is an oversight:
-
-**Every address is validated.** `bcc` is a bare `z.string()` with no email check
-(unchanged — a caller relying on that keeps today's behaviour byte for byte).
-`cc` refines each comma-separated entry through `z.string().email()`, so one
-malformed entry refuses the WHOLE send with a 400 naming the field rather than
-dropping the address quietly. An empty string is refused for the same reason:
-a caller that names nobody omits the field, and then no `cc` key reaches
-postmark-service at all.
-
-**Broadcast refuses it rather than dropping it.** Instantly drives a per-lead
-cold-email sequence and has no visible-copy recipient, so `cc` on a broadcast
-body is a 400, not a silent strip. A discriminated union strips unknown keys by
-default, which would have made a broadcast caller believe a visible copy was
-going out; the field is therefore declared on `BroadcastSendSchema` with a
-refinement that always fails. (It is typed `z.string()` rather than `z.never()`
-only because `@asteasolutions/zod-to-openapi` throws `UnknownZodTypeError` on
-`never` — the refusal is what matters, the type is the generator's constraint.)
-This is the mirror of the broadcast-only strip below: there postmark has no such
-dimension so stripping is correct; here the dimension is transactional-only so
-naming it on the other channel is an error.
+**Every address is validated** (`bcc` stays a bare string, unchanged): one malformed entry, or an empty string, refuses the WHOLE send with a 400, never dropped quietly. Absent = no `cc` key on the wire, nobody copied. This service NEVER adds a copy of its own and has no per-brand rule ("a sender sends only the To/Cc/Bcc its script names", owner 2026-11-16). The Gmail-thread follow-up path ignores `cc`, like `bcc` and `signature`. Guard: cc tests in `tests/send.test.ts`.
 
 ## Person-to-person delivery — `stream: "transactional"` drops the footer AND switches the Postmark stream, together
 
@@ -225,7 +198,7 @@ The sign-up code mail (client-service, before any org or user exists) has nobody
 
 ## `outcomeSubject` / `consumedOutcomeKeys` — the caller names the person, the gateway only relays (COST-ACCOUNTING-1023)
 
-postmark-service declares `message_sent` on a send's run only when the sender names the ONE person the email reaches. Transactional `/orgs/send` takes `outcomeSubject { subjectService, subjectId }` and `consumedOutcomeKeys` (1-20) and forwards both verbatim; absent = no key on the wire. `consumedOutcomeKeys` without `outcomeSubject` or `leadId` is a 400 here (postmark refuses it too, and its 4xx would surface as our 502). Broadcast refuses both (400), same pattern as `cc`. Never derive the subject from a tag/template/slug: who the person is belongs to the caller. postmark-service owns the contract (`SendEmailRequest`).
+postmark-service declares `message_sent` on a send's run only when the sender names the ONE person the email reaches. Transactional `/orgs/send` takes `outcomeSubject { subjectService, subjectId }` and `consumedOutcomeKeys` (1-20) and forwards both verbatim; absent = no key on the wire. `consumedOutcomeKeys` without `outcomeSubject` or `leadId` is a 400 here (postmark refuses it too, and its 4xx would surface as our 502). Broadcast refuses both (400), same pattern as `stream`. Never derive the subject from a tag/template/slug: who the person is belongs to the caller. postmark-service owns the contract (`SendEmailRequest`).
 
 ## The prod container is `distribute-email-gateway-service-1`, not `distribute-email-gateway-1`
 
