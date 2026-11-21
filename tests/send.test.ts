@@ -376,6 +376,51 @@ describe("POST /orgs/send", () => {
       expect(body).not.toHaveProperty("timezone");
     });
 
+    describe("lead-sourced personalization fields (COLD-NO-COMPANY-1121)", () => {
+      const ok = () =>
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () =>
+            Promise.resolve({ success: true, campaignId: "c1", leadId: "l1", added: 1 }),
+        });
+
+      it("accepts explicit null company/first/last name and omits them downstream", async () => {
+        ok();
+        const res = await authedPost("/orgs/send").send(
+          buildBroadcastBody({ recipientCompany: null, recipientFirstName: null, recipientLastName: null })
+        );
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body).not.toHaveProperty("company");
+        expect(body).not.toHaveProperty("firstName");
+        expect(body).not.toHaveProperty("lastName");
+      });
+
+      it("forwards real string values unchanged", async () => {
+        ok();
+        const res = await authedPost("/orgs/send").send(
+          buildBroadcastBody({ recipientCompany: "Acme", recipientFirstName: "Ada", recipientLastName: "Lovelace" })
+        );
+        expect(res.status).toBe(200);
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        expect(body.company).toBe("Acme");
+        expect(body.firstName).toBe("Ada");
+        expect(body.lastName).toBe("Lovelace");
+      });
+
+      it.each(["recipientCompany", "recipientFirstName", "recipientLastName"])(
+        "rejects a malformed %s (number, object)",
+        async (field) => {
+          for (const bad of [42, { name: "Acme" }]) {
+            const res = await authedPost("/orgs/send").send(buildBroadcastBody({ [field]: bad }));
+            expect(res.status).toBe(400);
+            expect(res.body.details.fieldErrors[field]).toBeDefined();
+          }
+          expect(mockFetch).not.toHaveBeenCalled();
+        }
+      );
+    });
+
     it("forwards followUp: true to instantly-service (NEVER-NO-FOLLOWUP-1014)", async () => {
       // No Gmail thread with the person: the follow-up stays on Instantly.
       mockFetch.mockResolvedValueOnce({

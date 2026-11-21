@@ -278,15 +278,18 @@
               },
               "recipientFirstName": {
                 "type": "string",
-                "description": "Recipient first name"
+                "nullable": true,
+                "description": "Recipient first name, sourced from the lead. Absent OR explicitly null = \"we don't know this person's first name\": the field is omitted downstream, never replaced by a default of ours."
               },
               "recipientLastName": {
                 "type": "string",
-                "description": "Recipient last name"
+                "nullable": true,
+                "description": "Recipient last name, sourced from the lead. Absent OR explicitly null = unknown: omitted downstream, never replaced by a default of ours."
               },
               "recipientCompany": {
                 "type": "string",
-                "description": "Recipient company name"
+                "nullable": true,
+                "description": "Recipient company name, sourced from the lead. Absent OR explicitly null = \"no company name is known for this person\": the send goes out with the field omitted downstream, never replaced by a default of ours."
               },
               "replyTo": {
                 "type": "string",
@@ -410,15 +413,18 @@
               },
               "recipientFirstName": {
                 "type": "string",
-                "description": "Recipient first name"
+                "nullable": true,
+                "description": "Recipient first name, sourced from the lead. Absent OR explicitly null = \"we don't know this person's first name\": the field is omitted downstream, never replaced by a default of ours."
               },
               "recipientLastName": {
                 "type": "string",
-                "description": "Recipient last name"
+                "nullable": true,
+                "description": "Recipient last name, sourced from the lead. Absent OR explicitly null = unknown: omitted downstream, never replaced by a default of ours."
               },
               "recipientCompany": {
                 "type": "string",
-                "description": "Recipient company name"
+                "nullable": true,
+                "description": "Recipient company name, sourced from the lead. Absent OR explicitly null = \"no company name is known for this person\": the send goes out with the field omitted downstream, never replaced by a default of ours."
               },
               "replyTo": {
                 "type": "string",

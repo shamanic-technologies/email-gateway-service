@@ -177,9 +177,11 @@ router.post("/send", async (req: Request, res: Response) => {
       const result = await instantlyClient.atomicSend({
         leadId: body.leadId,
         to: body.to,
-        firstName: body.recipientFirstName,
-        lastName: body.recipientLastName,
-        company: body.recipientCompany,
+        // Explicit null = the lead's name/company is unknown, same as absent
+        // (COLD-NO-COMPANY-1121). Omitted downstream, never a default of ours.
+        firstName: body.recipientFirstName ?? undefined,
+        lastName: body.recipientLastName ?? undefined,
+        company: body.recipientCompany ?? undefined,
         variables: metadata,
         bcc: bccList.length > 0 ? bccList : undefined,
         // Visible copy named by the script (OUTREACH-3WAYS-1121): verbatim,

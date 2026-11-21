@@ -134,7 +134,7 @@ A request field whose absence MEANS "we don't know this value" (a lead-sourced a
 
 Cost 2026-08-18 (`timezone`, #182→#183/v0.25.2): `BroadcastSendSchema.timezone` was `.optional()` while lead-service sent explicit `null` for leads with no location — 10 of 13 job failures in a 30-minute prod window, all on the send step, i.e. after the lead had already been found, enriched and had an email generated. 55,468 fleet leads have no city and no country, so no timezone exists for them at any price and every one of them was permanently unsendable.
 
-**Sibling fields not yet widened:** `recipientFirstName` / `recipientLastName` / `recipientCompany` are also lead-sourced and still `.optional()`. They have not been observed failing in prod (the 13 failures were all timezone), so they were left alone — but a caller that starts forwarding their nulls will hit the identical 400.
+**Siblings widened 2026-11-21 (COLD-NO-COMPANY-1121):** `recipientFirstName` / `recipientLastName` / `recipientCompany` are `.nullish()` too, normalized `?? undefined` before instantly-service. The predicted 400 happened: cold-email scripts forward an explicit `null` company for a lead whose employer has no known name, and `/orgs/send` refused 4 already-WRITTEN emails in 24 h (writer + LLM spend lost). Never a default name/company string here. These three are only read on the broadcast leg (the transactional relay does not forward them). Guard: COLD-NO-COMPANY tests in `tests/send.test.ts`.
 
 ## Reading ONE logical send operation back — `runIds` cannot do it, and the failure is silent
 
