@@ -229,9 +229,12 @@ const BroadcastSendSchema = SendBaseSchema.extend({
   bcc: z.string().optional().describe("Blind-carbon-copy recipients as a comma-separated email list. Split into an array and forwarded to instantly-service, which sets the Instantly campaign's bcc_list so the whole editorial team shares one thread. Absent/empty = no BCC."),
   cc: z
     .string()
-    .refine(() => false, "cc is transactional-only: a broadcast sequence has no visible-copy recipient")
+    .refine(
+      (v) => v.split(",").every((e) => z.string().email().safeParse(e.trim()).success),
+      "cc must be a comma-separated list of valid email addresses"
+    )
     .optional()
-    .describe("Not accepted on a broadcast send. Instantly drives a per-lead cold-email sequence and exposes no visible-copy recipient, so naming one is refused rather than silently dropped."),
+    .describe("Visible-copy (Cc) recipients chosen by the calling script, as a comma-separated email list. Split into an array and forwarded verbatim to instantly-service, which copies them on every step of this sequence. Every address is validated: one malformed entry refuses the whole send with a 400. Absent = no `cc` key forwarded, nobody copied; this service never adds a copy of its own. Ignored on a follow-up answered in a Gmail thread (like `bcc`)."),
   stream: z
     .string()
     .refine(() => false, "stream is transactional-only: a broadcast send goes through Instantly, which has no Postmark stream")

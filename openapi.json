@@ -465,7 +465,7 @@
               },
               "cc": {
                 "type": "string",
-                "description": "Not accepted on a broadcast send. Instantly drives a per-lead cold-email sequence and exposes no visible-copy recipient, so naming one is refused rather than silently dropped."
+                "description": "Visible-copy (Cc) recipients chosen by the calling script, as a comma-separated email list. Split into an array and forwarded verbatim to instantly-service, which copies them on every step of this sequence. Every address is validated: one malformed entry refuses the whole send with a 400. Absent = no `cc` key forwarded, nobody copied; this service never adds a copy of its own. Ignored on a follow-up answered in a Gmail thread (like `bcc`)."
               },
               "stream": {
                 "type": "string",
