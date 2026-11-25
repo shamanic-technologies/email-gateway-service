@@ -137,7 +137,7 @@ describe("POST /orgs/send", () => {
       expect(res.body.code).toBe("send_outcome_unknown");
     });
 
-    it("uses the scoped 60s timeout for the send so a >10s instantly multi-call latency does not false-time-out (not the default 10s)", async () => {
+    it("waits the verifying budget (300s) for the send, which verifies the address first (SEND-CHECK-502-1125), never the default 10s", async () => {
       const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
       mockFetch.mockResolvedValueOnce({
         ok: true,
@@ -147,7 +147,7 @@ describe("POST /orgs/send", () => {
 
       await authedPost("/orgs/send").send(buildBroadcastBody());
 
-      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(300_000);
       timeoutSpy.mockRestore();
     });
 

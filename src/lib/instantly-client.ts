@@ -14,10 +14,10 @@ import type {
 const { url, apiKey } = config.instantly;
 
 const TIMEOUT_MS = 10_000;
-// The send path makes ~5 sequential Instantly.ai API calls, so it legitimately
-// exceeds the default 10s. Scope a longer timeout to send only (not the GET
-// stats/status calls, where 10s should stay tight enough to surface failures).
-const SEND_TIMEOUT_MS = 60_000;
+// The send path makes ~5 sequential Instantly.ai API calls (after the address
+// check), so it legitimately exceeds the default 10s: it waits
+// VERIFYING_TIMEOUT_MS below (not the GET stats/status calls, where 10s should
+// stay tight enough to surface failures).
 // POST /orgs/status (the gateway's delivery-status route): instantly-service's
 // first, uncached answer for a big brand takes ~16 s on the loaded box
 // (10,401 addresses, 2026-10-22), a cached one ~0.5 s. 10 s + one retry 502'd
@@ -25,6 +25,15 @@ const SEND_TIMEOUT_MS = 60_000;
 // the first. Wait as long as a send does, and never re-ask after a timeout:
 // the first computation is still running and fills instantly-service's cache.
 export const STATUS_READ_TIMEOUT_MS = 60_000;
+// POST /orgs/send-checks and POST /orgs/send VERIFY the address when no verdict
+// under 30 days is held (apollo-service: a step-1 verifier, then BounceBan, whose
+// task it polls up to 90 s), and instantly-service asks again with backoff while
+// the verifier fails transiently (SEND-CHECK-502-1125). A cold verification took
+// ~100 s in prod: 14 follow-up runs died on our 60 s wait in 3 days while 8 of
+// those verdicts landed a few seconds later. Wait for the check's whole budget
+// (instantly-service starts no new attempt past 120 s); the script's call to us
+// waits 600 s. Never re-asked after a timeout (a verification may be billing).
+export const VERIFYING_TIMEOUT_MS = 300_000;
 const RETRY_DELAY_MS = 500;
 
 /**
@@ -176,7 +185,8 @@ export async function atomicSend(body: {
     method: "POST",
     body,
     ctx,
-    timeoutMs: SEND_TIMEOUT_MS,
+    // The send verifies the address first when no fresh verdict is held.
+    timeoutMs: VERIFYING_TIMEOUT_MS,
     send: true,
     idempotencyKey,
   });
@@ -307,7 +317,7 @@ export async function sendChecks(to: string, ctx: OrgContext): Promise<SendCheck
     method: "POST",
     body: { to },
     ctx,
-    timeoutMs: SEND_TIMEOUT_MS,
+    timeoutMs: VERIFYING_TIMEOUT_MS,
     retryOnTimeout: false,
   });
 }
