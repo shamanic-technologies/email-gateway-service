@@ -299,6 +299,26 @@ describe("followUp: the person's latest thread is in a connected Google mailbox"
     const res = await post(followUp());
     expect(res.status).toBe(502);
     expect(calledUrls()).not.toContain("http://instantly/orgs/send");
+    // An HTTP answer is never re-asked.
+    expect(calledUrls().filter((u) => u.startsWith("http://google/orgs/google/threads/latest"))).toHaveLength(1);
+  });
+
+  it("asks the latest-thread read again after a timeout, then routes as usual (SEND-CHECK-502-1125)", async () => {
+    const { setReadRetrySleepForTests } = await import("../src/lib/google-client");
+    setReadRetrySleepForTests(async () => {});
+    let asked = 0;
+    const flakyThread: Route = (url) => {
+      if (!url.startsWith("http://google/orgs/google/threads/latest")) return undefined;
+      asked++;
+      if (asked === 1) throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" });
+      return json(404, { reason: "no_messages" });
+    };
+    serve(flakyThread, instantlySend);
+    const res = await post(followUp());
+    setReadRetrySleepForTests(null);
+    expect(res.status).toBe(200);
+    expect(asked).toBe(2);
+    expect(calledUrls()).toContain("http://instantly/orgs/send");
   });
 });
 
