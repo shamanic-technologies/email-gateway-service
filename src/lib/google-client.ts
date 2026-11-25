@@ -64,6 +64,32 @@ async function call(path: string, init: { method: string; body?: unknown; ctx: O
 }
 
 /**
+ * A READ (idempotent) asked again, with backoff, when it got no HTTP answer (our
+ * 10 s timeout, a reset socket): SEND-CHECK-502-1125, a follow-up send died on
+ * one 10 s timeout of this read while google-service answers in milliseconds
+ * outside load stalls. An HTTP answer (any status) is never re-asked.
+ */
+export const READ_RETRY_WAITS_MS: readonly number[] = [1_000, 3_000];
+let readSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** Tests only. */
+export function setReadRetrySleepForTests(fn: ((ms: number) => Promise<void>) | null): void {
+  readSleep = fn ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+}
+
+async function readWithRetry<T>(read: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await read();
+    } catch (error) {
+      const wait = READ_RETRY_WAITS_MS[attempt];
+      if (error instanceof GoogleHttpError || wait === undefined) throw error;
+      console.warn(`[email-gateway] google-service read got no answer, asking again in ${wait} ms: ${error instanceof Error ? error.message : String(error)}`);
+      await readSleep(wait);
+    }
+  }
+}
+
+/**
  * The person's latest Gmail thread in the org's mirror. Its two documented
  * 404s (no mailbox connected, no answerable thread) are an answer, `found:
  * false`; anything else is an error (the caller cannot know where the person
@@ -71,11 +97,13 @@ async function call(path: string, init: { method: string; body?: unknown; ctx: O
  */
 export async function getLatestGmailThread(email: string, ctx: OrgContext): Promise<LatestGmailThreadResult> {
   try {
-    const body = (await call(`/orgs/google/threads/latest?email=${encodeURIComponent(email)}`, {
-      method: "GET",
-      ctx,
-      timeoutMs: TIMEOUT_MS,
-    })) as { thread: LatestGmailThread };
+    const body = (await readWithRetry(() =>
+      call(`/orgs/google/threads/latest?email=${encodeURIComponent(email)}`, {
+        method: "GET",
+        ctx,
+        timeoutMs: TIMEOUT_MS,
+      }),
+    )) as { thread: LatestGmailThread };
     return { found: true, thread: body.thread };
   } catch (error) {
     if (error instanceof GoogleHttpError && error.status === 404) {
