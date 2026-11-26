@@ -57,6 +57,10 @@ Owner 2026-10-14: when it is the right moment to write, the follow-up is a reply
 
 Owner 2026-11-07: signing approaches compete as scripts. `BroadcastSendSchema.signature` = `"default"` | `{ text }`, shape-checked only, forwarded byte-equal to instantly-service `POST /orgs/send` (which owns the meaning, the precedence brand signature > script > ours, and cleans the text: never refused). Absent = no key on the wire, no default injected. The Gmail-thread follow-up path ignores it (a continued thread keeps its signature). This hop rebuilds the instantly call field by field: a new instantly send field that is not added here never reaches it. Guard: SIGNATURE-TACTIC tests in `tests/send.test.ts`.
 
+## `maxVerdictAgeDays` is the SCRIPT's verdict window, relayed verbatim (VERDICT-WINDOW-BY-CALLER-1126)
+
+Owner 2026-11-23: a rule the Script cannot see or set is hidden in a service. `POST /orgs/send` (broadcast) and `POST /orgs/send-checks` take an optional integer 0..3650 = the oldest held address verdict (days) the request accepts; `0` = verify now. Forwarded byte-equal to instantly-service on every route reaching its door: the Instantly send (`/orgs/send`) and the check asked before a Gmail-thread follow-up (`/orgs/send-checks`). instantly-service owns the meaning (also the `email_not_verified` `until`). Absent = no key on the wire, never a default here; a transactional send refuses it (400: Postmark verifies nothing). Guard: VERDICT-WINDOW tests in `tests/follow-up-gmail.test.ts`.
+
 ## A visible copy (`cc`) is the SCRIPT's choice, on both channels — every address validated, never a default of ours
 
 `cc` is a comma-separated email list. Transactional: forwarded verbatim to postmark-service's `cc` (Postmark `Cc` header). Broadcast (OUTREACH-3WAYS-1121, owner 2026-11-21: cold emails copy the person they are signed as): split into an array and forwarded to instantly-service `POST /orgs/send` `cc`, beside `bcc`; instantly copies them on every step of that sequence. A visible copy differs from `bcc` on purpose: every recipient sees it and a reply-all reaches it (a rep on Bcc reads the mail as mis-sent and their reply-all reaches nobody).

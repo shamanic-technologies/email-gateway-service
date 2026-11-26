@@ -176,6 +176,9 @@ export async function atomicSend(body: {
   // Who signs the email, chosen by the script (SIGNATURE-TACTIC-1107).
   // instantly-service owns the meaning and cleans the text. Absent = no key.
   signature?: "default" | { text: string };
+  // Oldest held address verdict (days) the calling Script accepts
+  // (VERDICT-WINDOW-BY-CALLER-1126). Absent = no key, instantly's default.
+  maxVerdictAgeDays?: number;
 }, ctx?: OrgContext, idempotencyKey?: string) {
   // The send is non-idempotent (creates a campaign) and makes ~5 sequential
   // Instantly.ai calls. Longer send timeout, retried only when the request
@@ -312,10 +315,16 @@ export interface SendCheckPass {
  * one home. A refusal comes back as InstantlyHttpError with the send's own
  * status and body. Never retried after a timeout (a verification may be billing).
  */
-export async function sendChecks(to: string, ctx: OrgContext): Promise<SendCheckPass> {
+export async function sendChecks(
+  to: string,
+  ctx: OrgContext,
+  options: { maxVerdictAgeDays?: number } = {},
+): Promise<SendCheckPass> {
   return request<SendCheckPass>("/orgs/send-checks", {
     method: "POST",
-    body: { to },
+    // VERDICT-WINDOW-BY-CALLER-1126: the Script's verdict window, verbatim;
+    // absent = `{ to }` byte-identical to before.
+    body: { to, ...(options.maxVerdictAgeDays !== undefined ? { maxVerdictAgeDays: options.maxVerdictAgeDays } : {}) },
     ctx,
     timeoutMs: VERIFYING_TIMEOUT_MS,
     retryOnTimeout: false,

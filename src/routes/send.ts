@@ -135,7 +135,7 @@ router.post("/send", async (req: Request, res: Response) => {
         // prospect, stated not to the brand, our verifier's verdict, verified
         // now when none < 30 days is held) are asked before Gmail mails them
         // too. A refusal is an InstantlyHttpError, round-tripped below.
-        await instantlyClient.sendChecks(body.to, ctx);
+        await instantlyClient.sendChecks(body.to, ctx, { maxVerdictAgeDays: body.maxVerdictAgeDays });
         const sent = await googleClient.replyInGmailThread(
           {
             to: body.to,
@@ -197,6 +197,9 @@ router.post("/send", async (req: Request, res: Response) => {
         // Who signs, chosen by the script (SIGNATURE-TACTIC-1107): verbatim,
         // instantly-service owns the meaning. Absent = no key on the wire.
         ...(body.signature !== undefined ? { signature: body.signature } : {}),
+        // The verdict age the Script accepts (VERDICT-WINDOW-BY-CALLER-1126):
+        // verbatim, never a default of ours. Absent = no key on the wire.
+        ...(body.maxVerdictAgeDays !== undefined ? { maxVerdictAgeDays: body.maxVerdictAgeDays } : {}),
       }, ctx, body.idempotencyKey);
 
       console.log(`[email-gateway] instantly response: campaignId=${result.campaignId} leadId=${result.leadId} added=${result.added}`);
