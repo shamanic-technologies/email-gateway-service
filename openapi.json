@@ -98,7 +98,7 @@
           "reused": {
             "type": "boolean",
             "nullable": true,
-            "description": "true = a verdict under 30 days was reused (free); false = verified now, billed on the caller's run"
+            "description": "true = a held verdict inside the accepted window (`maxVerdictAgeDays`, else 30 days) was reused (free); false = verified now, billed on the caller's run"
           },
           "verifiedAt": {
             "type": "string",
@@ -128,6 +128,12 @@
             "type": "string",
             "minLength": 3,
             "description": "The address `POST /orgs/send` would be asked to mail"
+          },
+          "maxVerdictAgeDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 3650,
+            "description": "The OLDEST held address verdict (in days) this request accepts for reuse, stated by the calling Script (VERDICT-WINDOW-BY-CALLER-1126). `0` = verify the address now; absent = instantly-service's default window (30 days), exactly as before. It also sets when an `email_not_verified` refusal may be re-asked (`until` = verifiedAt + that many days). Integer 0..3650, forwarded verbatim to instantly-service (never defaulted here) on every route that reaches its send door: the Instantly send, and the check asked before a Gmail-thread follow-up. instantly-service owns this contract: refer to its openapi.json."
           },
           "followUp": {
             "type": "boolean",
@@ -383,6 +389,9 @@
                 "minItems": 1,
                 "maxItems": 20,
                 "description": "Catalogue outcome keys (e.g. `email_checked`, `message_written`) this send CONSUMED for the same person as `outcomeSubject`. Forwarded verbatim to postmark-service, which declares them as the send run's inputs. Requires `outcomeSubject` or `leadId` (400 otherwise, nothing sent). 1 to 20 keys. Omitted = no key forwarded. Transactional only. The outcome catalogue is owned by runs-service/features-service: keys are not validated here, postmark-service refuses an unknown one."
+              },
+              "maxVerdictAgeDays": {
+                "description": "Not accepted on a transactional send (Postmark does not verify addresses). Refused rather than silently dropped."
               }
             },
             "required": [
@@ -514,6 +523,12 @@
                   }
                 ],
                 "description": "WHO SIGNS this cold email, chosen by the script that wrote it (SIGNATURE-TACTIC-1107: competing scripts sign differently and their results are compared). `\"default\"` = our signature; `{ text }` = the script's own lines. Forwarded verbatim to instantly-service, which owns the meaning: the client's own brand signature wins over it, and a send that continues an earlier thread keeps THAT thread's signature. Absent = no key forwarded, exactly as before. A follow-up answered in a Gmail thread (`transport: gmail`) keeps that thread's signature: the field is not used there. instantly-service owns this contract: refer to its openapi.json."
+              },
+              "maxVerdictAgeDays": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 3650,
+                "description": "The OLDEST held address verdict (in days) this request accepts for reuse, stated by the calling Script (VERDICT-WINDOW-BY-CALLER-1126). `0` = verify the address now; absent = instantly-service's default window (30 days), exactly as before. It also sets when an `email_not_verified` refusal may be re-asked (`until` = verifiedAt + that many days). Integer 0..3650, forwarded verbatim to instantly-service (never defaulted here) on every route that reaches its send door: the Instantly send, and the check asked before a Gmail-thread follow-up. instantly-service owns this contract: refer to its openapi.json."
               },
               "followUp": {
                 "type": "boolean",

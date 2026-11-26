@@ -38,7 +38,7 @@ router.post("/send-checks", async (req: Request, res: Response) => {
       }
       transport = route.transport;
     }
-    const pass = await instantlyClient.sendChecks(body.to, ctx);
+    const pass = await instantlyClient.sendChecks(body.to, ctx, { maxVerdictAgeDays: body.maxVerdictAgeDays });
     traceEvent(ctx, "send-check.ok", `to=${body.to} transport=${transport} verdict=${pass.verdict ?? "none"} reused=${String(pass.reused)}`);
     res.json({ sendable: true, transport, to: body.to, verdict: pass.verdict, reused: pass.reused, verifiedAt: pass.verifiedAt });
   } catch (error: unknown) {
