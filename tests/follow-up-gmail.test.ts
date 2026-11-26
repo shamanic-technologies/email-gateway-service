@@ -417,3 +417,95 @@ describe("one rule for every email route (SEND-CHECK-BEFORE-WRITE-1120)", () => 
     expect(res.body.code).toBe("email_verification_unavailable");
   });
 });
+
+describe("maxVerdictAgeDays: the Script's verdict window, relayed verbatim (VERDICT-WINDOW-BY-CALLER-1126)", () => {
+  const bodyOf = (url: string) => {
+    const call = mockFetch.mock.calls.find((c) => c[0] === url);
+    expect(call).toBeDefined();
+    return JSON.parse(call![1].body) as Record<string, unknown>;
+  };
+  const check = (body: unknown) =>
+    request(app)
+      .post("/orgs/send-checks")
+      .set("X-API-Key", "test-api-key")
+      .set("x-org-id", "org_1")
+      .set("x-user-id", "user_1")
+      .set("x-run-id", "run_1")
+      .set("x-brand-id", "brand_1")
+      .send(body);
+  const cold = (over: Record<string, unknown> = {}) => {
+    const { followUp: _f, ...rest } = followUp(over);
+    return rest;
+  };
+
+  it("POST /orgs/send: forwarded verbatim to instantly-service's send", async () => {
+    serve(instantlySend);
+    const res = await post(cold({ maxVerdictAgeDays: 7 }));
+    expect(res.status).toBe(200);
+    expect(bodyOf("http://instantly/orgs/send").maxVerdictAgeDays).toBe(7);
+  });
+
+  it("POST /orgs/send: 0 (verify now) is forwarded, not dropped as falsy", async () => {
+    serve(instantlySend);
+    const res = await post(cold({ maxVerdictAgeDays: 0 }));
+    expect(res.status).toBe(200);
+    expect(bodyOf("http://instantly/orgs/send").maxVerdictAgeDays).toBe(0);
+  });
+
+  it("POST /orgs/send: absent = no key on the wire, nothing defaulted", async () => {
+    serve(instantlySend);
+    const res = await post(cold());
+    expect(res.status).toBe(200);
+    expect(Object.keys(bodyOf("http://instantly/orgs/send"))).not.toContain("maxVerdictAgeDays");
+  });
+
+  it("POST /orgs/send followUp via Gmail: the pre-send check carries it", async () => {
+    serve(
+      latestThread(200, { thread: THREAD }),
+      instantlyStatus(statusRow({ lastDeliveredAt: null, queued: false })),
+      gmailReply(200, { gmailMessageId: "g1", threadId: "T1", from: THREAD.fromAddress, to: PERSON }),
+    );
+    const res = await post(followUp({ maxVerdictAgeDays: 90 }));
+    expect(res.status).toBe(200);
+    expect(bodyOf("http://instantly/orgs/send-checks")).toEqual({ to: PERSON, maxVerdictAgeDays: 90 });
+  });
+
+  it("POST /orgs/send followUp via Instantly: the send carries it", async () => {
+    serve(
+      latestThread(404, { error: "x", reason: "no_messages" }),
+      instantlyStatus(statusRow({ lastDeliveredAt: "2026-10-14T15:00:00.000Z", queued: false })),
+      instantlySend,
+    );
+    const res = await post(followUp({ maxVerdictAgeDays: 14 }));
+    expect(res.status).toBe(200);
+    expect(bodyOf("http://instantly/orgs/send")).toMatchObject({ followUp: true, maxVerdictAgeDays: 14 });
+  });
+
+  it("POST /orgs/send-checks: forwarded verbatim", async () => {
+    serve();
+    const res = await check({ type: "broadcast", to: PERSON, maxVerdictAgeDays: 0 });
+    expect(res.status).toBe(200);
+    expect(bodyOf("http://instantly/orgs/send-checks")).toEqual({ to: PERSON, maxVerdictAgeDays: 0 });
+  });
+
+  it("POST /orgs/send-checks: absent = the instantly body is byte-identical to before", async () => {
+    serve();
+    const res = await check({ type: "broadcast", to: PERSON });
+    expect(res.status).toBe(200);
+    expect(bodyOf("http://instantly/orgs/send-checks")).toEqual({ to: PERSON });
+  });
+
+  it.each([-1, 3651, 1.5, "7"])("refuses %s with a 400, nothing asked", async (v) => {
+    serve();
+    const res = await check({ type: "broadcast", to: PERSON, maxVerdictAgeDays: v });
+    expect(res.status).toBe(400);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it("a transactional send refuses it (Postmark does not verify addresses)", async () => {
+    serve();
+    const res = await post({ type: "transactional", to: PERSON, subject: "Hi", textBody: "x", maxVerdictAgeDays: 7 });
+    expect(res.status).toBe(400);
+    expect(calledUrls().some((u) => u.startsWith("http://postmark"))).toBe(false);
+  });
+});

@@ -173,6 +173,15 @@ const OutcomeSubjectSchema = z
   })
   .openapi("OutcomeSubject");
 
+/** VERDICT-WINDOW-BY-CALLER-1126: the verdict age a Script accepts, relayed verbatim to instantly-service. */
+const maxVerdictAgeDaysField = z
+  .number()
+  .int()
+  .min(0)
+  .max(3650)
+  .optional()
+  .describe("The OLDEST held address verdict (in days) this request accepts for reuse, stated by the calling Script (VERDICT-WINDOW-BY-CALLER-1126). `0` = verify the address now; absent = instantly-service's default window (30 days), exactly as before. It also sets when an `email_not_verified` refusal may be re-asked (`until` = verifiedAt + that many days). Integer 0..3650, forwarded verbatim to instantly-service (never defaulted here) on every route that reaches its send door: the Instantly send, and the check asked before a Gmail-thread follow-up. instantly-service owns this contract: refer to its openapi.json.");
+
 const messageIdRegex =/^<[^<>\s]+@[^<>\s]+>$/;
 
 const TransactionalSendSchema = SendBaseSchema.extend({
@@ -220,6 +229,11 @@ const TransactionalSendSchema = SendBaseSchema.extend({
     .max(20)
     .optional()
     .describe("Catalogue outcome keys (e.g. `email_checked`, `message_written`) this send CONSUMED for the same person as `outcomeSubject`. Forwarded verbatim to postmark-service, which declares them as the send run's inputs. Requires `outcomeSubject` or `leadId` (400 otherwise, nothing sent). 1 to 20 keys. Omitted = no key forwarded. Transactional only. The outcome catalogue is owned by runs-service/features-service: keys are not validated here, postmark-service refuses an unknown one."),
+  maxVerdictAgeDays: z
+    .unknown()
+    .refine(() => false, "maxVerdictAgeDays is broadcast-only: the transactional provider does not verify addresses")
+    .optional()
+    .describe("Not accepted on a transactional send (Postmark does not verify addresses). Refused rather than silently dropped."),
 });
 
 const BroadcastSendSchema = SendBaseSchema.extend({
@@ -265,6 +279,7 @@ const BroadcastSendSchema = SendBaseSchema.extend({
     ])
     .optional()
     .describe("WHO SIGNS this cold email, chosen by the script that wrote it (SIGNATURE-TACTIC-1107: competing scripts sign differently and their results are compared). `\"default\"` = our signature; `{ text }` = the script's own lines. Forwarded verbatim to instantly-service, which owns the meaning: the client's own brand signature wins over it, and a send that continues an earlier thread keeps THAT thread's signature. Absent = no key forwarded, exactly as before. A follow-up answered in a Gmail thread (`transport: gmail`) keeps that thread's signature: the field is not used there. instantly-service owns this contract: refer to its openapi.json."),
+  maxVerdictAgeDays: maxVerdictAgeDaysField,
   followUp: z.boolean().optional().describe("`true` = this email CONTINUES the brand's own earlier outreach to this person (a follow-up), not a new cold pitch. Forwarded verbatim to instantly-service, which then does not apply its 3-month per-brand re-contact window (`recent_brand_contact`); opt-out, not-a-prospect, the address verifier and credits still refuse. While a step of the brand's sequence to the person is still queued it refuses with 409 `brand_sequence_queued`. Lands in the same thread as the brand's latest email to the person when that mailbox can still send. Each follow-up is keyed on the caller's `x-run-id`. Absent/false = a normal send. instantly-service owns this contract: refer to its openapi.json. RIGHT-MOMENT-OR-LATER-1014: when the person's latest exchange with the brand (x-brand-id) is a Gmail thread of a mailbox the org connected, newer than the brand's latest Instantly exchange (last email delivered, a reply), the email is sent by google-service as a reply IN that Gmail thread, from the address they wrote to / were answered from (`transport: gmail` on the 200; `subject` is then `Re: <thread subject>`, step 1 only, a multi-step sequence is refused 422 `follow_up_gmail_single_email`). google-service refusals are round-tripped: 403 `google_send_permission_missing` (the org owner must reconnect Google with send access; never a fallback to a cold mailbox), 404 `thread_not_found`, 422 `from_address_not_send_as`. A standing `lead_opted_out` / `lead_not_a_prospect` refuses 409 before Gmail."),
 });
 
@@ -284,6 +299,7 @@ export const SendCheckRequestSchema = z
   .object({
     type: z.literal("broadcast").describe("Only `broadcast`: the checks of the email a script is about to write."),
     to: z.string().min(3).describe("The address `POST /orgs/send` would be asked to mail"),
+    maxVerdictAgeDays: maxVerdictAgeDaysField,
     followUp: z.boolean().optional().describe("Same meaning as on `POST /orgs/send`: `true` picks the follow-up route (the person's latest thread, Instantly or Gmail) exactly as the send would."),
   })
   .openapi("SendCheckRequest");
@@ -294,7 +310,7 @@ export const SendCheckResponseSchema = z
     transport: z.enum(["instantly", "gmail"]).describe("The route `POST /orgs/send` would take now"),
     to: z.string(),
     verdict: z.string().nullable().describe("Our verifier's verdict: `valid`, `catch_all` or `unknown`"),
-    reused: z.boolean().nullable().describe("true = a verdict under 30 days was reused (free); false = verified now, billed on the caller's run"),
+    reused: z.boolean().nullable().describe("true = a held verdict inside the accepted window (`maxVerdictAgeDays`, else 30 days) was reused (free); false = verified now, billed on the caller's run"),
     verifiedAt: z.string().nullable(),
   })
   .openapi("SendCheckResponse");
