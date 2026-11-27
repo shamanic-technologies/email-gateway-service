@@ -183,6 +183,22 @@ const maxVerdictAgeDaysField = z
   .describe("The OLDEST held address verdict (in days) this request accepts for reuse, stated by the calling Script (VERDICT-WINDOW-BY-CALLER-1126). `0` = verify the address now; absent = instantly-service's default window (30 days), exactly as before. It also sets when an `email_not_verified` refusal may be re-asked (`until` = verifiedAt + that many days). Integer 0..3650, forwarded verbatim to instantly-service (never defaulted here) on every route that reaches its send door: the Instantly send, and the check asked before a Gmail-thread follow-up. instantly-service owns this contract: refer to its openapi.json.");
 
 const messageIdRegex =/^<[^<>\s]+@[^<>\s]+>$/;
+/** One or more Message-IDs separated by whitespace (RFC 5322 `References`). */
+const messageIdListRegex = /^\s*<[^<>\s]+@[^<>\s]+>(\s+<[^<>\s]+@[^<>\s]+>)*\s*$/;
+
+/** REP-REPLY-1127: one Reply-To address, display name optional. */
+export const ReplyToAddressSchema = z
+  .object({
+    email: z.string().email().describe("The address"),
+    name: z
+      .string()
+      .min(1)
+      .max(200)
+      .refine((v) => !/["\\\r\n]/.test(v), "name must not contain a double quote, a backslash or a line break")
+      .optional()
+      .describe("Display name, e.g. `Jean Müller`. Rendered by the gateway as a quoted-string (ASCII) or an RFC 2047 encoded-word (non-ASCII). Commas allowed; a double quote, a backslash or a line break is refused (400)."),
+  })
+  .openapi("ReplyToAddress");
 
 const TransactionalSendSchema = SendBaseSchema.extend({
   type: z.literal("transactional").describe("Transactional email channel"),
@@ -199,15 +215,24 @@ const TransactionalSendSchema = SendBaseSchema.extend({
     )
     .optional()
     .describe("Carbon-copy recipients as a comma-separated email list. Forwarded to postmark-service, which sets Postmark's Cc header, so the address is visible to every recipient of the message and a reply-all reaches it. Every address is validated: one malformed entry refuses the whole send with a 400. Absent = no Cc header at all, byte-identical to a send that never named one. Transactional only."),
+  replyTo: z
+    .union([
+      z.string().email(),
+      z.array(ReplyToAddressSchema).min(1).max(10),
+    ])
+    .optional()
+    .describe("Where the recipient's Reply goes. Either ONE address (string, forwarded verbatim, as before) or a LIST of 1-10 `{ email, name? }`: the gateway renders them as one RFC 5322 Reply-To header (`\"Name\" <a@x>, b@y`), and a mail client puts every one of them in To when the reader hits Reply (REP-REPLY-1127). Absent = no Reply-To key forwarded, postmark-service resolves its own default. The gateway never adds an address of its own. Transactional only (a broadcast send accepts only the single-string form, which it does not forward)."),
   inReplyTo: z
     .string()
     .regex(messageIdRegex, "inReplyTo must be a RFC 5322 Message-ID enclosed in angle brackets, e.g. <id@host>")
     .optional()
-    .describe("RFC 5322 In-Reply-To header — Message-ID of the email being replied to, including angle brackets"),
+    .describe("RFC 5322 In-Reply-To header — Message-ID of the email being replied to, including angle brackets. Set as a real header on the delivered email (forwarded to postmark-service as a `headers` entry), so a Reply to it stays in that conversation (REP-REPLY-1127)."),
   references: z
     .string()
+    .regex(messageIdListRegex, "references must be one or more RFC 5322 Message-IDs in angle brackets, separated by spaces, e.g. <a@x> <b@y>")
+    .max(8000)
     .optional()
-    .describe("RFC 5322 References header — space-separated list of Message-IDs (each enclosed in angle brackets) representing the thread chain"),
+    .describe("RFC 5322 References header — the thread chain, oldest first: Message-IDs in angle brackets separated by whitespace (normalized to single spaces). Set as a real header on the delivered email (forwarded to postmark-service as a `headers` entry) (REP-REPLY-1127)."),
   messageStream: z
     .string()
     .optional()
