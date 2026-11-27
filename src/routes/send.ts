@@ -11,6 +11,7 @@ import { traceEvent } from "../lib/trace-event";
 import { resolveFollowUpRoute } from "../lib/follow-up-route";
 import * as googleClient from "../lib/google-client";
 import { SendOutcomeUnknownError } from "../lib/send-fetch";
+import { renderReplyTo, threadingHeaders } from "../lib/reply-threading";
 
 const router = Router();
 
@@ -79,11 +80,12 @@ router.post("/send", async (req: Request, res: Response) => {
         subject: body.subject,
         htmlBody: htmlWithSignature,
         textBody: body.textBody,
-        replyTo: body.replyTo,
+        replyTo: renderReplyTo(body.replyTo),
         tag: body.tag,
         metadata,
-        inReplyTo: body.inReplyTo,
-        references: body.references,
+        // REP-REPLY-1127: postmark-service has no inReplyTo/references body
+        // field (it dropped them); it sets every `headers` entry on the message.
+        ...threadingHeaders(body.inReplyTo, body.references),
         messageStream: body.messageStream,
         stream: body.stream,
         // Absent = no `payer` key on the wire: postmark-service decides as before.

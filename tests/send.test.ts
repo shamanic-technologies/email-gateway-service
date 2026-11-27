@@ -908,8 +908,14 @@ describe("POST /orgs/send", () => {
         );
 
         const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-        expect(body.inReplyTo).toBe("<original-message-id@haro.com>");
-        expect(body.references).toBe("<root@haro.com> <original-message-id@haro.com>");
+        // REP-REPLY-1127: threading travels as postmark-service `headers`
+        // (it has no inReplyTo/references body field and dropped them).
+        expect(body.headers).toEqual([
+          { name: "In-Reply-To", value: "<original-message-id@haro.com>" },
+          { name: "References", value: "<root@haro.com> <original-message-id@haro.com>" },
+        ]);
+        expect(body.inReplyTo).toBeUndefined();
+        expect(body.references).toBeUndefined();
         expect(body.messageStream).toBe("outbound-replies");
       });
 
@@ -924,6 +930,7 @@ describe("POST /orgs/send", () => {
         const body = JSON.parse(mockFetch.mock.calls[0][1].body);
         expect(body.inReplyTo).toBeUndefined();
         expect(body.references).toBeUndefined();
+        expect(body.headers).toBeUndefined();
         expect(body.messageStream).toBeUndefined();
       });
 
@@ -939,7 +946,7 @@ describe("POST /orgs/send", () => {
 
         expect(res.status).toBe(200);
         const body = JSON.parse(mockFetch.mock.calls[0][1].body);
-        expect(body.inReplyTo).toBe("<just-this@x.com>");
+        expect(body.headers).toEqual([{ name: "In-Reply-To", value: "<just-this@x.com>" }]);
       });
 
       it("rejects malformed inReplyTo (must look like a Message-ID with angle brackets)", async () => {

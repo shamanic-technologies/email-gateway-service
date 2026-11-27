@@ -67,6 +67,12 @@ Owner 2026-11-23: a rule the Script cannot see or set is hidden in a service. `P
 
 **Every address is validated** (`bcc` stays a bare string, unchanged): one malformed entry, or an empty string, refuses the WHOLE send with a 400, never dropped quietly. Absent = no `cc` key on the wire, nobody copied. This service NEVER adds a copy of its own and has no per-brand rule ("a sender sends only the To/Cc/Bcc its script names", owner 2026-11-16). The Gmail-thread follow-up path ignores `cc`, like `bcc` and `signature`. Guard: cc tests in `tests/send.test.ts`.
 
+## Several Reply-To addresses + real threading headers on a transactional send (REP-REPLY-1127)
+
+`replyTo` on a transactional `/orgs/send` is either ONE address string (forwarded verbatim, as before) or a LIST of 1-10 `{ email, name? }`, rendered by `src/lib/reply-threading.ts` as one RFC 5322 list (`"Kevin Lourd" <k@x>, p@y`); a mail client puts every address in To when the reader hits Reply. An ASCII name is quoted; a non-ASCII name is an RFC 2047 encoded-word (SES requires it). A name with `"`, `\` or a line break is refused 400: postmark-service's SES splitter is quote-aware, not escape-aware. Broadcast accepts only the string form (and does not forward it).
+
+`inReplyTo` / `references` (Message-IDs in angle brackets; references = whitespace-separated list, normalized to single spaces) travel to postmark-service as `headers: [{ name: "In-Reply-To" }, { name: "References" }]`: postmark-service has NO `inReplyTo`/`references` body field and silently dropped them until 2026-11-27, while every `headers` entry becomes a real header (Postmark and SES paths). A caller stating neither sends no `headers`/`replyTo` key, byte-identical to before. Never add an address or header of our own. Proven on a real staff send through prod postmark-service (SES): received `Reply-To: Test Prospect <...>, Kevin Lourd <...>`, `In-Reply-To`, `References`. Guard `tests/reply-threading.test.ts`.
+
 ## Person-to-person delivery — `stream: "transactional"` drops the footer AND switches the Postmark stream, together
 
 Every Postmark send defaults to the BROADCAST stream (List-Unsubscribe header,
