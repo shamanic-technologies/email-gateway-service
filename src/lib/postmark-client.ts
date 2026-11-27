@@ -114,8 +114,7 @@ export async function sendEmail(body: {
   replyTo?: string;
   tag?: string;
   metadata?: Record<string, string>;
-  inReplyTo?: string;
-  references?: string;
+  headers?: { name: string; value: string }[];
   messageStream?: string;
   stream?: "broadcast" | "transactional";
   payer?: "org" | "platform";

@@ -298,9 +298,21 @@
                 "description": "Recipient company name, sourced from the lead. Absent OR explicitly null = \"no company name is known for this person\": the send goes out with the field omitted downstream, never replaced by a default of ours."
               },
               "replyTo": {
-                "type": "string",
-                "format": "email",
-                "description": "Reply-to email address"
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ReplyToAddress"
+                    },
+                    "minItems": 1,
+                    "maxItems": 10
+                  }
+                ],
+                "description": "Where the recipient's Reply goes. Either ONE address (string, forwarded verbatim, as before) or a LIST of 1-10 `{ email, name? }`: the gateway renders them as one RFC 5322 Reply-To header (`\"Name\" <a@x>, b@y`), and a mail client puts every one of them in To when the reader hits Reply (REP-REPLY-1127). Absent = no Reply-To key forwarded, postmark-service resolves its own default. The gateway never adds an address of its own. Transactional only (a broadcast send accepts only the single-string form, which it does not forward)."
               },
               "tag": {
                 "type": "string",
@@ -351,11 +363,13 @@
               "inReplyTo": {
                 "type": "string",
                 "pattern": "^<[^<>\\s]+@[^<>\\s]+>$",
-                "description": "RFC 5322 In-Reply-To header — Message-ID of the email being replied to, including angle brackets"
+                "description": "RFC 5322 In-Reply-To header — Message-ID of the email being replied to, including angle brackets. Set as a real header on the delivered email (forwarded to postmark-service as a `headers` entry), so a Reply to it stays in that conversation (REP-REPLY-1127)."
               },
               "references": {
                 "type": "string",
-                "description": "RFC 5322 References header — space-separated list of Message-IDs (each enclosed in angle brackets) representing the thread chain"
+                "maxLength": 8000,
+                "pattern": "^\\s*<[^<>\\s]+@[^<>\\s]+>(\\s+<[^<>\\s]+@[^<>\\s]+>)*\\s*$",
+                "description": "RFC 5322 References header — the thread chain, oldest first: Message-IDs in angle brackets separated by whitespace (normalized to single spaces). Set as a real header on the delivered email (forwarded to postmark-service as a `headers` entry) (REP-REPLY-1127)."
               },
               "messageStream": {
                 "type": "string",
@@ -542,6 +556,25 @@
               "sequence"
             ]
           }
+        ]
+      },
+      "ReplyToAddress": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "The address"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Display name, e.g. `Jean Müller`. Rendered by the gateway as a quoted-string (ASCII) or an RFC 2047 encoded-word (non-ASCII). Commas allowed; a double quote, a backslash or a line break is refused (400)."
+          }
+        },
+        "required": [
+          "email"
         ]
       },
       "OutcomeSubject": {
